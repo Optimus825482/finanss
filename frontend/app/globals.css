@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+body {
+  background-color: #0B0E11;
+  color: #D9D9D0;
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(255,176,0,0.05), transparent 40%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+}
+
+.scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(255,176,0,0.06), transparent);
+  animation: scan 2.4s linear infinite;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(255,176,0,0.6); }
+  50% { opacity: 0.5; box-shadow: 0 0 2px rgba(255,176,0,0.2); }
+}
+
+.pulse-node {
+  animation: pulse-amber 1.4s ease-in-out infinite;
+}
