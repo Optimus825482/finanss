@@ -45,7 +45,7 @@ services:
         NEXT_PUBLIC_API_URL: https://finans.erkanerdem.online/api
     container_name: orbis_finai_web
     ports:
-      - "3009:3000"
+      - "3000:3000"
     restart: unless-stopped
 
 volumes:
