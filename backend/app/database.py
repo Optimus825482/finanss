@@ -19,7 +19,7 @@ def get_db():
 def init_db():
     """Create tables + extension."""
     with engine.connect() as conn:
-        conn.execute(conn.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         conn.commit()
     from app import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
