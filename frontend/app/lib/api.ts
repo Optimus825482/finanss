@@ -86,6 +86,7 @@ export const api = {
   getHistory: () => fetch(`${API_BASE}/api/reports/history`, { cache: "no-store" }).then(j<ReportListItem[]>),
   getReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { cache: "no-store" }).then(j<Report>),
   generate: () => fetch(`${API_BASE}/api/generate`, { method: "POST" }).then(j<{ started: boolean }>),
+  deleteReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>).catch(() => ({ deleted: false })),
 
   getWatchlist: () =>
     fetch(`${API_BASE}/api/watchlist/personal`, { cache: "no-store" }).then(j<WatchlistItem[]>),

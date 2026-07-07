@@ -4,14 +4,52 @@
 
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap");
 
-body {
-  background-color: #0B0E11;
-  color: #D9D9D0;
-  background-image:
-    radial-gradient(circle at 20% 0%, rgba(255,176,0,0.05), transparent 40%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+/* ── Dark Theme (default) ── */
+:root {
+  --term-bg: #0B0E11;
+  --term-panel: #12161B;
+  --term-border: #23292F;
+  --term-amber: #E6A000;
+  --term-amber-dim: #8A6100;
+  --term-green: #4ADE80;
+  --term-red: #F87171;
+  --term-text: #D9D9D0;
+  --term-muted: #6B7280;
+  --term-glow: rgba(230, 160, 0, 0.45);
+
+  --scanline-gradient: linear-gradient(180deg, transparent, rgba(230, 160, 0, 0.06), transparent);
+  --bg-dots: radial-gradient(circle at 20% 0%, rgba(230, 160, 0, 0.05), transparent 40%);
+  --bg-lines: rgba(255, 255, 255, 0.015);
 }
 
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --term-bg: #E8EDF5;
+  --term-panel: #FFFFFF;
+  --term-border: #B0C4DE;
+  --term-amber: #B8860B;
+  --term-amber-dim: #D4A843;
+  --term-green: #0C6B32;
+  --term-red: #C91A1A;
+  --term-text: #0F172A;
+  --term-muted: #3B5998;
+  --term-glow: rgba(184, 134, 11, 0.20);
+
+  --scanline-gradient: linear-gradient(180deg, transparent, rgba(184, 134, 11, 0.03), transparent);
+  --bg-dots: radial-gradient(circle at 20% 0%, rgba(184, 134, 11, 0.05), transparent 40%);
+  --bg-lines: rgba(59, 89, 152, 0.025);
+}
+
+body {
+  background-color: var(--term-bg);
+  color: var(--term-text);
+  background-image:
+    var(--bg-dots),
+    repeating-linear-gradient(0deg, var(--bg-lines) 0px, var(--bg-lines) 1px, transparent 1px, transparent 3px);
+  transition: background-color 250ms ease, color 250ms ease;
+}
+
+/* ── Scanline Animation ── */
 .scanline {
   position: relative;
   overflow: hidden;
@@ -21,8 +59,9 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent, rgba(255,176,0,0.06), transparent);
+  background: var(--scanline-gradient);
   animation: scan 2.4s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes scan {
@@ -30,11 +69,32 @@ body {
   100% { transform: translateY(100%); }
 }
 
+/* ── Pulse Node ── */
 @keyframes pulse-amber {
-  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(255,176,0,0.6); }
-  50% { opacity: 0.5; box-shadow: 0 0 2px rgba(255,176,0,0.2); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--term-glow); }
+  50% { opacity: 0.5; box-shadow: 0 0 2px var(--term-glow); }
 }
 
 .pulse-node {
   animation: pulse-amber 1.4s ease-in-out infinite;
+}
+
+/* ── Theme Toggle ── */
+.theme-toggle {
+  cursor: pointer;
+  transition: transform 250ms ease;
+}
+
+.theme-toggle:active {
+  transform: scale(0.92);
+}
+
+/* ── Light theme scanline softer ── */
+[data-theme="light"] .scanline::after {
+  opacity: 0.5;
+}
+
+/* ── Light theme: subtle card shadow ── */
+[data-theme="light"] .theme-card-shadow {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }

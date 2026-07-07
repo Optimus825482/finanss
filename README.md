@@ -1,6 +1,6 @@
-# Uluslararası Hisse Araştırma - Agent Team
+# ORBIS FINAI — ORBIS Finance Analyze Team
 
-5 ajanlı bir araştırma ekibi (Tarama → Temel Analiz → Haber/Sentiment → Risk → Rapor)
+5 ajanlı bir AI araştırma ekibi (Tarama → Temel Analiz → Haber/Sentiment → Risk → Rapor)
 her gün 08:00'de (Europe/Istanbul) otomatik çalışır, yfinance üzerinden uluslararası
 hisse evrenini tarar ve bileşik skora göre sıralanmış bir günlük rapor üretir.
 Next.js arayüzü pipeline'ı canlı izler ve manuel tetiklemeye izin verir.
@@ -12,7 +12,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8012
 ```
 
 İlk açılışta `backend/data/reports.db` (SQLite) otomatik oluşturulur.
@@ -26,7 +26,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Arayüz http://localhost:3000 adresinde açılır, backend http://localhost:8000
+Arayüz http://localhost:3009 adresinde açılır, backend http://localhost:8012
 üzerinde çalışmalı.
 
 ## Watchlist'i özelleştirme

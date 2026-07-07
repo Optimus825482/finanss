@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { StockPick } from "../lib/api";
 
 function ScoreBar({ label, value, tone }: { label: string; value: number; tone: string }) {
@@ -14,8 +17,23 @@ function ScoreBar({ label, value, tone }: { label: string; value: number; tone: 
   );
 }
 
-export default function StockCard({ pick, rank }: { pick: StockPick; rank: number }) {
+const API = process.env.NEXT_PUBLIC_API_URL;
+
+export default function StockCard({ pick, rank, showPredict }: { pick: StockPick; rank: number; showPredict?: boolean }) {
   const momentumPositive = pick.momentum_pct >= 0;
+  const [predLoading, setPredLoading] = useState(false);
+  const [prediction, setPrediction] = useState<any>(null);
+  const [fairValue, setFairValue] = useState<any>(null);
+  const [fvLoading, setFvLoading] = useState(false);
+
+  const handlePredict = async () => {
+    setPredLoading(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/predictions/${pick.ticker}`, { method: "POST" });
+      if (res.ok) setPrediction(await res.json());
+    } catch { /* sessiz */ }
+    setPredLoading(false);
+  };
 
   return (
     <div className="border border-term-border bg-term-panel rounded-sm p-4 hover:border-term-amber/50 transition-colors">
@@ -55,6 +73,41 @@ export default function StockCard({ pick, rank }: { pick: StockPick; rank: numbe
           {pick.pe_ratio && <span>F/K {pick.pe_ratio.toFixed(1)}</span>}
           {pick.volatility_annualized && <span>Vol %{pick.volatility_annualized}</span>}
           {pick.max_drawdown_pct && <span>Düşüş %{pick.max_drawdown_pct}</span>}
+        </div>
+      )}
+
+      {showPredict !== false && (
+        <div className="mt-3 pt-3 border-t border-term-border space-y-2">
+          {/* Adil deger butonu */}
+          {(fairValue
+            ? <div className="flex flex-wrap gap-2 items-center">
+                <span className="font-mono text-[10px]" style={{ color: "var(--term-amber)" }}>⚖</span>
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: fairValue.margin_pct > 0 ? "rgba(74,222,128,0.12)" : "rgba(248,113,113,0.12)", color: fairValue.margin_pct > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  Adil: ${fairValue.fair_value} ({fairValue.margin_pct > 0 ? "+" : ""}{fairValue.margin_pct}%)
+                </span>
+              </div>
+            : <button onClick={()=>{setFvLoading(true);fetch(`${API}/api/screener/${pick.ticker}/fair-value`).then(r=>r.json()).then(v=>{setFairValue(v);setFvLoading(false)})}} disabled={fvLoading}
+                className="font-mono text-[10px] px-2.5 py-1 rounded-sm transition-none disabled:opacity-40"
+                style={{ border: "1px solid var(--term-amber-dim)", color: "var(--term-amber-dim)" }}>
+                {fvLoading ? "…" : "⚖ ADİL DEĞER"}
+              </button>
+          )}
+          {/* Ongoru butonu */}
+          {(prediction?.predictions
+            ? <div className="flex flex-wrap gap-2 items-center">
+                <span className="font-mono text-[10px]" style={{ color: "var(--term-amber)" }}>📈</span>
+                {Object.entries(prediction.predictions).map(([k, v]: [string, any]) => (
+                  <span key={k} className="font-mono text-[9px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: "var(--term-bg)", color: "var(--term-muted)" }}>
+                    {k.replace("day_", "")}g: ${v.predicted}
+                  </span>
+                ))}
+              </div>
+            : <button onClick={handlePredict} disabled={predLoading}
+                className="font-mono text-[10px] px-2.5 py-1 rounded-sm transition-none disabled:opacity-40"
+                style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}>
+                {predLoading ? "…" : "📈 ÖNGÖRÜ"}
+              </button>
+          )}
         </div>
       )}
     </div>

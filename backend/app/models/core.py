@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -11,10 +11,45 @@ class Report(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    summary = Column(Text)  # genel piyasa yorumu (Türkçe, jargonsuz)
+    summary = Column(Text)
     candidates_scanned = Column(Integer, default=0)
 
     picks = relationship("StockPick", back_populates="report", cascade="all, delete-orphan")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, default="report")  # report | alert | system
+    title = Column(String)
+    message = Column(Text, nullable=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Prediction(Base):
+    """Fiyat öngörüsü — self-learning RAG pipeline."""
+    __tablename__ = "predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, index=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
+    forecast_days = Column(Integer, default=30)
+    predicted_prices = Column(JSON, default=dict)
+    current_price = Column(Float)
+    features_used = Column(JSON, default=dict)
+    model_name = Column(String, default="ensemble-light")
+    confidence = Column(Float, default=0.5)
+    target_date = Column(DateTime, nullable=True)
+    actual_price = Column(Float, nullable=True)
+    error_pct = Column(Float, nullable=True)
+    error_analysis = Column(Text, nullable=True)
+    lessons_learned = Column(Text, nullable=True)
+    evaluated = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    evaluated_at = Column(DateTime, nullable=True)
 
 
 class StockPick(Base):
@@ -36,14 +71,12 @@ class StockPick(Base):
     volatility_annualized = Column(Float, nullable=True)
     max_drawdown_pct = Column(Float, nullable=True)
 
-    narrative = Column(Text)  # bu hisse için kısa Türkçe gerekçe
+    narrative = Column(Text)
 
     report = relationship("Report", back_populates="picks")
 
 
 class WatchlistItem(Base):
-    """Erkan'ın manuel olarak eklediği kişisel izleme listesi (araştırma
-    taramasından bağımsız — sadece canlı fiyat takibi için)."""
     __tablename__ = "watchlist_items"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -53,7 +86,6 @@ class WatchlistItem(Base):
 
 
 class PortfolioPosition(Base):
-    """Sanal (paper trading) portföy pozisyonu."""
     __tablename__ = "portfolio_positions"
 
     id = Column(Integer, primary_key=True, index=True)

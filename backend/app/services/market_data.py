@@ -14,24 +14,34 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
         return result
 
     try:
+        # yfinance >= 1.0: group_by kalktı, multi-ticker her zaman
+        # MultiIndex column (Price, Ticker) döner.
         data = yf.download(
             unique, period="5d", interval="1d",
-            group_by="ticker", threads=True, progress=False,
+            progress=False,
         )
     except Exception:
         data = None
 
     for t in unique:
         try:
-            if data is None:
+            if data is None or data.empty:
                 raise ValueError("veri yok")
-            hist = data[t] if len(unique) > 1 else data
-            hist = hist.dropna()
-            if hist.empty:
+            # Close kolonuna erişim: data['Close'] Series/DataFrame
+            # tek sembolde Series, çoklu sembolde DataFrame döner.
+            if len(unique) == 1:
+                closes = data["Close"]
+            else:
+                closes = data["Close"][t] if t in data["Close"].columns else None
+                if closes is None:
+                    result[t] = {"price": None, "change_pct": None}
+                    continue
+            closes = closes.dropna()
+            if closes.empty:
                 result[t] = {"price": None, "change_pct": None}
                 continue
-            last = float(hist["Close"].iloc[-1])
-            prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else last
+            last = float(closes.iloc[-1])
+            prev = float(closes.iloc[-2]) if len(closes) > 1 else last
             change_pct = ((last - prev) / prev * 100) if prev else 0.0
             result[t] = {"price": round(last, 2), "change_pct": round(change_pct, 2)}
         except Exception:

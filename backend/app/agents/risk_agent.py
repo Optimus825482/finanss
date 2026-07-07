@@ -29,7 +29,9 @@ class RiskAgent(BaseAgent):
     def _analyze(self, candidates: list[dict]) -> list[dict]:
         try:
             benchmark_hist = yf.Ticker(BENCHMARK_TICKER).history(period="3mo")["Close"]
-            benchmark_returns = benchmark_hist.pct_change().dropna()
+            # yfinance 1.x: Ticker.history() tz-aware, download() tz-naive → align patlar
+            benchmark_hist.index = benchmark_hist.index.tz_localize(None)
+            benchmark_returns = benchmark_hist.pct_change(fill_method=None).dropna()
         except Exception:
             benchmark_returns = None
 
@@ -42,7 +44,7 @@ class RiskAgent(BaseAgent):
                 continue
 
             closes = hist["Close"]
-            returns = closes.pct_change().dropna()
+            returns = closes.pct_change(fill_method=None).dropna()
 
             volatility_annualized = float(returns.std() * np.sqrt(252) * 100) if len(returns) > 1 else 0.0
 
