@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.config import DATABASE_URL
@@ -17,5 +17,9 @@ def get_db():
 
 
 def init_db():
-    from app import models  # noqa: F401 - modelleri kaydetmek için
+    """Create tables + extension."""
+    with engine.connect() as conn:
+        conn.execute(conn.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.commit()
+    from app import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
