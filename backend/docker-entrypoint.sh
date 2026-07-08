@@ -4,7 +4,8 @@ set -e
 echo "=== Running database migrations ==="
 # Retry loop — DB might not be ready yet despite depends_on
 for i in $(seq 1 10); do
-    if alembic upgrade head 2>/dev/null; then
+    echo "--- Migration attempt $i ---"
+    if alembic upgrade head 2>&1; then
         echo "Migrations applied successfully."
         break
     fi

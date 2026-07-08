@@ -84,5 +84,5 @@ def list_predictions(ticker: str | None = None, limit: int = 20, db: Session = D
 @router.post("/evaluate")
 async def evaluate_predictions(db: Session = Depends(get_db)):
     """Target date'i gecmis tum tahminleri degerlendir."""
-    results = await evaluate_due_predictions(db))
+    results = await evaluate_due_predictions(db)
     return {"evaluated": len(results), "results": results}
