@@ -21,6 +21,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
+    # type column - shadows built-in type()
     type = Column(String, default="report")  # report | alert | system
     title = Column(String)
     message = Column(Text, nullable=True)
@@ -100,3 +101,20 @@ class PortfolioPosition(Base):
     exit_date = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TradingDecision(Base):
+    __tablename__ = "trading_decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, index=True)
+    action = Column(String)
+    quantity = Column(Float)
+    price = Column(Float)
+    total_amount = Column(Float)
+    reasoning = Column(Text)
+    factors = Column(JSON, default=dict)
+    confidence = Column(Float)
+    portfolio_value_before = Column(Float, nullable=True)
+    portfolio_value_after = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

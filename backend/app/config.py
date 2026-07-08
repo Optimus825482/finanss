@@ -7,7 +7,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # PostgreSQL (primary) — Docker'da 'db' hostname, lokal'de 'localhost'
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:518518Erkan@localhost:5432/orbis_finai")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 
 # Kure edilmis global hisse evreni (borsa bazli).
 # Ilk asama tarama (teknik filtre) bu listeden yapilir.

@@ -1,8 +1,9 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.orchestrator import orchestrator
 
 import yfinance as yf
@@ -36,26 +37,19 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
             risk = RiskAgent()
             reporter = ReportAgent()
 
-            # Gercek veri: yfinance + ScannerAgent pipeline'i tek hisse icin
-            from app.agents.scanner_agent import ScannerAgent
-            scanner = ScannerAgent()
-            scan_results = await scanner.run()
-            # Sadece secili ticker'i bul
-            match = [c for c in scan_results if c["ticker"] == ticker_str]
-            if not match:
-                info = yf.Ticker(ticker_str).info
-                hist = yf.Ticker(ticker_str).history(period="3mo")
-                hist.index = hist.index.tz_localize(None)
-                price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
-                prev_close = info.get("regularMarketPreviousClose", price)
-                change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
-                candidates = [{
-                    "ticker": ticker_str, "price": price,
-                    "momentum_pct": round(change_pct, 2),
-                    "volume_ratio": 1.0, "history": hist,
-                }]
-            else:
-                candidates = [match[0]]
+            # Tek hisse analizi: scanner pipeline'ini atla, dogrudan yfinance
+            t = yf.Ticker(ticker_str)
+            info = await asyncio.to_thread(lambda: t.info or {})
+            hist = await asyncio.to_thread(lambda: t.history(period="3mo"))
+            hist.index = hist.index.tz_localize(None)
+            price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
+            prev_close = info.get("regularMarketPreviousClose", price)
+            change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
+            candidates = [{
+                "ticker": ticker_str, "price": price,
+                "momentum_pct": round(change_pct, 2),
+                "volume_ratio": 1.0, "history": hist,
+            }]
 
             candidates = await fundamental.run(candidates)
             candidates = await sentiment.run(candidates)

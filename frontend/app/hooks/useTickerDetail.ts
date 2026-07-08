@@ -28,7 +28,7 @@ export function useTickerDetail(autoRefresh = true): UseTickerDetailReturn {
         { cache: "no-store" }
       );
       if (res.ok) setDetail(await res.json());
-    } catch { /* sessiz */ }
+    } catch (e) { console.warn("Failed to fetch detail", e); }
   }, []);
 
   const loadDetail = useCallback((t: string) => {
@@ -48,16 +48,10 @@ export function useTickerDetail(autoRefresh = true): UseTickerDetailReturn {
 
   // Auto-refresh 30s
   useEffect(() => {
-    if (!autoRefresh) return;
-    autoInterval.current = setInterval(() => {
-      if (currentTicker.current) {
-        fetchDetail(currentTicker.current, period, interval_);
-      }
-    }, 30_000);
-    return () => {
-      if (autoInterval.current) clearInterval(autoInterval.current);
-    };
-  }, [autoRefresh, fetchDetail, period, interval_]);
+    if (!currentTicker.current) return;
+    const i = setInterval(loadDetail, 30_000);
+    return () => clearInterval(i);
+  }, [autoRefresh]);
 
   return { detail, detailLoading, loadDetail, period, interval: interval_, setPeriod, setInterval_ };
 }

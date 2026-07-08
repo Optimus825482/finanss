@@ -1,9 +1,29 @@
+import os
 from datetime import datetime
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+try:
+    from cryptography.fernet import Fernet
+    _HAS_FERNET = True
+except ImportError:
+    _HAS_FERNET = False
+
+
+def _get_fernet() -> "Fernet | None":
+    """Return Fernet cipher if FERNET_KEY env var is set."""
+    if not _HAS_FERNET:
+        return None
+    key = os.environ.get("FERNET_KEY")
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode())
+    except Exception:
+        return None
 
 
 class LLMProvider(Base):
@@ -14,10 +34,33 @@ class LLMProvider(Base):
     name = Column(String, unique=True, index=True)
     slug = Column(String, unique=True)
     base_url = Column(String)
-    api_key = Column(Text)
+    api_key = Column(Text)  # encrypted with Fernet when FERNET_KEY env var is set
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def get_decrypted_api_key(self) -> str:
+        """Return decrypted API key. Falls back to raw value if no encryption configured."""
+        if not self.api_key:
+            return ""
+        f = _get_fernet()
+        if f:
+            try:
+                return f.decrypt(self.api_key.encode()).decode()
+            except Exception:
+                return self.api_key
+        return self.api_key
+
+    def set_encrypted_api_key(self, value: str) -> None:
+        """Encrypt and store API key. Stores raw if no encryption configured."""
+        if not value:
+            self.api_key = ""
+            return
+        f = _get_fernet()
+        if f:
+            self.api_key = f.encrypt(value.encode()).decode()
+        else:
+            self.api_key = value
 
     models = relationship("LLMModel", back_populates="provider", cascade="all, delete-orphan")
 

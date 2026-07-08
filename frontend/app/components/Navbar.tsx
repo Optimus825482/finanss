@@ -25,17 +25,12 @@ export default function Navbar() {
 	    try {
 	      const r = await fetch(`${apiBase}/api/notifications/unread-count`);
 	      if (r.ok) setUnread((await r.json()).count ?? 0);
-	    } catch {}
+	    } catch (e) { console.warn("Failed to load unread count", e); }
 	  };
 
   useEffect(() => { loadUnread(); const i = setInterval(loadUnread, 30_000); return () => clearInterval(i); }, []);
 
-	  useEffect(() => {
-	    if (pathname === "/raporlar") {
-	      fetch(`${apiBase}/api/notifications/read-all`, { method: "POST" }).then(loadUnread);
-	    }
-	    setMenuOpen(false);
-	  }, [pathname]);
+		  useEffect(() => { setMenuOpen(false); }, [pathname]);
 
   const navLink = (href: string, label: string) => {
     const active = pathname === href;

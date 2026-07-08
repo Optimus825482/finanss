@@ -68,7 +68,7 @@ export default function TakipPage() {
                     <span className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>—</span>
                   )}
                   <span onClick={(e) => { e.stopPropagation(); handleDelete(it.id, it.ticker); }}
-                    className="text-xs font-mono cursor-pointer transition-none" style={{ color: "var(--term-muted)" }}>✕</span>
+                    className="text-xs font-mono cursor-pointer transition-none" style={{ color: "var(--term-muted)" }} aria-label="Takip listesinden çıkar">✕</span>
                 </div>
               </button>
             ))}

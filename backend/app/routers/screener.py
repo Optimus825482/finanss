@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+import asyncio
 import math
+
+from fastapi import APIRouter, HTTPException, Query, Request
 
 import yfinance as yf
 
@@ -59,7 +61,7 @@ async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: s
     ticker_str = ticker.strip().upper()
     try:
         t = yf.Ticker(ticker_str)
-        info = t.info or {}
+        info = await asyncio.to_thread(lambda: t.info or {})
 
         sector_en = info.get("sector") or info.get("sectorDisp") or ""
         industry_en = info.get("industry") or info.get("industryDisp") or ""
@@ -112,7 +114,7 @@ async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: s
         }
 
         try:
-            news_raw = t.news[:6] if t.news else []
+            news_raw = (await asyncio.to_thread(lambda: t.news or []))[:6]
             titles_en = [
                 n.get("content", {}).get("title") or n.get("title", "")
                 for n in news_raw
@@ -139,7 +141,7 @@ async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: s
                 if period not in valid_periods:
                     period = "1mo"
 
-            hist = t.history(period=period, interval=interval)
+            hist = await asyncio.to_thread(t.history, period=period, interval=interval)
             hist.index = hist.index.tz_localize(None)
             result["price_history"] = [
                 {
@@ -168,4 +170,3 @@ def get_fair_value(ticker: str):
         return calculate_fair_value(ticker.strip().upper())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Adil deger hesaplanamadi: {str(e)}")
-        raise HTTPException(status_code=404, detail=f"Sembol verisi alinamadi: {str(e)}")

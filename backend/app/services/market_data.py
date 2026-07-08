@@ -2,6 +2,7 @@
 Watchlist ve portföy için ortak canlı fiyat servisi.
 Araştırma pipeline'ındaki ScannerAgent'tan bağımsız, hafif ve tek amaçlı.
 """
+import pandas as pd
 import yfinance as yf
 
 
@@ -29,10 +30,12 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
                 raise ValueError("veri yok")
             # Close kolonuna erişim: data['Close'] Series/DataFrame
             # tek sembolde Series, çoklu sembolde DataFrame döner.
+            closes = data.get("Close", pd.DataFrame())
             if len(unique) == 1:
-                closes = data["Close"]
+                if isinstance(closes, pd.DataFrame) and closes.shape[1] == 1:
+                    closes = closes.iloc[:, 0]
             else:
-                closes = data["Close"][t] if t in data["Close"].columns else None
+                closes = closes[t] if t in closes.columns else None
                 if closes is None:
                     result[t] = {"price": None, "change_pct": None}
                     continue

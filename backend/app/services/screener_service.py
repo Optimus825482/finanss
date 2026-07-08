@@ -7,11 +7,14 @@ Stage 2 (Deep dive): Full agent pipeline on top candidates
 Configurable via exchange + sector + filter thresholds.
 """
 import asyncio
+import logging
 import math
 from typing import Optional
 
 import numpy as np
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 from app.config import STOCK_UNIVERSE
 
@@ -64,7 +67,13 @@ async def stage1_prescreen(
 ) -> list[dict]:
     """Tum hisseleri teknik filtrelerden gecir, en gucluleri sec."""
     cfg = {**TECHNICAL_SCREEN_DEFAULTS, **(thresholds or {})}
-    data = yf.download(tickers, period="3mo", interval="1d", progress=False)
+    try:
+        data = await asyncio.to_thread(
+            yf.download, tickers, period="3mo", interval="1d", progress=False, timeout=30
+        )
+    except Exception as e:
+        logger.error("Download failed for %d tickers: %s", len(tickers), e)
+        return []
 
     if data.empty:
         return []
@@ -168,7 +177,7 @@ async def stage2_deep_analysis(
     for c in top:
         try:
             t = yf.Ticker(c["ticker"])
-            hist = t.history(period="3mo")
+            hist = await asyncio.to_thread(lambda: t.history(period="3mo"))
             hist.index = hist.index.tz_localize(None)
             c["history"] = hist
             enriched.append(c)

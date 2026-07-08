@@ -55,6 +55,7 @@ export default function AyarlarPage() {
     setTestLoading(prev => ({ ...prev, [id]: true }));
     fetch(`${API}/api/admin/providers/${id}/test`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "Merhaba test" }) })
       .then(r => r.json()).then(r => setTestResults(prev => ({ ...prev, [id]: r })))
+      .catch(e => console.warn("Failed to test provider", e))
       .finally(() => setTestLoading(prev => ({ ...prev, [id]: false })));
   };
 
@@ -86,7 +87,7 @@ export default function AyarlarPage() {
     loadProviders();
   };
 
-  const borderStyle = { borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" };
+  const borderStyle = { backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" };
   const muted = { color: "var(--term-muted)" };
 
   return (

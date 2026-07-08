@@ -19,7 +19,8 @@ export default function Dashboard() {
       const s = await api.getStatus();
       setStatus(s);
       return s;
-    } catch {
+    } catch (e) {
+      console.warn("Failed to get status", e);
       setError("Backend'e bağlanılamadı. http://localhost:8012 çalışıyor mu?");
       return null;
     }
@@ -30,7 +31,8 @@ export default function Dashboard() {
       const r = await api.getLatestReport();
       setReport(r);
       setError(null);
-    } catch {
+    } catch (e) {
+      console.warn("Failed to get latest report", e);
       // henüz rapor yok
     }
   }, []);
@@ -39,7 +41,8 @@ export default function Dashboard() {
     try {
       const h = await api.getHistory();
       setHistory(h);
-    } catch {
+    } catch (e) {
+      console.warn("Failed to get history", e);
       // yoksay
     }
   }, []);
@@ -47,7 +50,7 @@ export default function Dashboard() {
   const refreshWatchlist = useCallback(async () => {
     try {
       setWatchlist(await api.getWatchlist());
-    } catch { /* sessiz */ }
+    } catch (e) { console.warn("Failed to get watchlist", e); }
   }, []);
 
   useEffect(() => {
@@ -89,13 +92,12 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
       {/* Hero */}
-      <div
-        className="scanline rounded-sm px-6 py-5 mb-6 flex items-center justify-between"
-        style={{
-          borderColor: "var(--term-border)",
-          backgroundColor: "var(--term-panel)",
-          border: "1px solid var(--term-border)",
-        }}
+	      <div
+	        className="scanline rounded-sm px-6 py-5 mb-6 flex items-center justify-between"
+	        style={{
+	          backgroundColor: "var(--term-panel)",
+	          border: "1px solid var(--term-border)",
+	        }}
       >
         <div>
           <div
@@ -131,14 +133,13 @@ export default function Dashboard() {
       </div>
 
       {error && (
-        <div
-          className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
-          style={{
-            borderColor: "var(--term-red)",
-            backgroundColor: "rgba(220, 38, 38, 0.1)",
-            color: "var(--term-red)",
-            border: "1px solid var(--term-red)",
-          }}
+	      <div
+	          className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
+	          style={{
+	            backgroundColor: "rgba(220, 38, 38, 0.1)",
+	            color: "var(--term-red)",
+	            border: "1px solid var(--term-red)",
+	          }}
         >
           {error}
         </div>
@@ -154,14 +155,13 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Ana içerik */}
         <div className="lg:col-span-3 space-y-6">
-          {report && (
-            <div
-              className="rounded-sm p-4"
-              style={{
-                borderColor: "var(--term-border)",
-                backgroundColor: "var(--term-panel)",
-                border: "1px solid var(--term-border)",
-              }}
+	          {report && (
+	            <div
+	              className="rounded-sm p-4"
+	              style={{
+	                backgroundColor: "var(--term-panel)",
+	                border: "1px solid var(--term-border)",
+	              }}
             >
               <div
                 className="text-[11px] tracking-[0.2em] font-mono mb-2"
@@ -207,13 +207,12 @@ export default function Dashboard() {
 
         {/* Geçmiş */}
         <div className="lg:col-span-1">
-          <div
-            className="rounded-sm p-4 sticky top-20"
-            style={{
-              borderColor: "var(--term-border)",
-              backgroundColor: "var(--term-panel)",
-              border: "1px solid var(--term-border)",
-            }}
+	        <div
+	            className="rounded-sm p-4 sticky top-20"
+	            style={{
+	              backgroundColor: "var(--term-panel)",
+	              border: "1px solid var(--term-border)",
+	            }}
           >
             <div
               className="text-[11px] tracking-[0.2em] font-mono mb-3"

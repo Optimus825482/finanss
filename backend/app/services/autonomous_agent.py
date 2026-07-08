@@ -47,13 +47,13 @@ class AutonomousAgent:
 
     # ── Tools ──
 
-    def get_market_status(self, exchanges: list[str] | None = None) -> dict:
+    async def get_market_status(self, exchanges: list[str] | None = None) -> dict:
         """Piyasa durumu: tum evrenden hizli teknik tarama."""
         from app.services.screener_service import stage1_prescreen, get_universe
         tickers = get_universe(exchanges)
-        return asyncio.run(stage1_prescreen(tickers))  # sync wrapper for agent
+        return await stage1_prescreen(tickers)
 
-    def analyze_single(self, ticker: str) -> dict:
+    async def analyze_single(self, ticker: str) -> dict:
         """Tek hisse detayli analiz (full agent pipeline)."""
         import yfinance as yf
         t = yf.Ticker(ticker)
@@ -73,19 +73,16 @@ class AutonomousAgent:
         }
 
         # Run agents
-        async def _run():
-            from app.agents.fundamental_agent import FundamentalAgent
-            from app.agents.sentiment_agent import SentimentAgent
-            from app.agents.risk_agent import RiskAgent
-            from app.agents.report_agent import ReportAgent
+        from app.agents.fundamental_agent import FundamentalAgent
+        from app.agents.sentiment_agent import SentimentAgent
+        from app.agents.risk_agent import RiskAgent
+        from app.agents.report_agent import ReportAgent
 
-            f = FundamentalAgent(); s = SentimentAgent(); r = RiskAgent(); rep = ReportAgent()
-            c = await f.run([candidate])
-            c = await s.run(c)
-            c = await r.run(c)
-            return c[0] if c else candidate
-
-        return asyncio.run(_run())
+        f = FundamentalAgent(); s = SentimentAgent(); r = RiskAgent(); rep = ReportAgent()
+        c = await f.run([candidate])
+        c = await s.run(c)
+        c = await r.run(c)
+        return c[0] if c else candidate
 
     def get_portfolio(self, db: Session) -> dict:
         """Mevcut portfoy ve bakiye durumu."""
@@ -155,11 +152,6 @@ class AutonomousAgent:
     def _log_decision(self, db: Session, ticker: str, action: str, quantity: float, price: float,
                       amount: float, reasoning: str, confidence: float, portfolio_before: dict, portfolio_after: dict):
         """Her karari trading_decisions'a yaz."""
-        from app.models.core import Prediction  # noqa
-        # Raw SQL daha guvenli
-        db.execute(
-            db.query(Prediction)._annotations,
-        )
         # Manual insert
         import sqlalchemy as sa
         meta = sa.MetaData()
@@ -191,7 +183,7 @@ class AutonomousAgent:
         analyzed = []
         for c in top:
             try:
-                a = self.analyze_single(c["ticker"])
+                a = await self.analyze_single(c["ticker"])
                 analyzed.append({
                     "ticker": c["ticker"], "price": c["price"],
                     "technical_score": c["technical_score"],
@@ -323,7 +315,8 @@ JSON format (sadece JSON, aciklama yok):
         """Ajanı manuel veya scheduler'dan cagirmak icin sync wrapper."""
         db = SessionLocal()
         try:
-            result = asyncio.run(self.think_and_act(db, exchanges))
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(self.think_and_act(db, exchanges))
             return result
         finally:
             db.close()
@@ -333,14 +326,15 @@ JSON format (sadece JSON, aciklama yok):
 
 def get_trading_logs(db: Session, ticker: str | None = None, limit: int = 50) -> list[dict]:
     """Trading kararlarinin logunu dondur."""
+    from sqlalchemy import text
     if ticker:
         query = db.execute(
-            db.query(db.text("SELECT * FROM trading_decisions WHERE ticker = :t ORDER BY created_at DESC LIMIT :l")),
+            text("SELECT * FROM trading_decisions WHERE ticker = :t ORDER BY created_at DESC LIMIT :l"),
             {"t": ticker.upper(), "l": limit},
         )
     else:
         query = db.execute(
-            db.query(db.text("SELECT * FROM trading_decisions ORDER BY created_at DESC LIMIT :l")),
+            text("SELECT * FROM trading_decisions ORDER BY created_at DESC LIMIT :l"),
             {"l": limit},
         )
     rows = query.fetchall()

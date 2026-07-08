@@ -9,18 +9,30 @@ export default function RaporlarPage() {
   const [history, setHistory] = useState<ReportListItem[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.getHistory().then(setHistory).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
+    fetch(`${apiBase}/api/notifications/read-all`, { method: "POST" }).catch(() => {});
+  }, []);
+
   const loadReport = async (id: number) => {
     setLoading(true);
-    const r = await api.getReport(id);
-    setReport(r);
-    //Mark notifications as read for this report
-    try{await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/read-by-report/${id}`,{method:"POST"})}catch{}
-    setLoading(false);
+    setError(null);
+    try {
+      const r = await api.getReport(id);
+      setReport(r);
+      //Mark notifications as read for this report
+      try{await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/read-by-report/${id}`,{method:"POST"})}catch{}
+    } catch(e) {
+      setError("Rapor yüklenemedi: " + (e instanceof Error ? e.message : "Beklenmeyen hata"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,7 +40,6 @@ export default function RaporlarPage() {
       <div
         className="rounded-sm px-6 py-4 mb-6"
         style={{
-          borderColor: "var(--term-border)",
           backgroundColor: "var(--term-panel)",
           border: "1px solid var(--term-border)",
         }}
@@ -47,7 +58,6 @@ export default function RaporlarPage() {
           <div
             className="rounded-sm p-4"
             style={{
-              borderColor: "var(--term-border)",
               backgroundColor: "var(--term-panel)",
               border: "1px solid var(--term-border)",
             }}
@@ -68,7 +78,8 @@ export default function RaporlarPage() {
                 <button
                   key={h.id}
                   onClick={() => loadReport(h.id)}
-                  className="w-full text-left px-2 py-2 rounded-sm font-mono text-xs transition-none flex justify-between items-start"
+                  disabled={loading}
+                  className="w-full text-left px-2 py-2 rounded-sm font-mono text-xs transition-none flex justify-between items-start disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
                     backgroundColor:
                       report?.id === h.id ? "var(--term-border)" : "transparent",
@@ -86,7 +97,7 @@ export default function RaporlarPage() {
                     </div>
                   </div>
                   <span onClick={(e) => { e.stopPropagation(); api.deleteReport(h.id).then(() => { setHistory(prev => prev.filter(x => x.id !== h.id)); if (report?.id === h.id) setReport(null); }); }}
-                    className="text-term-red text-[10px] transition-none shrink-0 mt-0.5">✕</span>
+                    className="text-term-red text-[10px] transition-none shrink-0 mt-0.5" aria-label="Raporu sil">✕</span>
                 </button>
               ))}
             </div>
@@ -96,7 +107,12 @@ export default function RaporlarPage() {
         {/* Rapor detayı */}
         <div className="lg:col-span-3">
           {loading && (<Loader />)}
-          {!report && !loading && (
+          {error && !loading && (
+            <div className="rounded-sm p-4 text-center" style={{ border: "1px solid var(--term-red)", backgroundColor: "var(--term-panel)" }}>
+              <div className="text-sm font-mono" style={{ color: "var(--term-red)" }}>{error}</div>
+            </div>
+          )}
+          {!report && !loading && !error && (
             <div
               className="rounded-sm p-12 text-center"
               style={{
@@ -114,7 +130,6 @@ export default function RaporlarPage() {
               <div
                 className="rounded-sm p-4"
                 style={{
-                  borderColor: "var(--term-border)",
                   backgroundColor: "var(--term-panel)",
                   border: "1px solid var(--term-border)",
                 }}

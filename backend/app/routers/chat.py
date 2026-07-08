@@ -2,7 +2,7 @@ import re
 
 from fastapi import APIRouter
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.schemas import ChatSessionOut, ChatMessageOut, ChatIn, ChatResponse
 from app.services.memory_service import (
     get_or_create_profile, create_chat_session, add_chat_message,

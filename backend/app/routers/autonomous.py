@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.services.autonomous_agent import AutonomousAgent, get_trading_logs
 
 router = APIRouter(prefix="/api/autonomous", tags=["autonomous"])
@@ -40,9 +40,10 @@ async def run_agent(background_tasks: BackgroundTasks, exchanges: list[str] | No
 @router.post("/schedule")
 def schedule_agent():
     """Ajanin periyodik calismasini baslat (her 30 dakikada bir)."""
-    from app.scheduler import scheduler
+    from app.scheduler import start_scheduler
+    sched = start_scheduler()
     try:
-        scheduler.add_job(
+        sched.add_job(
             agent.run,
             trigger="interval",
             minutes=30,
@@ -58,9 +59,10 @@ def schedule_agent():
 @router.post("/stop")
 def stop_agent():
     """Ajanin periyodik calismasini durdur."""
-    from app.scheduler import scheduler
+    from app.scheduler import start_scheduler
+    sched = start_scheduler()
     try:
-        scheduler.remove_job("autonomous_agent")
+        sched.remove_job("autonomous_agent")
         return {"stopped": True}
     except Exception:
         return {"stopped": False, "message": "Ajan zaten calismiyor"}

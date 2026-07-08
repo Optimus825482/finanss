@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.config import WATCHLIST
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.models import WatchlistItem
 from app.schemas import WatchlistItemIn, WatchlistItemOut
 from app.services.market_data import get_live_prices

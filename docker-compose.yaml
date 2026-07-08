@@ -7,7 +7,8 @@ services:
     environment:
       POSTGRES_DB: orbis_finai
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 518518Erkan
+      # WARNING: Override POSTGRES_PASSWORD in production! Use a .env file.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-518518Erkan}
     ports:
       - "5432:5432"
     volumes:
@@ -18,6 +19,10 @@ services:
       timeout: 10s
       retries: 15
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
 
   backend:
@@ -25,8 +30,18 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: orbis_finai_api
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     environment:
-      DATABASE_URL: postgresql://postgres:518518Erkan@db:5432/orbis_finai
+      # DB — default works inside Docker Compose network
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-518518Erkan}@db:5432/orbis_finai}
+      # API Key for frontend→backend auth (optional — leave empty to disable)
+      API_KEY: ${API_KEY:-}
+      # Fernet key for encrypting LLM API keys at rest (optional)
+      FERNET_KEY: ${FERNET_KEY:-}
+      # LLM provider API keys (at least one required for LLM features)
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -35,6 +50,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost',8012); c.request('GET','/api/status'); r=c.getresponse(); exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   frontend:
@@ -46,6 +66,15 @@ services:
     container_name: orbis_finai_web
     ports:
       - "3009:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
 volumes:

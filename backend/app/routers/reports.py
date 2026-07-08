@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from sqlalchemy.orm import joinedload
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.models import Report
 from app.models.core import Notification
 from app.schemas import ReportOut, ReportListItem, PipelineStatusOut

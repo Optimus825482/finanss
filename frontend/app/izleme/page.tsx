@@ -20,7 +20,7 @@ export default function IzlemePage() {
 
   return (
     <main className="min-h-screen px-6 py-8 max-w-5xl mx-auto">
-      <div className="rounded-sm px-6 py-4 mb-6" style={{ borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
+      <div className="rounded-sm px-6 py-4 mb-6" style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
         <h1 className="font-mono text-xl font-semibold mb-1" style={{ color: "var(--term-text)" }}>İZLEME</h1>
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
           Herhangi bir hisse senedini ara, anlık fiyat ve detaylı analizini gör
@@ -28,7 +28,7 @@ export default function IzlemePage() {
       </div>
 
       {/* Arama */}
-      <div className="rounded-sm p-4 mb-6" style={{ borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
+      <div className="rounded-sm p-4 mb-6" style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="flex-1 relative">
             <input
@@ -69,7 +69,7 @@ export default function IzlemePage() {
       </div>
 
       {/* Sonuç */}
-      {detailLoading && (<div className="rounded-sm" style={{ borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}><Loader /></div>)}
+        {detailLoading && (<div className="rounded-sm" style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}><Loader /></div>)}
 
       {!detail && !detailLoading && (
         <div className="rounded-sm p-12 text-center" style={{ border: "1px dashed var(--term-border)", backgroundColor: "var(--term-panel)" }}>

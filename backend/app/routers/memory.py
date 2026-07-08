@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.schemas import MemoryOut, MemorySearchResult
 from app.services.memory_service import (
     store_research_memory, get_ticker_memories, search_similar_memories,

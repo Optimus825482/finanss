@@ -29,8 +29,8 @@ export function useTickerSearch(onSelect?: (ticker: string) => void): UseTickerS
   const [suggestions, setSuggestions] = useState<TickerSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null as any);
-  const dropdownRef = useRef<HTMLDivElement>(null as any);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const skipNextRef = useRef(false);   // selectSuggestion sonrasi fetch'i atla
 
   // outside click handler
@@ -70,7 +70,7 @@ export function useTickerSearch(onSelect?: (ticker: string) => void): UseTickerS
           setShowSuggestions(data.length > 0);
           setSelectedIdx(-1);
         }
-      } catch { /* sessiz */ }
+      } catch (e) { console.warn("Failed to fetch suggestions", e); }
     }, 200);
     return () => clearTimeout(timer);
   }, [ticker]);

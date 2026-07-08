@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.models import PortfolioPosition
 from app.schemas import PortfolioPositionIn, PortfolioCloseIn, PortfolioPositionOut, PortfolioSummaryOut
 from app.services.market_data import get_live_prices

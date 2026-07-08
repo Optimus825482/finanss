@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.orchestrator import orchestrator
 from app.services.screener_service import list_exchanges, get_universe
+from app.config import STOCK_UNIVERSE
 
 router = APIRouter(prefix="/api/screen", tags=["screen"])
 
@@ -19,7 +20,7 @@ def get_ticker_universe(exchange: str | None = Query(None)):
     if exchange:
         tickers = get_universe([exchange])
         return {"exchange": exchange, "count": len(tickers), "tickers": tickers}
-    return {"exchanges": [{"slug": k, "tickers": v} for k, v in get_universe(None) if len(v) > 0][:10]}
+    return {"exchanges": [{"slug": k, "ticker_count": len(v)} for k, v in STOCK_UNIVERSE.items() if len(v) > 0]}
 
 
 @router.post("/generate")

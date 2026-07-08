@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
   LineSeries, CandlestickSeries, AreaSeries, HistogramSeries, Time,
@@ -29,11 +29,8 @@ function bollinger(d:number[],p:number,m:number){const mid=sma(d,p);const up:(nu
 function rsiFn(d:number[],p:number):(number|null)[]{const o:(number|null)[]=[];let ag=0,al=0;for(let i=1;i<d.length;i++){const ch=d[i]-d[i-1];const gn=ch>0?ch:0;const ls=ch<0?-ch:0;if(i<p){ag+=gn;al+=ls;if(i!==p-1){o.push(null);continue}ag/=p;al/=p}else{ag=(ag*(p-1)+gn)/p;al=(al*(p-1)+ls)/p}o.push(al===0?100:100-(100/(1+ag/al)))}return o}
 function macdFn(d:number[]){const e12=ema(d,12);const e26=ema(d,26);const mv:(number|null)[]=[];for(let i=0;i<d.length;i++)mv.push(e12[i]!=null&&e26[i]!=null?e12[i]!-e26[i]!:null);const sig=ema(mv.filter(v=>v!=null)as number[],9);const ps:(number|null)[]=[];const off=26+9-2;for(let i=0;i<d.length;i++)ps.push(i<off?null:sig[i-off]??null);const hs:(number|null)[]=[];for(let i=0;i<d.length;i++)hs.push(mv[i]!=null&&ps[i]!=null?mv[i]!-ps[i]!:null);return{macd:mv,signal:ps,hist:hs}}
 
-const resolveColor = (c:string)=>{const v=getComputedStyle(document.documentElement).getPropertyValue(c.replace(/^var\(|\)$/g,"")).trim();return v||(c.includes("green")?"#22C55E":c.includes("red")?"#EF4444":"#9CA3AF")};
+const resolveColor = (c:string)=>{const m=c.match(/^var\((--[^,)]+)/);if(m){const v=getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();if(v)return v}return c.includes("green")?"#22C55E":c.includes("red")?"#EF4444":"#9CA3AF"};
 const isLight = ()=>document.documentElement.getAttribute("data-theme")==="light";
-// Duplicate timestamp önleme
-const _seen=new Map<number,number>();
-const toTime = (d:PricePoint):Time=>{let t=Math.floor(new Date(d.date+(d.date.includes("T")?"":"T00:00:00")).getTime()/1000);const s=_seen.get(t)||0;_seen.set(t,s+1);return(t+s)as Time};
 
 export default function PriceChart({data,color,period,interval,onPeriodChange,onIntervalChange}:{
   data:PricePoint[];color:string;period?:string;interval?:string;
@@ -43,6 +40,7 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
   const chRef=useRef<IChartApi|null>(null);
   const mainRef=useRef<ISeriesApi<any>|null>(null);
   const indRefs=useRef<Map<string,ISeriesApi<any>>>(new Map());
+  const seenRef=useRef<Map<number,number>>(new Map());
   const [mode,setMode]=useState<ChartMode>("candle");
   const [ready,setReady]=useState(false);
   const [leg,setLeg]=useState({o:0,h:0,l:0,c:0,v:0});
@@ -54,10 +52,13 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
 
   if(!data||data.length<2)return <div className="rounded-sm border p-8 text-center" style={{borderColor:"var(--term-border)",backgroundColor:"var(--term-panel)"}}><div className="text-xs font-mono mb-1" style={{color:"var(--term-muted)"}}>Bu dönem/aralık için veri yok</div><div className="text-[10px] font-mono" style={{color:"var(--term-muted)"}}>Daha geniş dönem veya büyük aralık dene</div></div>;
 
-  const trend=data[data.length-1].close>=data[0].close?"up":"down";
-  const base=color||(trend==="up"?"var(--term-green)":"var(--term-red)");
-  const lineColor=base.startsWith("var(")?resolveColor(base):base;
-  const closes=data.map(d=>d.close);
+  const toTime = (d:PricePoint):Time=>{let t=Math.floor(new Date(d.date+(d.date.includes("T")?"":"T00:00:00")).getTime()/1000);const s=seenRef.current.get(t)||0;seenRef.current.set(t,s+1);return(t+s)as Time};
+
+  // Memoize derived data
+  const closes=useMemo(()=>data.map(d=>d.close),[data]);
+  const trend=useMemo(()=>data.length>=2?(data[data.length-1].close>=data[0].close?"up":"down"):"up",[data]);
+  const base=useMemo(()=>color||(trend==="up"?"var(--term-green)":"var(--term-red)"),[color,trend]);
+  const lineColor=useMemo(()=>base.startsWith("var(")?resolveColor(base):base,[base]);
 
   const toggleInd=(id:IndicatorId)=>{setInds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n})};
 
@@ -84,9 +85,9 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
 
   const fmt=(n:number|string)=>Number(n).toFixed(2);
   const fmtV=(n:number)=>n>=1e6?`${(n/1e6).toFixed(1)}M`:n>=1e3?`${(n/1e3).toFixed(1)}K`:`${n}`;
-  const L=isLight();
 
-  useEffect(()=>{if(!cRef.current)return;const ch=createChart(cRef.current,{width:cRef.current.clientWidth,height:420,layout:{background:{type:ColorType.Solid,color:"transparent"},textColor:L?"#334155":"#94A3B8",fontSize:11,fontFamily:"IBM Plex Mono, JetBrains Mono, monospace"},grid:{vertLines:{visible:false},horzLines:{color:L?"#E2E8F0":"#1E293B",style:1}},crosshair:{mode:CrosshairMode.Normal,vertLine:{color:"#64748B",style:3,width:1,visible:true,labelVisible:false},horzLine:{color:"#64748B",style:3,width:1,visible:true,labelVisible:false}},rightPriceScale:{borderColor:L?"#CBD5E1":"#334155",borderVisible:true,scaleMargins:{top:.08,bottom:.20}},timeScale:{borderColor:L?"#CBD5E1":"#334155",borderVisible:true,timeVisible:interval==="1d",fixLeftEdge:true,fixRightEdge:true}});
+  // Chart creation (mount only)
+  useEffect(()=>{if(!cRef.current)return;const L=isLight();const ch=createChart(cRef.current,{width:cRef.current.clientWidth,height:420,layout:{background:{type:ColorType.Solid,color:"transparent"},textColor:L?"#334155":"#94A3B8",fontSize:11,fontFamily:"IBM Plex Mono, JetBrains Mono, monospace"},grid:{vertLines:{visible:false},horzLines:{color:L?"#E2E8F0":"#1E293B",style:1}},crosshair:{mode:CrosshairMode.Normal,vertLine:{color:"#64748B",style:3,width:1,visible:true,labelVisible:false},horzLine:{color:"#64748B",style:3,width:1,visible:true,labelVisible:false}},rightPriceScale:{borderColor:L?"#CBD5E1":"#334155",borderVisible:true,scaleMargins:{top:.08,bottom:.20}},timeScale:{borderColor:L?"#CBD5E1":"#334155",borderVisible:true,timeVisible:false,fixLeftEdge:true,fixRightEdge:true}});
     chRef.current=ch;setReady(true);
     const ro=new ResizeObserver(e=>{for(const{contentRect:{width}}of e){if(width>0)ch.applyOptions({width})}});ro.observe(cRef.current);
     const mo=new MutationObserver(()=>{const l=isLight();ch.applyOptions({layout:{textColor:l?"#334155":"#94A3B8"},grid:{horzLines:{color:l?"#E2E8F0":"#1E293B"}},rightPriceScale:{borderColor:l?"#CBD5E1":"#334155"},timeScale:{borderColor:l?"#CBD5E1":"#334155"}})});
@@ -95,9 +96,9 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
     return ()=>{ro.disconnect();mo.disconnect();ch.remove()};
   },[]);
 
-  // Series + indicators
+  // Series + indicators (mode/interval/inds changes)
   useEffect(()=>{if(!chRef.current||!ready)return;const ch=chRef.current;
-    _seen.clear();
+    seenRef.current.clear();
     if(mainRef.current){ch.removeSeries(mainRef.current);mainRef.current=null}
     indRefs.current.forEach(s=>ch.removeSeries(s));indRefs.current.clear();
     let s:any;
@@ -127,15 +128,18 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
       const hSer=ch.addSeries(HistogramSeries,{priceScaleId:"macd",priceLineVisible:false});hSer.setData(hs.map((v,i)=>({time:toTime(data[i]),value:v??0,color:(v??0)>=0?"#22C55E55":"#EF444455"})).filter(x=>x.value!==0));
       ch.priceScale("macd").applyOptions({scaleMargins:{top:.85,bottom:.02},borderVisible:false});indRefs.current.set("macd_m",ms);indRefs.current.set("macd_s",ss);indRefs.current.set("macd_h",hSer)}
 
+    // Apply dynamic timeVisible based on interval
+    ch.applyOptions({timeScale:{timeVisible:interval==="1d"}});
+    // fitContent only on mode/indicator change, not on data refresh
     ch.timeScale().fitContent();
     const last=data[data.length-1];setLeg({o:last.open??last.close,h:last.high??last.close,l:last.low??last.close,c:last.close,v:last.volume??0});
   },[mode,ready,interval,inds]);
 
-  // Auto-refresh
-  useEffect(()=>{if(!mainRef.current||!ready)return;_seen.clear();const s=mainRef.current;
+  // Data refresh only — no fitContent (preserves user zoom)
+  useEffect(()=>{if(!mainRef.current||!ready)return;seenRef.current.clear();const s=mainRef.current;
     if(mode==="candle")(s as ISeriesApi<"Candlestick">).setData(data.map(d=>({time:toTime(d),open:d.open??d.close,high:d.high??d.close,low:d.low??d.close,close:d.close})));
     else(s as unknown as ISeriesApi<"Line"|"Area">).setData(data.map(d=>({time:toTime(d),value:d.close})));
-    chRef.current?.timeScale().fitContent()},[data]);
+  },[data]);
 
   const groups=new Map<string,IndDef[]>();INDICATORS.forEach(d=>{const a=groups.get(d.group)??[];a.push(d);groups.set(d.group,a)});
 

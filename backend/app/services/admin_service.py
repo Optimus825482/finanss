@@ -211,7 +211,8 @@ def get_translation_config(db: Session) -> dict:
             "provider_name": provider.name,
             "provider_slug": provider.slug,
             "base_url": provider.base_url,
-            "api_key": provider.api_key,
+            "has_api_key": bool(provider.api_key),
+            "api_key_masked": _mask_key(provider.api_key or ""),
             "model_id": model.id,
             "model_name": model.model_id,
             "model_display": model.display_name,
@@ -237,14 +238,17 @@ def seed_default_provider():
             db.add(p)
             db.flush()
 
-            db.add(LLMModel(
+            nemotron = LLMModel(
                 provider_id=p.id,
                 model_id="mistralai/mistral-nemotron",
                 display_name="Mistral Nemotron",
                 supports_chat=True,
                 supports_embedding=False,
                 max_tokens=4096,
-            ))
+            )
+            db.add(nemotron)
+            db.flush()
+
             db.add(LLMModel(
                 provider_id=p.id,
                 model_id="nvidia/nemotron-4",
@@ -256,7 +260,7 @@ def seed_default_provider():
 
             # Çeviri ayarını varsayılan olarak bu provider'a ata
             db.add(SystemSettings(key="translation_provider_id", value=str(p.id), description="Çeviri için LLM provider ID"))
-            db.add(SystemSettings(key="translation_model_id", value="1", description="Çeviri için LLM model ID (provider'a ait)"))
+            db.add(SystemSettings(key="translation_model_id", value=str(nemotron.id), description="Çeviri için LLM model ID (provider'a ait)"))
 
             db.commit()
             print("Seed: NVIDIA NIM provider + modeller eklendi")

@@ -31,7 +31,7 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/predictions/${pick.ticker}`, { method: "POST" });
       if (res.ok) setPrediction(await res.json());
-    } catch { /* sessiz */ }
+	    } catch (e) { console.warn("Failed to get prediction", e); }
     setPredLoading(false);
   };
 

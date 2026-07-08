@@ -10,6 +10,7 @@ Self-evaluate döngüsü: research_memories tablosunda her anının
 confidence skoru var. Yeni veri geldiğinde eski tahmin doğrulanır,
 confidence güncellenir.
 """
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -18,6 +19,8 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+
+logger = logging.getLogger(__name__)
 from app.models import (
     UserProfile,
     ChatSession,
@@ -150,8 +153,8 @@ async def store_research_memory(
             model_name="text-embedding-3-small",
         )
         db.add(emb)
-    except Exception:
-        pass  # embedding başarısız olursa memory yine de kaydedilir
+    except Exception as e:
+        logger.warning("Embedding failed, memory saved without embedding: %s", e)
 
     db.commit()
     db.refresh(memory)

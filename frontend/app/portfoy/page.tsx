@@ -66,7 +66,6 @@ export default function PortfoyPage() {
       <div
         className="rounded-sm px-6 py-4 mb-6"
         style={{
-          borderColor,
           backgroundColor: "var(--term-panel)",
           border: `1px solid ${borderColor}`,
         }}
@@ -240,6 +239,7 @@ export default function PortfoyPage() {
                 onClick={() => handleDelete(p.id)}
                 className="text-xs font-mono transition-none"
                 style={{ color: "var(--term-muted)" }}
+                aria-label="Pozisyonu sil"
               >
                 ✕
               </button>

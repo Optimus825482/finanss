@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
+from app.middleware import APIKeyMiddleware
 from app.scheduler import start_scheduler
 from app.services.admin_service import seed_default_provider
 from app.routers import register_routers
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(APIKeyMiddleware)
 
 
 @app.on_event("startup")

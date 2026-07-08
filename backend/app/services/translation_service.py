@@ -227,10 +227,21 @@ async def translate_text(text: str, target_lang: str = "tr", use_llm: bool = Tru
         if use_llm:
             try:
                 from app.services.admin_service import get_translation_config
+                from app.models import LLMProvider
                 from openai import OpenAI
 
                 config = get_translation_config(db)
-                if config.get("api_key") and config.get("base_url") and config.get("model_name"):
+                if config.get("has_api_key") and config.get("base_url") and config.get("model_name"):
+                    # Get real API key from provider record (not exposed via config)
+                    provider = db.query(LLMProvider).filter(LLMProvider.id == config["provider_id"]).first()
+                    if not provider or not provider.api_key:
+                        config = None
+                    else:
+                        config["api_key"] = provider.api_key  # internal use only
+                else:
+                    config = None
+
+                if config:
                     client = OpenAI(base_url=config["base_url"], api_key=config["api_key"])
                     prompt = f"""Aşağıdaki finansal metni Türkçe'ye çevir.
 Sadece çeviriyi ver, açıklama ekleme. Finansal terimleri doğru çevir.

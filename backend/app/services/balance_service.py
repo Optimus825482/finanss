@@ -14,26 +14,26 @@ def get_balance(db: Session) -> VirtualBalance:
     if not balance:
         balance = VirtualBalance(cash=100_000.0)
         db.add(balance)
-        db.commit()
+        db.flush()
         db.refresh(balance)
     return balance
 
 
 def deposit(db: Session, amount: float, note: str = "Para yatırma") -> VirtualBalance:
-    """Nakit ekle."""
+    """Nakit ekle. Caller must commit."""
     balance = get_balance(db)
     balance.cash = round(balance.cash + amount, 2)
     balance.updated_at = datetime.utcnow()
 
     tx = BalanceTransaction(type="deposit", amount=amount, note=note)
     db.add(tx)
-    db.commit()
+    db.flush()
     db.refresh(balance)
     return balance
 
 
 def withdraw(db: Session, amount: float, note: str = "Para çekme") -> VirtualBalance:
-    """Nakit çek."""
+    """Nakit çek. Caller must commit."""
     balance = get_balance(db)
     if balance.cash < amount:
         raise ValueError(f"Yetersiz bakiye. Mevcut: ${balance.cash:,.2f}")
@@ -42,13 +42,13 @@ def withdraw(db: Session, amount: float, note: str = "Para çekme") -> VirtualBa
 
     tx = BalanceTransaction(type="withdraw", amount=amount, note=note)
     db.add(tx)
-    db.commit()
+    db.flush()
     db.refresh(balance)
     return balance
 
 
 def record_position_opened(db: Session, position_id: int, cost: float, ticker: str) -> BalanceTransaction:
-    """Pozisyon açıldığında bakiyeden düş."""
+    """Pozisyon açıldığında bakiyeden düş. Caller must commit."""
     balance = get_balance(db)
     balance.cash = round(balance.cash - cost, 2)
     balance.updated_at = datetime.utcnow()
@@ -60,13 +60,12 @@ def record_position_opened(db: Session, position_id: int, cost: float, ticker: s
         position_id=position_id,
     )
     db.add(tx)
-    db.commit()
-    db.refresh(balance)
+    db.flush()
     return tx
 
 
 def record_position_closed(db: Session, position_id: int, proceeds: float, ticker: str) -> BalanceTransaction:
-    """Pozisyon kapandığında bakiyeye ekle."""
+    """Pozisyon kapandığında bakiyeye ekle. Caller must commit."""
     balance = get_balance(db)
     balance.cash = round(balance.cash + proceeds, 2)
     balance.updated_at = datetime.utcnow()
@@ -78,8 +77,7 @@ def record_position_closed(db: Session, position_id: int, proceeds: float, ticke
         position_id=position_id,
     )
     db.add(tx)
-    db.commit()
-    db.refresh(balance)
+    db.flush()
     return tx
 
 

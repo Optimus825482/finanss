@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.database import SessionLocal
+from app.database import SessionLocal  # TODO: use Depends(get_db)
 from app.services.admin_service import (
     list_providers, create_provider, update_provider, delete_provider,
     list_models, create_model, update_model, delete_model, test_provider_connection,
