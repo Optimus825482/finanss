@@ -16,11 +16,14 @@ Her karar trading_decisions tablosuna loglanir.
 """
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Optional
 
 import yfinance as yf
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.database import SessionLocal
 from app.models.core import PortfolioPosition
@@ -206,17 +209,89 @@ class AutonomousAgent:
                 "timestamp": datetime.utcnow().isoformat()}
 
     async def _llm_decide(self, portfolio: dict, candidates: list[dict], db: Session) -> tuple:
-        """LLM portfoy + adaylari degerlendirip dinamik al/sat kararlari verir."""
+        """LLM portfoy + adaylari degerlendirip dinamik al/sat kararlari verir.
+        
+        Falls back to rule-based decisions when no LLM is configured.
+        """
         from app.services.llm_bridge import generate, get_default_model
+        from app.config import TOP_N_PICKS
 
-        # Portfoy ozeti
+        # Try LLM first
+        model = get_default_model()
+        if model is not None:
+            try:
+                return await self._llm_decide_with_llm(portfolio, candidates, db)
+            except Exception as e:
+                logger.warning("LLM karar verme basarisiz, kural-bazli moda geciliyor: %s", e)
+
+        # Fallback: rule-based decisions
+        return self._rule_based_decide(portfolio, candidates, db, TOP_N_PICKS)
+
+    def _rule_based_decide(self, portfolio: dict, candidates: list[dict], db: Session, top_n: int = 5) -> tuple:
+        """Kural-bazli portfoy kararlari (LLM yokken calisir)."""
+        actions = []
+        decisions = []
+
+        # 1. Check existing positions — sell if overbought (RSI > 75) or stop-loss (< -15%)
+        for pos in portfolio.get("positions", []):
+            ticker = pos["ticker"]
+            candidate = next((c for c in candidates if c["ticker"] == ticker), None)
+            if candidate:
+                rsi = candidate.get("rsi_14", 50)
+                unrealized = pos.get("unrealized_pl", 0)
+                if rsi > 75 or unrealized < -pos.get("entry_price", 1) * 0.15 * pos.get("quantity", 1):
+                    # Sell signal
+                    price = candidate.get("price", 0)
+                    pos_id = pos.get("id")
+                    if price > 0 and pos_id:
+                        result = self.execute_sell(db, pos_id, price,
+                            f"Kural bazli satis: RSI={rsi:.0f}, PL=${unrealized:.2f}",
+                            portfolio, confidence=0.6)
+                        if result["success"]:
+                            actions.append({"action": "sell", "ticker": ticker, "reasoning": result.get("error", "")})
+                            portfolio = self.get_portfolio(db)
+
+        # 2. Buy top candidates if cash available
+        cash = portfolio.get("cash", 0)
+        max_per_pos = cash * self.max_per_position_pct
+        current_count = portfolio.get("position_count", 0)
+
+        for c in candidates[:top_n]:
+            if current_count >= self.max_positions:
+                break
+            if cash <= 0:
+                break
+
+            # Only buy if strong signal: composite > 60, RSI < 65, positive momentum
+            score = c.get("composite_score", c.get("technical_score", 0))
+            rsi = c.get("rsi_14", 50)
+            mom = c.get("momentum_5d", 0)
+
+            if score >= 60 and rsi < 65 and mom > -5:
+                qty = max(1, int(max_per_pos / c["price"])) if c["price"] > 0 else 0
+                if qty > 0 and max_per_pos > 0:
+                    result = self.execute_buy(db, c["ticker"], qty, c["price"],
+                        f"Kural bazli alis: skor={score:.0f} RSI={rsi:.0f} momentum=%{mom:.1f}",
+                        portfolio, confidence=0.6)
+                    if result["success"]:
+                        actions.append({"action": "buy", "ticker": c["ticker"], "quantity": qty, "price": c["price"],
+                            "reasoning": f"skor={score:.0f} RSI={rsi:.0f}"})
+                        cash -= qty * c["price"]
+                        current_count += 1
+                        portfolio = self.get_portfolio(db)
+
+        return actions, decisions
+
+    async def _llm_decide_with_llm(self, portfolio: dict, candidates: list[dict], db: Session) -> tuple:
+        """LLM ile portfoy kararlari."""
+        from app.services.llm_bridge import generate
+
         pos_text = "\n".join(
             f"  {p['ticker']} x{p['quantity']} @ ${p['entry_price']:.2f} (su an: ${p.get('current_price', '?')}) "
             f"PL: ${p.get('unrealized_pl', 0):.2f}"
             for p in portfolio["positions"]
         ) if portfolio["positions"] else "  (bos portfoy)"
 
-        # Aday ozeti
         cand_text = "\n".join(
             f"  {c['ticker']} ${c['price']:.2f} | "
             f"teknik:{c['technical_score']:.0f} compozit:{c['composite_score']:.0f} "
@@ -228,7 +303,7 @@ class AutonomousAgent:
         )
 
         prompt = f"""Sen ORBIS FINAI'nin otonom portfoy yoneticisisin. $10,000 sanal bakiye ile gercek piyasa kosullarinda islem yapiyorsun.
-Amacin: riski yoneterek maksimum getiri saglamak.
+Amacin: riski yonetererk maksimum getiri saglamak.
 
 === PORTFOY DURUMU ===
 Nakit: ${portfolio['cash']:.2f}
@@ -262,52 +337,48 @@ JSON format (sadece JSON, aciklama yok):
   "portfolio_strategy": "portfoy stratejisi (1 cumle Turkce)"
 }}"""
 
-        try:
-            model = get_default_model()
-            response = await generate(prompt=prompt, system="Sen deneyimli bir portfoy yoneticisisin. Risk yonetimi, sektor cesitlendirmesi ve piyasa zamanlamasi konularinda uzmansin.", temperature=0.4, max_tokens=1024)
+        response = await generate(prompt=prompt,
+            system="Sen deneyimli bir portfoy yoneticisisin. Risk yonetimi, sektor cesitlendirmesi ve piyasa zamanlamasi konularinda uzmansin.",
+            temperature=0.4, max_tokens=1024)
 
-            # Parse JSON
-            import re
-            json_match = re.search(r'\{[\s\S]*\}', response)
-            if not json_match:
-                return [], []
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response)
+        if not json_match:
+            return [], []
 
-            decision = json.loads(json_match.group(0))
-            actions = []
-            llm_actions = decision.get("actions", [])
+        decision = json.loads(json_match.group(0))
+        actions = []
+        llm_actions = decision.get("actions", [])
 
-            for act in llm_actions:
-                ticker = act["ticker"].upper()
-                action_type = act["action"]
-                reasoning = act.get("reasoning", "LLM karari")
-                portfolio_before = portfolio
+        for act in llm_actions:
+            ticker = act["ticker"].upper()
+            action_type = act["action"]
+            reasoning = act.get("reasoning", "LLM karari")
+            portfolio_before = portfolio
 
-                if action_type == "buy":
-                    qty = float(act.get("quantity", 1))
-                    price = float(next((c["price"] for c in candidates if c["ticker"] == ticker), 0))
-                    if price > 0:
-                        result = self.execute_buy(db, ticker, qty, price, reasoning, portfolio_before,
-                                                  confidence=0.75)
-                        if result["success"]:
-                            actions.append({"action": "buy", "ticker": ticker, "quantity": qty, "price": price, "reasoning": reasoning})
-                            portfolio = self.get_portfolio(db)
+            if action_type == "buy":
+                qty = float(act.get("quantity", 1))
+                price = float(next((c["price"] for c in candidates if c["ticker"] == ticker), 0))
+                if price > 0:
+                    result = self.execute_buy(db, ticker, qty, price, reasoning, portfolio_before, confidence=0.75)
+                    if result["success"]:
+                        actions.append({"action": "buy", "ticker": ticker, "quantity": qty, "price": price, "reasoning": reasoning})
+                        portfolio = self.get_portfolio(db)
 
-                elif action_type == "sell":
-                    pos_id = act.get("position_id")
-                    if pos_id:
-                        price = float(act.get("price", 0))
-                        if price <= 0:
-                            pos = db.query(PortfolioPosition).filter(PortfolioPosition.id == pos_id).first()
-                            prices = get_live_prices([pos.ticker]) if pos else {}
-                            price = prices.get(pos.ticker, {}).get("price") or 0
-                        result = self.execute_sell(db, pos_id, price, reasoning, portfolio_before, confidence=0.75)
-                        if result["success"]:
-                            actions.append({"action": "sell", "ticker": ticker, "reasoning": reasoning})
-                            portfolio = self.get_portfolio(db)
+            elif action_type == "sell":
+                pos_id = act.get("position_id")
+                if pos_id:
+                    price = float(act.get("price", 0))
+                    if price <= 0:
+                        pos = db.query(PortfolioPosition).filter(PortfolioPosition.id == pos_id).first()
+                        prices = get_live_prices([pos.ticker]) if pos else {}
+                        price = prices.get(pos.ticker, {}).get("price") or 0
+                    result = self.execute_sell(db, pos_id, price, reasoning, portfolio_before, confidence=0.75)
+                    if result["success"]:
+                        actions.append({"action": "sell", "ticker": ticker, "reasoning": reasoning})
+                        portfolio = self.get_portfolio(db)
 
-            return actions, llm_actions
-        except Exception as e:
-            return [], [{"error": str(e)}]
+        return actions, llm_actions
 
     # ── Scheduler-friendly sync wrapper ──
 

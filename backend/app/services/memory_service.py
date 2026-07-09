@@ -143,16 +143,17 @@ async def store_research_memory(
     db.add(memory)
     db.flush()
 
-    # Embedding oluştur
+    # Embedding oluştur (optional — memory works without it)
     try:
         embed_text = f"{ticker} {topic}: {summary}"
         vector = await get_embedding(embed_text)
-        emb = MemoryEmbedding(
-            memory_id=memory.id,
-            embedding=vector,
-            model_name="text-embedding-3-small",
-        )
-        db.add(emb)
+        if vector is not None:
+            emb = MemoryEmbedding(
+                memory_id=memory.id,
+                embedding=vector,
+                model_name="text-embedding-3-small",
+            )
+            db.add(emb)
     except Exception as e:
         logger.warning("Embedding failed, memory saved without embedding: %s", e)
 

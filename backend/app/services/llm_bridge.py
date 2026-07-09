@@ -18,9 +18,24 @@ def _get_litellm():
     return _litellm
 
 
+def _has_ollama() -> bool:
+    """Check if Ollama is reachable."""
+    import socket
+    try:
+        host = os.getenv("OLLAMA_HOST", "localhost")
+        port = 11434
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        result = s.connect_ex((host.replace("http://", "").replace("https://", "").split(":")[0], port))
+        s.close()
+        return result == 0
+    except Exception:
+        return False
+
+
 def get_default_model() -> str:
     """Ortam değişkenlerine göre varsayılan modeli belirle."""
-    if os.getenv("OLLAMA_MODEL"):
+    if os.getenv("OLLAMA_MODEL") and _has_ollama():
         return f"ollama/{os.environ['OLLAMA_MODEL']}"
     if os.getenv("GROQ_API_KEY"):
         return "groq/llama-3.1-70b-versatile"
@@ -30,8 +45,8 @@ def get_default_model() -> str:
         return "openai/gpt-4o-mini"
     if os.getenv("ANTHROPIC_API_KEY"):
         return "claude-3-haiku-20240307"
-    # Hiçbiri yoksa Ollama varsayılan
-    return "ollama/llama3.2"
+    # Hiçbiri yoksa None — caller handles missing LLM gracefully
+    return None
 
 
 async def generate(
@@ -42,8 +57,11 @@ async def generate(
     max_tokens: int = 2048,
 ) -> str:
     """LiteLLM üzerinden tamamlama."""
-    litellm = _get_litellm()
     model = model or get_default_model()
+    if model is None:
+        raise RuntimeError("No LLM configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, or OLLAMA_MODEL + run Ollama.")
+
+    litellm = _get_litellm()
 
     messages = []
     if system:
@@ -59,16 +77,28 @@ async def generate(
     return response.choices[0].message.content
 
 
-async def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
-    """Metin embedding'i üret. Yerel model için Ollama embedding kullanır."""
-    litellm = _get_litellm()
+async def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float] | None:
+    """Metin embedding'i üret.
 
-    # Ollama embedding için fallback
-    if "ollama" in model or not os.getenv("OPENAI_API_KEY"):
+    Returns None when no embedding service is available (caller handles it gracefully).
+    """
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    has_ollama = _has_ollama()
+
+    if not has_openai and not has_ollama:
+        return None  # Caller saves memory without embedding
+
+    if not has_openai and has_ollama:
         return await _ollama_embed(text)
 
-    response = await litellm.aembedding(model=model, input=text)
-    return response.data[0]["embedding"]
+    litellm = _get_litellm()
+    try:
+        response = await litellm.aembedding(model=model, input=text)
+        return response.data[0]["embedding"]
+    except Exception:
+        if has_ollama:
+            return await _ollama_embed(text)
+        return None
 
 
 async def _ollama_embed(text: str) -> list[float]:
