@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 from app.config import STOCK_UNIVERSE
 
 TECHNICAL_SCREEN_DEFAULTS = {
-    "min_momentum_5d": -5.0,
-    "max_rsi": 75,
-    "min_rsi": 25,
-    "min_volume_ratio": 0.5,
-    "max_volatility": 80.0,
-    "max_stage1_candidates": 15,
-    "max_stage2_candidates": 8,
+    "min_momentum_5d": -8.0,
+    "max_rsi": 80,
+    "min_rsi": 20,
+    "min_volume_ratio": 0.3,
+    "max_volatility": 85.0,
+    "max_stage1_candidates": 20,
+    "max_stage2_candidates": 10,
 }
 
 
@@ -69,7 +69,7 @@ async def stage1_prescreen(
     cfg = {**TECHNICAL_SCREEN_DEFAULTS, **(thresholds or {})}
     try:
         data = await asyncio.to_thread(
-            yf.download, tickers, period="3mo", interval="1d", progress=False, timeout=30
+            yf.download, tickers, period="1mo", interval="1d", progress=False, timeout=60
         )
     except Exception as e:
         logger.error("Download failed for %d tickers: %s", len(tickers), e)
