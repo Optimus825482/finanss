@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api, AgentPortfolio, AgentDecision } from "../lib/api";
 
 export default function AgentPortfolioCard() {
@@ -9,16 +9,21 @@ export default function AgentPortfolioCard() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setPortfolio(await api.getAgentPortfolio());
     } catch { /* agent not configured yet */ }
     try {
       setDecisions(await api.getAgentDecisions(10));
     } catch { /* no decisions yet */ }
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // Initial load + auto-refresh every 60s
+  useEffect(() => {
+    load();
+    const i = setInterval(load, 60_000);
+    return () => clearInterval(i);
+  }, [load]);
 
   const handleRun = async () => {
     setRunning(true);
