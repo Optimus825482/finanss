@@ -61,12 +61,12 @@ async def create_forecast(ticker: str, report_id: int | None = None, db: Session
         if not agent_scores:
             agent_scores = {"fundamental_score": 50, "sentiment_score": 50, "risk_score": 50}
 
-	        result = await create_prediction(
-	            db=db, ticker=ticker_str,
-	            price_history=price_history,
-	            agent_scores=agent_scores,
-	            report_id=report_id,
-	        )
+        result = await create_prediction(
+            db=db, ticker=ticker_str,
+            price_history=price_history,
+            agent_scores=agent_scores,
+            report_id=report_id,
+        )
         return result
 
     except HTTPException:
