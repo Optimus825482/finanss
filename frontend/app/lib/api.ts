@@ -11,6 +11,9 @@ export type AgentStatus = {
 export type PipelineStatus = {
   running: boolean;
   agents: AgentStatus[];
+  mode?: string;
+  progress?: string[];
+  last_error?: string | null;
 };
 
 export type StockPick = {
