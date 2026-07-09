@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Optional
 
 import yfinance as yf
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -173,38 +173,76 @@ class AutonomousAgent:
     # ── Main Decision Loop (LLM-powered) ──
 
     async def think_and_act(self, db: Session, exchanges: list[str] | None = None) -> dict:
-        """Ana dusunme dongusu: piyasayi tara → LLM'e goster → LLM karar versin → uygula."""
+        """Ana dusunme dongusu:
+        1. Son rapordaki pick'leri kullan (varsa) — hizli yol
+        2. Rapor yoksa piyasayi tara + analiz et — yavas yol
+        3. LLM/kural-bazli karar ver + uygula
+        """
         portfolio = self.get_portfolio(db)
 
-        # 1. Piyasayi tara — top candidates
-        from app.services.screener_service import stage1_prescreen, get_universe
-        tickers = get_universe(exchanges) if exchanges else get_universe(["NASDAQ", "NYSE"])
-        candidates = await stage1_prescreen(tickers)
-        top = candidates[:8]
+        # 1. Son rapordaki pick'leri dene (hazir veri, tekrar indirme yok)
+        from app.models.core import Report
+        latest = db.query(Report).options(
+            joinedload(Report.picks)
+        ).order_by(Report.created_at.desc()).first()
 
-        # 2. Top candidates'i derinlemesine analiz et
-        analyzed = []
-        for c in top:
-            try:
-                a = await self.analyze_single(c["ticker"])
-                analyzed.append({
-                    "ticker": c["ticker"], "price": c["price"],
-                    "technical_score": c["technical_score"],
-                    "momentum_5d": c.get("momentum_5d", 0),
-                    "rsi_14": c.get("rsi_14", 50),
-                    "composite_score": a.get("composite_score", 0),
-                    "fundamental_score": a.get("fundamental_score", 50),
-                    "sentiment_score": a.get("sentiment_score", 50),
-                    "risk_score": a.get("risk_score", 50),
-                    "pe_ratio": a.get("pe_ratio"),
-                    "volatility": a.get("volatility_annualized"),
-                    "narrative": a.get("narrative", ""),
+        candidates = []
+
+        if latest and latest.picks:
+            # Rapor var — pick'leri kullan
+            for p in latest.picks:
+                candidates.append({
+                    "ticker": p.ticker,
+                    "price": p.price,
+                    "momentum_5d": p.momentum_pct or 0,
+                    "rsi_14": 50,  # rapor RSI tutmaz, nötr varsay
+                    "technical_score": p.composite_score or 50,
+                    "composite_score": p.composite_score or 50,
+                    "fundamental_score": p.fundamental_score or 50,
+                    "sentiment_score": p.sentiment_score or 50,
+                    "risk_score": p.risk_score or 50,
+                    "pe_ratio": p.pe_ratio,
+                    "volatility": p.volatility_annualized,
+                    "narrative": p.narrative or "",
                 })
-            except Exception:
-                pass
+            # Rapor pick'lerini skora gore sirala
+            candidates.sort(key=lambda c: c["composite_score"], reverse=True)
+            logger.info("Rapor #%d pick'leri kullaniliyor: %d aday", latest.id, len(candidates))
+        else:
+            # 2. Rapor yok — piyasayi tara (yavas)
+            logger.info("Rapor bulunamadi, piyasa taniyor...")
+            from app.services.screener_service import stage1_prescreen, get_universe
+            tickers = get_universe(exchanges) if exchanges else get_universe(["NASDAQ", "NYSE"])
+            scanned = await stage1_prescreen(tickers)
+            top = scanned[:8]
 
-        # 3. LLM karar versin
-        actions, decisions = await self._llm_decide(portfolio, analyzed, db)
+            # Derinlemesine analiz
+            for c in top:
+                try:
+                    a = await self.analyze_single(c["ticker"])
+                    candidates.append({
+                        "ticker": c["ticker"], "price": c["price"],
+                        "technical_score": c["technical_score"],
+                        "momentum_5d": c.get("momentum_5d", 0),
+                        "rsi_14": c.get("rsi_14", 50),
+                        "composite_score": a.get("composite_score", 0),
+                        "fundamental_score": a.get("fundamental_score", 50),
+                        "sentiment_score": a.get("sentiment_score", 50),
+                        "risk_score": a.get("risk_score", 50),
+                        "pe_ratio": a.get("pe_ratio"),
+                        "volatility": a.get("volatility_annualized"),
+                        "narrative": a.get("narrative", ""),
+                    })
+                except Exception:
+                    pass
+
+        if not candidates:
+            logger.info("Hiç aday bulunamadi, islem yapilmadi")
+            return {"actions": [], "decisions": [], "portfolio": self.get_portfolio(db),
+                    "timestamp": datetime.utcnow().isoformat(), "note": "aday yok"}
+
+        # 3. LLM/kural-bazli karar
+        actions, decisions = await self._llm_decide(portfolio, candidates, db)
         return {"actions": actions, "decisions": decisions, "portfolio": self.get_portfolio(db),
                 "timestamp": datetime.utcnow().isoformat()}
 
@@ -236,12 +274,17 @@ class AutonomousAgent:
         for pos in portfolio.get("positions", []):
             ticker = pos["ticker"]
             candidate = next((c for c in candidates if c["ticker"] == ticker), None)
-            if candidate:
-                rsi = candidate.get("rsi_14", 50)
-                unrealized = pos.get("unrealized_pl", 0)
-                if rsi > 75 or unrealized < -pos.get("entry_price", 1) * 0.15 * pos.get("quantity", 1):
-                    # Sell signal
-                    price = candidate.get("price", 0)
+            rsi = candidate.get("rsi_14", 50) if candidate else 50
+            unrealized = pos.get("unrealized_pl", 0)
+            # Sell trigger: RSI aşırı alım veya stop-loss veya rapor skoru düştü
+            should_sell = rsi > 75
+            if not should_sell and candidate:
+                should_sell = candidate.get("composite_score", 50) < 40  # skor çok düşükse sat
+            if not should_sell:
+                entry_cost = pos.get("entry_price", 1) * 0.15 * pos.get("quantity", 1)
+                should_sell = unrealized < -entry_cost  # stop-loss -%15
+            if should_sell:
+                    price = candidate.get("price", 0) if candidate else 0
                     pos_id = pos.get("id")
                     if price > 0 and pos_id:
                         result = self.execute_sell(db, pos_id, price,
