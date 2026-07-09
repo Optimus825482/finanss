@@ -270,29 +270,66 @@ class AutonomousAgent:
         actions = []
         decisions = []
 
+        # Use a simple per-ticker cache to avoid repeated yfinance calls
+        _rsi_cache: dict[str, float] = {}
+
+        def _get_rsi(ticker: str, default: float = 50) -> float:
+            """RSI'yi bul: once candidate'da ara, yoksa yfinance'dan canli hesapla."""
+            # Check cache first
+            if ticker in _rsi_cache:
+                return _rsi_cache[ticker]
+
+            # Check if candidate already has non-default RSI
+            cand = next((c for c in candidates if c["ticker"] == ticker), None)
+            if cand and cand.get("rsi_14", 0) != 50:
+                _rsi_cache[ticker] = float(cand["rsi_14"])
+                return _rsi_cache[ticker]
+
+            # Fetch live RSI from yfinance
+            try:
+                import yfinance as yf
+                import numpy as np
+                hist = yf.Ticker(ticker).history(period="1mo")
+                if not hist.empty and len(hist) >= 15:
+                    closes = hist["Close"].values
+                    delta = np.diff(closes)
+                    gains = np.where(delta > 0, delta, 0)
+                    losses = np.where(delta < 0, -delta, 0)
+                    avg_g = float(np.mean(gains[-14:]))
+                    avg_l = float(np.mean(losses[-14:]))
+                    rsi = 100 - (100 / (1 + avg_g / avg_l)) if avg_l > 0 else 100
+                    rsi = round(rsi, 1)
+                    _rsi_cache[ticker] = rsi
+                    return rsi
+            except Exception:
+                pass
+            return default
+
         # 1. Check existing positions — sell if overbought (RSI > 75) or stop-loss (< -15%)
         for pos in portfolio.get("positions", []):
             ticker = pos["ticker"]
-            candidate = next((c for c in candidates if c["ticker"] == ticker), None)
-            rsi = candidate.get("rsi_14", 50) if candidate else 50
+            rsi = _get_rsi(ticker)
             unrealized = pos.get("unrealized_pl", 0)
             # Sell trigger: RSI aşırı alım veya stop-loss veya rapor skoru düştü
             should_sell = rsi > 75
-            if not should_sell and candidate:
-                should_sell = candidate.get("composite_score", 50) < 40  # skor çok düşükse sat
+            if not should_sell:
+                candidate = next((c for c in candidates if c["ticker"] == ticker), None)
+                if candidate:
+                    should_sell = candidate.get("composite_score", 50) < 40
             if not should_sell:
                 entry_cost = pos.get("entry_price", 1) * 0.15 * pos.get("quantity", 1)
-                should_sell = unrealized < -entry_cost  # stop-loss -%15
+                should_sell = unrealized < -entry_cost
             if should_sell:
-                    price = candidate.get("price", 0) if candidate else 0
-                    pos_id = pos.get("id")
-                    if price > 0 and pos_id:
-                        result = self.execute_sell(db, pos_id, price,
-                            f"Kural bazli satis: RSI={rsi:.0f}, PL=${unrealized:.2f}",
-                            portfolio, confidence=0.6)
-                        if result["success"]:
-                            actions.append({"action": "sell", "ticker": ticker, "reasoning": result.get("error", "")})
-                            portfolio = self.get_portfolio(db)
+                candidate = next((c for c in candidates if c["ticker"] == ticker), None)
+                price = candidate.get("price", 0) if candidate else 0
+                pos_id = pos.get("id")
+                if price > 0 and pos_id:
+                    result = self.execute_sell(db, pos_id, price,
+                        f"Kural bazli satis: RSI={rsi:.0f}, PL=${unrealized:.2f}",
+                        portfolio, confidence=0.6)
+                    if result["success"]:
+                        actions.append({"action": "sell", "ticker": ticker, "reasoning": result.get("error", "")})
+                        portfolio = self.get_portfolio(db)
 
         # 2. Buy top candidates if cash available
         cash = portfolio.get("cash", 0)
@@ -305,9 +342,8 @@ class AutonomousAgent:
             if cash <= 0:
                 break
 
-            # Only buy if strong signal: composite > 60, RSI < 65, positive momentum
             score = c.get("composite_score", c.get("technical_score", 0))
-            rsi = c.get("rsi_14", 50)
+            rsi = _get_rsi(c["ticker"])
             mom = c.get("momentum_5d", 0)
 
             if score >= 60 and rsi < 65 and mom > -5:
