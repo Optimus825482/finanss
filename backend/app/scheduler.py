@@ -26,7 +26,7 @@ def _run_autonomous_agent_sync():
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent()
-        result = agent.run(["NASDAQ", "NYSE"])
+        result = agent.run(["NASDAQ", "NYSE", "BIST"])
         logger.info("Otonom ajan kararlari: %d islem, %d karar",
                      len(result.get("actions", [])), len(result.get("decisions", [])))
     except Exception as e:
