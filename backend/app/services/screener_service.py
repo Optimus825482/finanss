@@ -67,20 +67,19 @@ async def stage1_prescreen(
 ) -> list[dict]:
     """Tum hisseleri teknik filtrelerden gecir, en gucluleri sec."""
     cfg = {**TECHNICAL_SCREEN_DEFAULTS, **(thresholds or {})}
+
+    # .IS ticker'lar batch download'da calismaz — direkt tek tek indir
+    if any(t.endswith(".IS") for t in tickers):
+        logger.info("BIST tickers detected, using individual downloads...")
+        return await _prescreen_individual(tickers, cfg)
+
     try:
         data = await asyncio.to_thread(
             yf.download, tickers, period="1mo", interval="1d", progress=False, timeout=60
         )
     except Exception as e:
         logger.error("Download failed for %d tickers: %s", len(tickers), e)
-        data = None
-
-    # Batch download bazen .IS ticker'lar icin bos doner — tek tek dene
-    if data is None or data.empty:
-        is_bist = any(t.endswith(".IS") for t in tickers)
-        if is_bist:
-            logger.info("Batch download empty for BIST tickers, trying individual...")
-            return await _prescreen_individual(tickers, cfg)
+        return []
         return []
 
     if data.empty:
@@ -169,26 +168,30 @@ async def stage1_prescreen(
 
 async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
     """Tek tek yf.Ticker ile indir — batch download calismayan ticker'lar icin (.IS vb)."""
+
+    def _fetch(t: str) -> object:
+        """Sync fetch helper for to_thread."""
+        import yfinance as yf
+        return yf.Ticker(t).history(period="1mo")
+
     import numpy as np
-    import yfinance as yf
 
     results = []
     for ticker in tickers:
         try:
-            t = yf.Ticker(ticker)
-            hist = await asyncio.to_thread(lambda t=t: t.history(period="1mo"))
-            if hist.empty or len(hist) < 20:
+            hist = await asyncio.to_thread(_fetch, ticker)
+            if hist is None or hist.empty or len(hist) < 10:
                 continue
             hist.index = hist.index.tz_localize(None)
 
             closes = hist["Close"].values
             volumes = hist["Volume"].values
-            highs = hist["High"].values
-            lows = hist["Low"].values
+
+            if len(closes) < 10:
+                continue
 
             # Momentum
             momentum_5d = float((closes[-1] / closes[-6] - 1) * 100) if len(closes) >= 6 else 0.0
-            momentum_20d = float((closes[-1] / closes[-21] - 1) * 100) if len(closes) >= 21 else 0.0
 
             # RSI 14
             delta = np.diff(closes)
@@ -207,15 +210,13 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             vol_20 = float(np.std(rets[-20:]) * np.sqrt(252) * 100) if len(rets) >= 20 else 50.0
 
             # Drawdown
-            peak = np.maximum.accumulate(closes[-20:])
-            dd = float(np.min((closes[-20:] - peak) / peak) * 100)
+            peak = np.maximum.accumulate(closes[-min(20, len(closes)):])
+            dd = float(np.min((closes[-min(20, len(closes)):] - peak) / peak) * 100) if len(peak) > 0 else 0
 
-            # Filters
-            if momentum_5d < cfg["min_momentum_5d"]: continue
-            if rsi_val > cfg["max_rsi"]: continue
-            if rsi_val < cfg["min_rsi"]: continue
-            if volume_ratio < cfg["min_volume_ratio"]: continue
-            if vol_20 > cfg["max_volatility"]: continue
+            # Relaxed filters for emerging markets
+            if momentum_5d < -15: continue   # cok kotu momentumu el
+            if rsi_val > 85: continue        # cok asiri alim
+            if vol_20 > 120: continue        # cok yuksek volatilite
 
             # Composite score
             mom_score = np.clip((momentum_5d + 15) * 1.5, 0, 100)
@@ -227,7 +228,6 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
                 "ticker": ticker,
                 "price": float(closes[-1]),
                 "momentum_5d": round(momentum_5d, 2),
-                "momentum_20d": round(momentum_20d, 2),
                 "rsi_14": round(rsi_val, 1),
                 "volume_ratio": round(volume_ratio, 2),
                 "volatility_20d": round(vol_20, 1),
