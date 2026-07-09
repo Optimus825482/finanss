@@ -75,6 +75,37 @@ export type PortfolioSummary = {
   total_pl_pct: number;
 };
 
+// ── Autonomous Agent ──
+
+export type AgentPortfolio = {
+  cash: number;
+  position_count: number;
+  total_cost: number;
+  total_market_value: number;
+  total_pl: number;
+  total_pl_pct: number;
+  positions: {
+    id: number;
+    ticker: string;
+    quantity: number;
+    entry_price: number;
+    current_price: number | null;
+    unrealized_pl: number;
+  }[];
+};
+
+export type AgentDecision = {
+  id: number;
+  ticker: string;
+  action: string;
+  quantity: number;
+  price: number;
+  total_amount: number;
+  reasoning: string;
+  confidence: number;
+  created_at: string;
+};
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`API hatası: ${res.status}`);
   return res.json();
@@ -120,4 +151,12 @@ export const api = {
     }).then(j<PortfolioPosition>),
   deletePortfolioPosition: (id: number) =>
     fetch(`${API_BASE}/api/portfolio/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
+
+  // ── Autonomous Agent ──
+  getAgentPortfolio: () =>
+    fetch(`${API_BASE}/api/autonomous/portfolio`).then(j<AgentPortfolio>),
+  runAgent: () =>
+    fetch(`${API_BASE}/api/autonomous/run`, { method: "POST" }).then(j<{ started: boolean; mode: string }>),
+  getAgentDecisions: (limit = 20) =>
+    fetch(`${API_BASE}/api/autonomous/decisions?limit=${limit}`).then(j<AgentDecision[]>),
 };

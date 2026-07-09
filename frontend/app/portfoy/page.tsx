@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { api, PortfolioSummary } from "../lib/api";
+import AgentPortfolioCard from "../components/AgentPortfolioCard";
 
 export default function PortfoyPage() {
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
@@ -276,6 +277,9 @@ export default function PortfoyPage() {
           })}
         </div>
       )}
+
+      {/* Otonom Ajan */}
+      <AgentPortfolioCard />
     </main>
   );
 }
