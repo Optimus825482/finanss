@@ -67,19 +67,22 @@ async def stage1_prescreen(
 ) -> list[dict]:
     """Tum hisseleri teknik filtrelerden gecir, en gucluleri sec."""
     cfg = {**TECHNICAL_SCREEN_DEFAULTS, **(thresholds or {})}
+    logger.info("stage1_prescreen basladi: %d ticker", len(tickers))
 
     # .IS ticker'lar batch download'da calismaz — direkt tek tek indir
     if any(t.endswith(".IS") for t in tickers):
-        logger.info("BIST tickers detected, using individual downloads...")
-        return await _prescreen_individual(tickers, cfg)
+        logger.info("BIST tickers detected (%d), using individual downloads...", len(tickers))
+        result = await _prescreen_individual(tickers, cfg)
+        logger.info("BIST prescreen done: %d candidates found", len(result))
+        return result
 
+    logger.info("Non-BIST tickers, using batch yf.download...")
     try:
         data = await asyncio.to_thread(
             yf.download, tickers, period="1mo", interval="1d", progress=False, timeout=60
         )
     except Exception as e:
         logger.error("Download failed for %d tickers: %s", len(tickers), e)
-        return []
         return []
 
     if data.empty:
@@ -177,17 +180,24 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
     import numpy as np
 
     results = []
-    for ticker in tickers:
+    total = len(tickers)
+    logger.info("_prescreen_individual: %d ticker isleniyor...", total)
+    
+    for idx, ticker in enumerate(tickers):
+        if idx % 10 == 0:
+            logger.info("BIST prescreen ilerleme: %d/%d (%d aday)", idx, total, len(results))
         try:
             hist = await asyncio.to_thread(_fetch, ticker)
-            if hist is None or hist.empty or len(hist) < 10:
+            if hist is None or hist.empty or len(hist) < 5:
+                logger.debug("BIST %s: yetersiz veri (%s)", ticker, len(hist) if hist is not None else 0)
                 continue
             hist.index = hist.index.tz_localize(None)
 
             closes = hist["Close"].values
             volumes = hist["Volume"].values
 
-            if len(closes) < 10:
+            if len(closes) < 5:
+                logger.debug("BIST %s: yetersiz kapanis (%d)", ticker, len(closes))
                 continue
 
             # Momentum

@@ -4,6 +4,7 @@ Orchestrator — Two-stage pipeline:
   Stage 2: Full agent team (derin analiz, secilmis adaylara)
 """
 import asyncio
+import logging
 from datetime import datetime
 
 from app.agents.scanner_agent import ScannerAgent
@@ -18,6 +19,8 @@ from app.services.screener_service import (
     stage1_prescreen, stage2_deep_analysis, get_universe,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Orchestrator:
     def __init__(self):
@@ -28,15 +31,26 @@ class Orchestrator:
         self.reporter = ReportAgent()
         self.is_running = False
         self.last_error: str | None = None
-        self.mode: str = "legacy"  # "legacy" | "two-stage"
+        self.mode: str = "legacy"
         self.exchanges: list[str] = []
+        self.progress_log: list[str] = []  # canli log mesajlari
 
     @property
     def agents(self):
         return [self.scanner, self.fundamental, self.sentiment, self.risk, self.reporter]
 
     def status_snapshot(self) -> dict:
-        return {"running": self.is_running, "agents": [a.as_dict() for a in self.agents], "mode": self.mode}
+        return {
+            "running": self.is_running,
+            "agents": [a.as_dict() for a in self.agents],
+            "mode": self.mode,
+            "progress": self.progress_log[-20:] if self.progress_log else [],
+            "last_error": self.last_error,
+        }
+
+    def _log(self, msg: str):
+        self.progress_log.append(msg)
+        logger.info("[pipeline] %s", msg)
 
     async def run_pipeline(self, exchanges: list[str] | None = None) -> int:
         if self.is_running:
@@ -44,6 +58,7 @@ class Orchestrator:
 
         self.is_running = True
         self.last_error = None
+        self.progress_log = []
         self.mode = "two-stage" if exchanges else "legacy"
         self.exchanges = exchanges or []
 
@@ -73,29 +88,44 @@ class Orchestrator:
         """Iki asamali pipeline: on tarama → derin analiz."""
         tickers = get_universe(exchanges)
         total_scanned = len(tickers)
+        self._log(f"Pipeline basladi: {total_scanned} hisse, islem: {exchanges}")
 
         # Stage 1 — Technical pre-screen
         self.scanner._set(self.scanner.RUNNING, f"{total_scanned} hisse teknik taraniyor...")
+        self._log(f"Stage 1 basliyor: {total_scanned} hisse taranacak...")
         stage1 = await stage1_prescreen(tickers)
+        self._log(f"Stage 1 sonuc: {len(stage1)}/{total_scanned} aday secti")
         self.scanner._set(self.scanner.DONE, f"Stage 1: {len(stage1)}/{total_scanned} hisse secti")
 
         if not stage1:
+            self._log("Stage 1: aday bulunamadi, rapor kaydedilmiyor")
             return self._persist({"summary": "Stage 1: teknik taramayi gecen aday bulunamadi.",
                                    "candidates_scanned": total_scanned, "picks": []})
 
         # Stage 2 — Deep analysis
         self.fundamental._set(self.fundamental.RUNNING, f"Stage 2: {len(stage1)} hisse derin analize giriyor")
+        self._log(f"Stage 2 basliyor: {len(stage1)} hisse derin analiz...")
         stage2 = await stage2_deep_analysis(stage1)
-        self.fundamental._set(self.fundamental.DONE if stage2 else self.fundamental.ERROR, f"Derin analiz: {len(stage2)}")
+        self._log(f"Stage 2 sonuc: {len(stage2)} hisse analiz edildi")
+        self.fundamental._set(self.fundamental.DONE if stage2 else self.fundamental.ERROR,
+                              f"Derin analiz: {len(stage2)}")
 
         if not stage2:
+            self._log("Stage 2: derin analiz tamamlanamadi, rapor kaydedilmiyor")
             return self._persist({"summary": "Stage 2: derin analiz tamamlanamadi.",
                                    "candidates_scanned": total_scanned, "picks": []})
 
-        # Score & report
+        # Reporter
+        self._log(f"Rapor hazirlaniyor: {len(stage2)} pick...")
         result = await self.reporter.run(stage2)
-        result["candidates_scanned"] = total_scanned  # Stage 1 count
-        return self._persist(result)
+        result["candidates_scanned"] = total_scanned
+        pick_count = len(result.get("picks", []))
+        self._log(f"Rapor olusturuldu: {pick_count} pick kaydediliyor")
+        rid = self._persist(result)
+        self._log(f"Rapor #{rid} kaydedildi ({pick_count} pick)")
+        return rid
+
+    def _persist(self, result: dict) -> int:
 
     def _persist(self, result: dict) -> int:
         db = SessionLocal()

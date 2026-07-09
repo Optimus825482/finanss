@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, Report, ReportListItem, AgentPortfolio, AgentDecision } from "../lib/api";
+import { api, Report, ReportListItem, AgentPortfolio, AgentDecision, PipelineStatus } from "../lib/api";
 import Loader from "../components/Loader";
 
 export default function BistPage() {
@@ -12,14 +12,19 @@ export default function BistPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string[]>([]);
 
   const load = async () => {
     try { setPortfolio(await api.getAgentPortfolio()); } catch { /* */ }
     try { setDecisions(await api.getAgentDecisions(10)); } catch { /* */ }
     try {
+      const s = await api.getStatus();
+      setGenerating(s.running);
+      if (s.running && s.progress) setProgress(s.progress);
+    } catch { /* */ }
+    try {
       const h = await api.getHistory();
       setHistory(h);
-      // Find latest BIST report (candidates_scanned ~60 for BIST, ~500 for full)
       const bistReports = h.filter(r => r.candidates_scanned >= 40 && r.candidates_scanned <= 100);
       if (bistReports.length > 0) {
         const r = await api.getReport(bistReports[0].id);
@@ -29,27 +34,16 @@ export default function BistPage() {
   };
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { const i = setInterval(load, 60_000); return () => clearInterval(i); }, []);
+  useEffect(() => { const i = setInterval(load, 3000); return () => clearInterval(i); }, []);
+  // Clear progress when pipeline finishes
+  useEffect(() => { if (!generating) setProgress([]); }, [generating]);
 
   const handleGenerate = async () => {
-    setGenerating(true);
     setError(null);
     try {
       await api.generate("BIST");
-      // Poll for completion
-      const poll = setInterval(async () => {
-        try {
-          const s = await api.getStatus();
-          if (!s.running) {
-            clearInterval(poll);
-            await load();
-            setGenerating(false);
-          }
-        } catch { clearInterval(poll); setGenerating(false); }
-      }, 2000);
     } catch {
       setError("Rapor üretilemedi");
-      setGenerating(false);
     }
   };
 
@@ -88,6 +82,21 @@ export default function BistPage() {
       {error && (
         <div className="mb-4 rounded-sm px-4 py-2 font-mono text-xs" style={{ border: `1px solid var(--term-red)`, color: "var(--term-red)" }}>
           {error}
+        </div>
+      )}
+
+      {/* Canli ilerleme */}
+      {generating && progress.length > 0 && (
+        <div className="mb-4 rounded-sm px-4 py-3 font-mono text-xs"
+          style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-amber)" }}>
+          <div className="text-[10px] tracking-wider mb-1" style={{ color: "var(--term-amber)" }}>
+            🔄 PIPELINE ÇALIŞIYOR
+          </div>
+          {progress.map((msg, i) => (
+            <div key={i} className="py-0.5" style={{ color: i === progress.length - 1 ? "var(--term-text)" : "var(--term-muted)" }}>
+              {i === progress.length - 1 ? "▶" : "✓"} {msg}
+            </div>
+          ))}
         </div>
       )}
 
