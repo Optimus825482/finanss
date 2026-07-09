@@ -16,15 +16,17 @@ def get_status():
 
 
 @router.post("/generate")
-async def generate_report(background_tasks: BackgroundTasks):
+async def generate_report(background_tasks: BackgroundTasks, exchange: str | None = None):
     if orchestrator.is_running:
         raise HTTPException(status_code=409, detail="Pipeline zaten calisiyor")
 
+    exchanges = [exchange.upper()] if exchange else None
+    label = exchange.upper() if exchange else "TÜM EVREN"
     async def _task():
-        await orchestrator.run_pipeline()
+        await orchestrator.run_pipeline(exchanges)
 
     background_tasks.add_task(_task)
-    return {"started": True}
+    return {"started": True, "exchange": label}
 
 
 @router.get("/reports/latest", response_model=ReportOut)

@@ -9,6 +9,7 @@ export default function RaporlarPage() {
   const [history, setHistory] = useState<ReportListItem[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,6 +20,29 @@ export default function RaporlarPage() {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
     fetch(`${apiBase}/api/notifications/read-all`, { method: "POST" }).catch(() => {});
   }, []);
+
+  const handleGenerate = async (exchange?: string) => {
+    const label = exchange || "TÜM";
+    setGenerating(label);
+    try {
+      await api.generate(exchange);
+      // Poll for completion
+      const poll = setInterval(async () => {
+        try {
+          const s = await api.getStatus();
+          if (!s.running) {
+            clearInterval(poll);
+            const h = await api.getHistory();
+            setHistory(h);
+            if (h.length > 0) loadReport(h[0].id);
+            setGenerating(null);
+          }
+        } catch { clearInterval(poll); setGenerating(null); }
+      }, 2000);
+    } catch {
+      setGenerating(null);
+    }
+  };
 
   const loadReport = async (id: number) => {
     setLoading(true);
@@ -50,6 +74,26 @@ export default function RaporlarPage() {
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
           Geçmiş araştırma raporlarını görüntüle, detaylı analizleri incele
         </p>
+      </div>
+
+      {/* Üret butonları */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => handleGenerate()}
+          disabled={generating !== null}
+          className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}
+        >
+          {generating === "TÜM" ? "ÜRETİLİYOR…" : "📊 TÜM EVREN RAPORU"}
+        </button>
+        <button
+          onClick={() => handleGenerate("BIST")}
+          disabled={generating !== null}
+          className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}
+        >
+          {generating === "BIST" ? "ÜRETİLİYOR…" : "🇹🇷 BİST RAPORU"}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

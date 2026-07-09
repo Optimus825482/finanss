@@ -116,7 +116,7 @@ export const api = {
   getLatestReport: () => fetch(`${API_BASE}/api/reports/latest`, { cache: "no-store" }).then(j<Report>),
   getHistory: () => fetch(`${API_BASE}/api/reports/history`, { cache: "no-store" }).then(j<ReportListItem[]>),
   getReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { cache: "no-store" }).then(j<Report>),
-  generate: () => fetch(`${API_BASE}/api/generate`, { method: "POST" }).then(j<{ started: boolean }>),
+  generate: (exchange?: string) => fetch(`${API_BASE}/api/generate${exchange ? `?exchange=${exchange}` : ""}`, { method: "POST" }).then(j<{ started: boolean; exchange: string }>),
   deleteReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>).catch(() => ({ deleted: false })),
 
   getWatchlist: () =>
