@@ -195,8 +195,12 @@ export default function BistPage() {
               </div>
             )}
             {!loading && !generating && !report && (
+              <div className="px-4 py-10 text-center font-mono text-xs" style={{ color: "var(--term-muted)" }}>
+                Henüz BIST raporu yok. "BIST TARA" butonuna bas.
+              </div>
+            )}
 
-            {bistPicks.map((pick, i) => (
+            {!loading && bistPicks.length > 0 && bistPicks.map((pick, i) => (
               <div
                 key={pick.ticker}
                 className="px-4 py-3"
