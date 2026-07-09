@@ -126,8 +126,6 @@ class Orchestrator:
         return rid
 
     def _persist(self, result: dict) -> int:
-
-    def _persist(self, result: dict) -> int:
         db = SessionLocal()
         try:
             report = Report(created_at=datetime.utcnow(), summary=result["summary"],
