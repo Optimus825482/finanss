@@ -25,7 +25,8 @@ export default function BistPage() {
     try {
       const h = await api.getHistory();
       setHistory(h);
-      const bistReports = h.filter(r => r.candidates_scanned >= 40 && r.candidates_scanned <= 100);
+      // BIST raporu: BIST pipeline ~65 sembol tarar, WATCHLIST 40, tam evren ~300
+      const bistReports = h.filter(r => r.candidates_scanned > 50 && r.candidates_scanned < 200);
       if (bistReports.length > 0) {
         const r = await api.getReport(bistReports[0].id);
         setReport(r);
@@ -182,15 +183,18 @@ export default function BistPage() {
           >
             <div className="px-4 py-3 text-[11px] tracking-[0.2em] font-mono" style={{ color: "var(--term-muted)" }}>
               BIST ÖNERİLERİ {report ? `· ${report.candidates_scanned} sembol tarandı` : ""}
+            {!generating && report && bistPicks.length === 0 ? " (BIST hissesi bulunamadı)" : ""}
             </div>
 
             {loading && <Loader />}
 
-            {!loading && bistPicks.length === 0 && (
+            {!loading && !generating && report && bistPicks.length === 0 && (
               <div className="px-4 py-10 text-center font-mono text-xs" style={{ color: "var(--term-muted)" }}>
-                Henüz BIST raporu yok. "BIST TARA" butonuna basarak ilk taramayı başlat.
+                BIST raporu bulundu ({report.candidates_scanned} sembol tarandı) ama BIST hissesi seçilemedi.
+                Filtreler çok dar olabilir. "BIST TARA" butonuna tekrar bas.
               </div>
             )}
+            {!loading && !generating && !report && (
 
             {bistPicks.map((pick, i) => (
               <div
