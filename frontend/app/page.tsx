@@ -5,6 +5,7 @@ import { api, PipelineStatus, Report, ReportListItem, WatchlistItem } from "./li
 import SignalChain from "./components/SignalChain";
 import StockCard from "./components/StockCard";
 import WatchlistWidget from "./components/WatchlistWidget";
+import AgentPortfolioCard from "./components/AgentPortfolioCard";
 
 export default function Dashboard() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
@@ -257,6 +258,11 @@ export default function Dashboard() {
       </div>
 
       <WatchlistWidget watchlist={watchlist} />
+
+      {/* Otonom Ajan */}
+      <div className="mt-6">
+        <AgentPortfolioCard />
+      </div>
     </main>
   );
 }
