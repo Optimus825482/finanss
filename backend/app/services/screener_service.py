@@ -73,6 +73,14 @@ async def stage1_prescreen(
         )
     except Exception as e:
         logger.error("Download failed for %d tickers: %s", len(tickers), e)
+        data = None
+
+    # Batch download bazen .IS ticker'lar icin bos doner — tek tek dene
+    if data is None or data.empty:
+        is_bist = any(t.endswith(".IS") for t in tickers)
+        if is_bist:
+            logger.info("Batch download empty for BIST tickers, trying individual...")
+            return await _prescreen_individual(tickers, cfg)
         return []
 
     if data.empty:
@@ -155,6 +163,80 @@ async def stage1_prescreen(
             continue
 
     # Sort & limit
+    results.sort(key=lambda r: r["technical_score"], reverse=True)
+    return results[:cfg["max_stage1_candidates"]]
+
+
+async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
+    """Tek tek yf.Ticker ile indir — batch download calismayan ticker'lar icin (.IS vb)."""
+    import numpy as np
+    import yfinance as yf
+
+    results = []
+    for ticker in tickers:
+        try:
+            t = yf.Ticker(ticker)
+            hist = await asyncio.to_thread(lambda t=t: t.history(period="1mo"))
+            if hist.empty or len(hist) < 20:
+                continue
+            hist.index = hist.index.tz_localize(None)
+
+            closes = hist["Close"].values
+            volumes = hist["Volume"].values
+            highs = hist["High"].values
+            lows = hist["Low"].values
+
+            # Momentum
+            momentum_5d = float((closes[-1] / closes[-6] - 1) * 100) if len(closes) >= 6 else 0.0
+            momentum_20d = float((closes[-1] / closes[-21] - 1) * 100) if len(closes) >= 21 else 0.0
+
+            # RSI 14
+            delta = np.diff(closes)
+            gains = np.where(delta > 0, delta, 0)
+            losses = np.where(delta < 0, -delta, 0)
+            avg_gain = float(np.mean(gains[-14:])) if len(gains) >= 14 else 1.0
+            avg_loss = float(np.mean(losses[-14:])) if len(losses) >= 14 else 1.0
+            rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
+
+            # Volume ratio
+            avg_vol_20 = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else 1.0
+            volume_ratio = float(volumes[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
+
+            # Volatility
+            rets = np.diff(closes) / closes[:-1]
+            vol_20 = float(np.std(rets[-20:]) * np.sqrt(252) * 100) if len(rets) >= 20 else 50.0
+
+            # Drawdown
+            peak = np.maximum.accumulate(closes[-20:])
+            dd = float(np.min((closes[-20:] - peak) / peak) * 100)
+
+            # Filters
+            if momentum_5d < cfg["min_momentum_5d"]: continue
+            if rsi_val > cfg["max_rsi"]: continue
+            if rsi_val < cfg["min_rsi"]: continue
+            if volume_ratio < cfg["min_volume_ratio"]: continue
+            if vol_20 > cfg["max_volatility"]: continue
+
+            # Composite score
+            mom_score = np.clip((momentum_5d + 15) * 1.5, 0, 100)
+            rsi_score = 100 - abs(rsi_val - 50) * 2
+            volume_score = min(volume_ratio * 40, 100)
+            technical_score = round(mom_score * 0.4 + rsi_score * 0.3 + volume_score * 0.15 + (100 - abs(dd * 2)) * 0.15, 1)
+
+            results.append({
+                "ticker": ticker,
+                "price": float(closes[-1]),
+                "momentum_5d": round(momentum_5d, 2),
+                "momentum_20d": round(momentum_20d, 2),
+                "rsi_14": round(rsi_val, 1),
+                "volume_ratio": round(volume_ratio, 2),
+                "volatility_20d": round(vol_20, 1),
+                "max_drawdown_20d": round(dd, 1),
+                "technical_score": technical_score,
+            })
+        except Exception:
+            continue
+
     results.sort(key=lambda r: r["technical_score"], reverse=True)
     return results[:cfg["max_stage1_candidates"]]
 
