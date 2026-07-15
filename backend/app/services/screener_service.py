@@ -147,6 +147,7 @@ async def stage1_prescreen(
                 "ticker": ticker,
                 "price": float(arr[-1]),
                 "momentum_5d": round(momentum_5d, 2),
+                "momentum_pct": round(momentum_5d, 2),  # alias — report_agent bekler
                 "momentum_20d": round(momentum_20d, 2),
                 "rsi_14": round(rsi_val, 1),
                 "volume_ratio": round(volume_ratio, 2),
@@ -232,6 +233,7 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
                 "ticker": ticker,
                 "price": float(closes[-1]),
                 "momentum_5d": round(momentum_5d, 2),
+                "momentum_pct": round(momentum_5d, 2),  # alias — report_agent bekler
                 "rsi_14": round(rsi_val, 1),
                 "volume_ratio": round(volume_ratio, 2),
                 "volatility_20d": round(vol_20, 1),
