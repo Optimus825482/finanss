@@ -5,4 +5,8 @@ module.exports = {
   transform: {
     '^.+\\.(ts|tsx)$': 'ts-jest',
   },
+  moduleNameMapper: {
+    '\\.(css|less|scss)$': '<rootDir>/tests/__mocks__/styleMock.js',
+    '\\.(jpg|jpeg|png|gif|svg|webp)$': '<rootDir>/tests/__mocks__/fileMock.js',
+  },
 };

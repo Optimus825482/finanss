@@ -1,37 +1,35 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+import asyncio
+import logging
 
-from app.database import SessionLocal  # TODO: use Depends(get_db)
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from sqlalchemy.orm import Session
+
+from app.database import get_db
 from app.services.autonomous_agent import AutonomousAgent, get_trading_logs
 
 router = APIRouter(prefix="/api/autonomous", tags=["autonomous"])
+logger = logging.getLogger(__name__)
 agent = AutonomousAgent()
 
 
 @router.get("/portfolio")
-def get_agent_portfolio():
+def get_agent_portfolio(db: Session = Depends(get_db)):
     """Ajanin mevcut portfoy ve bakiye durumu."""
-    db = SessionLocal()
-    try:
-        return agent.get_portfolio(db)
-    finally:
-        db.close()
+    return agent.get_portfolio(db)
 
 
 @router.get("/decisions")
-def get_decisions(ticker: str | None = None, limit: int = 50):
+def get_decisions(ticker: str | None = None, limit: int = 50, db: Session = Depends(get_db)):
     """Ajanin tum karar loglari."""
-    db = SessionLocal()
-    try:
-        return get_trading_logs(db, ticker, limit)
-    finally:
-        db.close()
+    return get_trading_logs(db, ticker, limit)
 
 
 @router.post("/run")
-async def run_agent(background_tasks: BackgroundTasks, exchanges: list[str] | None = Query(None)):
+async def run_agent(background_tasks: BackgroundTasks, exchanges: list[str] | None = Query(default=None)):
     """Ajani manuel calistir (veya scheduler'dan tetikle)."""
     async def _run():
-        agent.run(exchanges)
+        # Sync agent.run → to_thread ile event loop'u bloklamadan calistir
+        await asyncio.to_thread(agent.run, exchanges)
 
     background_tasks.add_task(_run)
     return {"started": True, "mode": "autonomous"}

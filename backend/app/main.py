@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,25 +12,15 @@ from app.routers import register_routers
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ORBIS FINAI - ORBIS Finance Analyze Team API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3009", "https://finans.erkanerdem.online"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(APIKeyMiddleware)
-
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup + shutdown lifecycle."""
     init_db()
     seed_default_provider()
     start_scheduler()
 
-    # Sanal bakiyeyi başlat (yoksa 100k USD ile oluşur)
+    # Sanal bakiyeyi baslat (yoksa 100k USD ile olusur)
     from app.database import SessionLocal
     from app.services.balance_service import get_balance
     db = SessionLocal()
@@ -41,6 +32,20 @@ def on_startup():
         logger.warning("Bakiye baslatilamadi: %s", e)
     finally:
         db.close()
+
+    yield
+
+
+app = FastAPI(title="ORBIS FINAI - ORBIS Finance Analyze Team API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3009", "https://finans.erkanerdem.online"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(APIKeyMiddleware)
 
 
 register_routers(app)

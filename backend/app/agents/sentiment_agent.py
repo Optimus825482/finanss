@@ -27,16 +27,14 @@ class SentimentAgent(BaseAgent):
             raise
 
     def _analyze(self, candidates: list[dict]) -> list[dict]:
+        from app.services.yf_utils import safe_ticker_news
         for c in candidates:
             headlines = []
-            try:
-                news_items = yf.Ticker(c["ticker"]).news or []
-                for item in news_items[:10]:
-                    title = item.get("content", {}).get("title") or item.get("title")
-                    if title:
-                        headlines.append(title)
-            except Exception:
-                headlines = []
+            news_items = safe_ticker_news(c["ticker"])
+            for item in news_items[:10]:
+                title = item.get("content", {}).get("title") or item.get("title")
+                if title:
+                    headlines.append(title)
 
             if not headlines:
                 c["sentiment_score"] = 50.0  # veri yoksa nötr

@@ -30,15 +30,15 @@ STOCK_UNIVERSE = {
         "SCHW","PNC","USB","TFC","BK","COF","AIG","MET","PRU","ALL",
         # Saglik
         "JNJ","UNH","PFE","MRK","ABBV","LLY","TMO","DHR","ABT","BMY",
-        "SYK","CI","HUM","CVS","ANTM","REGN","VRTX","GILD","AMGN","BIIB",
+        "SYK","CI","HUM","CVS","ANTM",
         # Enerji & Sanayi
         "XOM","CVX","CAT","GE","BA","HON","LMT","UNP","RTX","DE",
         "MMM","ITW","ETN","EMR","ROK","PH","NSC","FDX","UPS",
         # Tuketici & Perakende
-        "WMT","HD","KO","PEP","PG","NKE","MCD","SBUX","TGT","LOW",
-        "TJX","DG","ROST","BBY","AZO","ORLY","CMG","YUM","DPZ",
+        "WMT","HD","KO","PG","NKE","MCD","SBUX","TGT","LOW",
+        "TJX","DG","ROST","BBY","AZO","CMG","YUM","DPZ",
         # Diger
-        "DIS","NFLX","VZ","T","TMUS","SPG","O","PLD","AMT","WELL",
+        "DIS","VZ","T","TMUS","SPG","O","PLD","AMT","WELL",
         "DUK","SO","NEE","D","AEP","XEL","SRE","ED","PEG","EXC",
         "LIN","APD","ECL","SHW","FCX","NEM","GOLD","AEM",
     ],
@@ -69,7 +69,7 @@ STOCK_UNIVERSE = {
         # Sigorta & Finans
         "ANSGR.IS","TSGYO.IS","AKGRT.IS","RAYSG.IS",
         # Diger
-        "THYAO.IS","PGSUS.IS","MAVI.IS",
+        "THYAO.IS","MAVI.IS",
         "KONYA.IS","BAGFS.IS","IZENR.IS","DOCO.IS",
         "KMPUR.IS","ALKA.IS","ORCAY.IS","UFUK.IS","AKFIS.IS",
     ],
@@ -89,9 +89,6 @@ STOCK_UNIVERSE = {
     ],
 }
 
-# Varsayilan izleme evreni (geriye donuk uyumluluk)
-WATCHLIST = STOCK_UNIVERSE["NASDAQ"][:15] + STOCK_UNIVERSE["NYSE"][:15] + STOCK_UNIVERSE["BIST"][:10]
-
 BENCHMARK_TICKER = "^GSPC"
 
 SCORING_WEIGHTS = {
@@ -101,10 +98,6 @@ SCORING_WEIGHTS = {
 }
 
 TOP_N_PICKS = 8
-
-# Tarama esikleri
-SCANNER_MIN_MOMENTUM_PCT = -100
-SCANNER_LOOKBACK_DAYS = "3mo"
 
 SCHEDULE_HOUR = 8
 SCHEDULE_MINUTE = 0

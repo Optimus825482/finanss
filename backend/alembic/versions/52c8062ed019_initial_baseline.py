@@ -3,6 +3,12 @@
 Uses Base.metadata.create_all() which is internally CREATE TABLE IF NOT EXISTS,
 so it works whether tables already exist from a previous init_db() run or not.
 
+NOTE: create_all only adds tables that don't exist yet — it does NOT detect
+schema drift (added/removed/dropped columns) on existing tables. For any model
+change after this baseline, generate a real migration with
+`alembic revision --autogenerate -m "describe change"` and use op.add_column /
+op.drop_column etc. Do NOT just re-run this baseline.
+
 Revision ID: 52c8062ed019
 Revises:
 Create Date: 2026-07-08 16:20:54.103324

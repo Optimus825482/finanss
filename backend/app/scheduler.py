@@ -1,5 +1,4 @@
 import asyncio
-import concurrent.futures
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,12 +12,11 @@ logger = logging.getLogger("scheduler")
 
 
 def _run_pipeline_sync():
+    """BackgroundScheduler thread'inden async pipeline'i calistir."""
     try:
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, orchestrator.run_pipeline())
-            return future.result()
+        asyncio.run(orchestrator.run_pipeline())
     except Exception as e:
-        logger.error(f"Zamanlanmış pipeline çalıştırması başarısız: {e}")
+        logger.error(f"Zamanlanmis pipeline calistirmasi basarisiz: {e}")
 
 
 def _run_autonomous_agent_sync():

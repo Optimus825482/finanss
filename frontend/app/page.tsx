@@ -6,6 +6,7 @@ import SignalChain from "./components/SignalChain";
 import StockCard from "./components/StockCard";
 import WatchlistWidget from "./components/WatchlistWidget";
 import AgentPortfolioCard from "./components/AgentPortfolioCard";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 export default function Dashboard() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
@@ -21,8 +22,8 @@ export default function Dashboard() {
       setStatus(s);
       return s;
     } catch (e) {
-      console.warn("Failed to get status", e);
-      setError("Backend'e bağlanılamadı. http://localhost:8012 çalışıyor mu?");
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      setError(`Backend'e bağlanılamadı: ${msg}. http://localhost:8012 çalışıyor mu?`);
       return null;
     }
   }, []);
@@ -33,8 +34,9 @@ export default function Dashboard() {
       setReport(r);
       setError(null);
     } catch (e) {
-      console.warn("Failed to get latest report", e);
-      // henüz rapor yok
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      // Rapor yok olabilir (404) — kullanıcıya sadece bağlantı hatası göster
+      if (!msg.includes("404")) setError(`Rapor alınamadı: ${msg}`);
     }
   }, []);
 
@@ -43,15 +45,18 @@ export default function Dashboard() {
       const h = await api.getHistory();
       setHistory(h);
     } catch (e) {
-      console.warn("Failed to get history", e);
-      // yoksay
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      setError(`Geçmiş yüklenemedi: ${msg}`);
     }
   }, []);
 
   const refreshWatchlist = useCallback(async () => {
     try {
       setWatchlist(await api.getWatchlist());
-    } catch (e) { console.warn("Failed to get watchlist", e); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      setError(`İzleme listesi yüklenemedi: ${msg}`);
+    }
   }, []);
 
   useEffect(() => {
@@ -75,22 +80,31 @@ export default function Dashboard() {
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setError(null);
     try {
       await api.generate();
       await refreshStatus();
-    } catch {
-      setError("Rapor başlatılamadı.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      setError(`Rapor başlatılamadı: ${msg}`);
     } finally {
       setGenerating(false);
     }
   };
 
   const loadReport = async (id: number) => {
-    const r = await api.getReport(id);
-    setReport(r);
+    try {
+      const r = await api.getReport(id);
+      setReport(r);
+      setError(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+      setError(`Rapor yüklenemedi: ${msg}`);
+    }
   };
 
   return (
+    <ErrorBoundary>
     <main className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
       {/* Hero */}
 	      <div
@@ -264,5 +278,6 @@ export default function Dashboard() {
         <AgentPortfolioCard />
       </div>
     </main>
+    </ErrorBoundary>
   );
 }

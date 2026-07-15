@@ -110,7 +110,22 @@ export type AgentDecision = {
 };
 
 async function j<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`API hatası: ${res.status}`);
+  if (!res.ok) {
+    // Backend'ten detay mesajını çıkarmaya çalış
+    let detail = "";
+    try {
+      const body = await res.text();
+      try {
+        const parsed = JSON.parse(body);
+        detail = parsed.detail || parsed.message || body;
+      } catch {
+        detail = body.slice(0, 200);
+      }
+    } catch {
+      detail = res.statusText;
+    }
+    throw new Error(`API ${res.status}: ${detail || "Bilinmeyen hata"}`);
+  }
   return res.json();
 }
 

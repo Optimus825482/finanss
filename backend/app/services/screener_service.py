@@ -17,6 +17,7 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 from app.config import STOCK_UNIVERSE
+from app.services.yf_utils import safe_download, with_retry
 
 TECHNICAL_SCREEN_DEFAULTS = {
     "min_momentum_5d": -8.0,
@@ -77,15 +78,8 @@ async def stage1_prescreen(
         return result
 
     logger.info("Non-BIST tickers, using batch yf.download...")
-    try:
-        data = await asyncio.to_thread(
-            yf.download, tickers, period="1mo", interval="1d", progress=False, timeout=60
-        )
-    except Exception as e:
-        logger.error("Download failed for %d tickers: %s", len(tickers), e)
-        return []
-
-    if data.empty:
+    data = safe_download(tickers, period="1mo", interval="1d", progress=False)
+    if data is None or data.empty:
         return []
 
     results = []
@@ -174,8 +168,8 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
 
     def _fetch(t: str) -> object:
         """Sync fetch helper for to_thread."""
-        import yfinance as yf
-        return yf.Ticker(t).history(period="1mo")
+        from app.services.yf_utils import safe_ticker_history
+        return safe_ticker_history(t, period="1mo")
 
     import numpy as np
 
@@ -268,8 +262,10 @@ async def stage2_deep_analysis(
     enriched = []
     for c in top:
         try:
-            t = yf.Ticker(c["ticker"])
-            hist = await asyncio.to_thread(lambda: t.history(period="3mo"))
+            from app.services.yf_utils import safe_ticker_history
+            hist = await asyncio.to_thread(lambda t=c["ticker"]: safe_ticker_history(t, period="3mo"))
+            if hist is None or hist.empty:
+                continue
             hist.index = hist.index.tz_localize(None)
             c["history"] = hist
             enriched.append(c)

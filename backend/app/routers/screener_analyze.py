@@ -3,14 +3,14 @@ import logging
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
-from app.database import SessionLocal  # TODO: use Depends(get_db)
+from app.database import SessionLocal
 from app.orchestrator import orchestrator
 
 import yfinance as yf
 
 router = APIRouter(prefix="/api/screener", tags=["screener_analyze"])
 
-logger = logging.getLogger("orchestrator")
+logger = logging.getLogger(__name__)
 
 
 @router.post("/{ticker}/analyze")
@@ -24,8 +24,11 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
     async def _deep_analysis():
         from datetime import datetime
         from app.services.memory_service import store_research_memory
-        from app.database import SessionLocal
-        from app.models import Report, StockPick
+        app_models = __import__("app.models", fromlist=["Report", "StockPick"])
+        Report = app_models.Report
+        StockPick = app_models.StockPick
+        from app.models.core import Notification
+        from app.services.factor_extractor import extract_and_store_factors
         from app.agents.fundamental_agent import FundamentalAgent
         from app.agents.sentiment_agent import SentimentAgent
         from app.agents.risk_agent import RiskAgent
@@ -37,7 +40,7 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
             risk = RiskAgent()
             reporter = ReportAgent()
 
-            # Tek hisse analizi: scanner pipeline'ini atla, dogrudan yfinance
+            # Tek hisse analizi: on taramayi atla, dogrudan yfinance
             t = yf.Ticker(ticker_str)
             info = await asyncio.to_thread(lambda: t.info or {})
             hist = await asyncio.to_thread(lambda: t.history(period="3mo"))
@@ -56,7 +59,7 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
             candidates = await risk.run(candidates)
             result = await reporter.run(candidates)
 
-            # DB'ye Report olarak kaydet
+            # DB'ye Report olarak kaydet (BG task → SessionLocal dogrudan, DI calismaz)
             db = SessionLocal()
             try:
                 report = Report(
@@ -100,29 +103,31 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
                         confidence=0.7, ttl_days=30,
                     )
 
-                # Notification ekle
-                from app.models.core import Notification
+                # Notification
                 pick_tickers = [p["ticker"] for p in result.get("picks", [])]
-                notif = Notification(
-                    type="report", title="Analiz Tamamlandı",
-                    message=f"{ticker_str} detaylı analizi hazır. {len(pick_tickers)} hisse önerisi oluşturuldu.",
+                db.add(Notification(
+                    type="report", title="Analiz Tamamlandi",
+                    message=f"{ticker_str} detayli analizi hazir. {len(pick_tickers)} hisse onerisi olusturuldu.",
                     report_id=report.id,
-                )
-                db.add(notif)
+                ))
 
                 # RD-Agent: faktor cikar ve memory'e kaydet
-                from app.services.factor_extractor import extract_and_store_factors
                 extract_and_store_factors(
                     ticker=ticker_str, candidates=result.get("picks", []),
                     summary=result.get("summary", ""), source_report_id=report.id,
                 )
 
                 db.commit()
+                logger.info("Deep analysis completed for %s (report #%d)", ticker_str, report.id)
+            except Exception as e:
+                db.rollback()
+                logger.error("DB persist failed for %s deep analysis: %s", ticker_str, e)
+                raise
             finally:
                 db.close()
 
         except Exception as e:
-            logger.error(f"Deep analysis failed for {ticker_str}: {e}")
+            logger.error("Deep analysis failed for %s: %s", ticker_str, e)
 
     background_tasks.add_task(_deep_analysis)
     return {

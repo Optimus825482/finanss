@@ -1,9 +1,10 @@
 """
 Watchlist ve portföy için ortak canlı fiyat servisi.
-Araştırma pipeline'ındaki ScannerAgent'tan bağımsız, hafif ve tek amaçlı.
+Hafif ve tek amaçlı — pipeline'dan bağımsız çalışır.
 """
 import pandas as pd
-import yfinance as yf
+
+from app.services.yf_utils import safe_download
 
 
 def get_live_prices(tickers: list[str]) -> dict[str, dict]:
@@ -14,15 +15,9 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
     if not unique:
         return result
 
-    try:
-        # yfinance >= 1.0: group_by kalktı, multi-ticker her zaman
-        # MultiIndex column (Price, Ticker) döner.
-        data = yf.download(
-            unique, period="5d", interval="1d",
-            progress=False,
-        )
-    except Exception:
-        data = None
+    data = safe_download(unique, period="5d", interval="1d", progress=False)
+    if data is None:
+        data = pd.DataFrame()
 
     for t in unique:
         try:

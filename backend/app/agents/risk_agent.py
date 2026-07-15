@@ -27,8 +27,9 @@ class RiskAgent(BaseAgent):
             raise
 
     def _analyze(self, candidates: list[dict]) -> list[dict]:
+        from app.services.yf_utils import safe_ticker_history
         try:
-            benchmark_hist = yf.Ticker(BENCHMARK_TICKER).history(period="3mo")["Close"]
+            benchmark_hist = safe_ticker_history(BENCHMARK_TICKER, period="3mo")["Close"]
             # yfinance 1.x: Ticker.history() tz-aware, download() tz-naive → align patlar
             benchmark_hist.index = benchmark_hist.index.tz_localize(None)
             benchmark_returns = benchmark_hist.pct_change(fill_method=None).dropna()

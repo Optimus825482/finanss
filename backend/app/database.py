@@ -17,9 +17,9 @@ def get_db():
 
 
 def init_db():
-    """Create tables + extension."""
+    """Ensure pgvector extension exists. Schema management is Alembic's job
+    (docker-entrypoint runs `alembic upgrade head`), so we do NOT call
+    create_all here — that would mask schema drift from future migrations."""
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         conn.commit()
-    from app import models  # noqa: F401
-    Base.metadata.create_all(bind=engine)

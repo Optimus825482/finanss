@@ -1,11 +1,14 @@
 import asyncio
+import logging
 import math
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 
 import yfinance as yf
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize(obj):
@@ -47,7 +50,8 @@ def suggest_tickers(q: str):
         valid_types = {"equity", "etf", "index", "currency", "future"}
         results = [r for r in results if r["type"].lower() in valid_types]
         return results[:10]
-    except Exception:
+    except Exception as e:
+        logger.warning("suggest_tickers failed for q=%s: %s", q, e)
         return []
 
 
@@ -130,7 +134,8 @@ async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: s
                 }
                 for i in range(len(news_raw))
             ]
-        except Exception:
+        except Exception as e:
+            logger.warning("news fetch failed for %s: %s", ticker_str, e)
             result["news"] = []
 
         try:
@@ -154,7 +159,8 @@ async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: s
                 }
                 for idx, row in hist.iterrows()
             ][-30:]
-        except Exception:
+        except Exception as e:
+            logger.warning("price history fetch failed for %s: %s", ticker_str, e)
             result["price_history"] = []
 
         return _sanitize(result)

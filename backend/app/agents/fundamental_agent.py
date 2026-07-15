@@ -75,11 +75,9 @@ class FundamentalAgent(BaseAgent):
             raise
 
     def _analyze(self, candidates: list[dict]) -> list[dict]:
+        from app.services.yf_utils import safe_ticker_info
         for c in candidates:
-            try:
-                info = yf.Ticker(c["ticker"]).info
-            except Exception:
-                info = {}
+            info = safe_ticker_info(c["ticker"])
 
             pe = info.get("trailingPE")
             roe = info.get("returnOnEquity")

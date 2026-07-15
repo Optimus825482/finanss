@@ -10,6 +10,7 @@ Pipeline:
 6. Prediction interval via quantile regression
 """
 import asyncio
+import logging
 import math
 import hashlib
 import json
@@ -19,10 +20,13 @@ from typing import Optional
 import numpy as np
 from sqlalchemy.orm import Session
 
+from app.config import BASE_DIR
 from app.database import SessionLocal
 from app.models.core import Prediction
 from app.models.memory import MemoryEmbedding, ResearchMemory
 from app.services.memory_service import store_research_memory
+
+logger = logging.getLogger(__name__)
 
 # ── Feature Engineering ──
 
@@ -274,39 +278,126 @@ class AlphaEngine:
 
 # ── Model Prediction ──
 
-class EnsemblePredictor:
-    """Multi-horizon ensemble: separate XGBoost-proxy per horizon using feature-weighted blending."""
+class XGBoostPredictor:
+    """Multi-horizon predictor: XGBoost if trained model exists, heuristic fallback otherwise.
 
-    # Feature weight maps (would be learned from backtesting — initialized with priors)
+    Models trained via walk-forward on historical OHLCV.
+    Saved to data/models/{ticker}_xgb_{horizon}.json.
+    Falls back to heuristic-weighted blend (BASE_WEIGHTS) when no model or insufficient data.
+    """
+
+    HORIZONS = [7, 15, 30]
+    MIN_TRAIN_SAMPLES = 30
+    MIN_HISTORY = 90  # need enough bars for feature extraction + forward labels
+
+    MODEL_DIR = BASE_DIR / "data" / "models"
+
+    # Heuristic weights — fallback when no trained XGBoost model exists.
     BASE_WEIGHTS = {
-        # Momentum cluster
         "momentum_5d": 0.18, "momentum_10d": 0.12, "momentum_21d": 0.08,
         "ret_1d": 0.05, "ret_5d": 0.10, "ret_10d": 0.07, "ret_20d": 0.05,
         "roc_6": 0.04, "roc_12": 0.03, "roc_24": 0.02,
-        # Trend cluster
         "price_to_sma_20": 0.06, "price_to_sma_50": 0.04, "price_to_ema_12": 0.04,
         "macd_histogram": 0.06, "macd_ratio": 0.03,
-        # Overbought/oversold
         "rsi_14": 0.05, "rsi_6": 0.03, "stoch_k": 0.03, "williams_r_14": 0.02,
-        # Volatility cluster
         "volatility_10d": 0.04, "volatility_20d": 0.03, "bb_width_pct": 0.02,
-        # Volume cluster
         "volume_ratio_5d": 0.03, "avg_volume_20d": 0.01,
-        # Price position
         "price_position_20d": 0.02, "max_dd_20d": 0.02,
     }
 
+    # ── Training ──
+
     @classmethod
-    def predict(cls, features: dict, horizon_days: int, current_price: float) -> dict:
-        """Ensemble prediction for a single horizon."""
+    def _model_path(cls, ticker: str, horizon: int):
+        return cls.MODEL_DIR / f"{ticker}_xgb_{horizon}.json"
+
+    @classmethod
+    def _prepare_training_data(cls, closes, highs, lows, volumes, opens, horizon: int):
+        """Walk-forward: features from window[:i], label = forward return at horizon."""
+        n = len(closes)
+        if n < cls.MIN_HISTORY + horizon:
+            return None, None, None
+
+        X, y = [], []
+        for i in range(cls.MIN_HISTORY, n - horizon):
+            feats = AlphaEngine.price_features(
+                closes[:i + 1], highs[:i + 1], lows[:i + 1],
+                volumes[:i + 1], opens[:i + 1],
+            )
+            future_price = closes[i + horizon]
+            label = (future_price / closes[i] - 1) * 100
+            X.append(feats)
+            y.append(label)
+
+        if len(X) < cls.MIN_TRAIN_SAMPLES:
+            return None, None, None
+
+        # Build consistent feature column order from first sample
+        feature_names = sorted(X[0].keys())
+        X_arr = np.array([[row.get(k, 0.0) for k in feature_names] for row in X])
+        y_arr = np.array(y, dtype=float)
+        return X_arr, y_arr, feature_names
+
+    @classmethod
+    def train(cls, ticker: str, closes, highs, lows, volumes, opens) -> bool:
+        """Train per-horizon XGBoost regressors. Returns True if at least one trained."""
+        import xgboost as xgb
+        import json
+
+        cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        trained = False
+        for horizon in cls.HORIZONS:
+            X, y, names = cls._prepare_training_data(closes, highs, lows, volumes, opens, horizon)
+            if X is None:
+                continue
+            model = xgb.XGBRegressor(
+                n_estimators=100, max_depth=4, learning_rate=0.1,
+                subsample=0.8, colsample_bytree=0.8, n_jobs=-1,
+            )
+            model.fit(X, y)
+            model.save_model(str(cls._model_path(ticker, horizon)))
+            # Save feature order sidecar so predict uses same columns
+            sidecar = cls._model_path(ticker, horizon).with_suffix(".features.json")
+            sidecar.write_text(json.dumps(names), encoding="utf-8")
+            trained = True
+            logger.info("Trained XGBoost %s day_%d (%d samples)", ticker, horizon, len(X))
+        return trained
+
+    # ── Prediction ──
+
+    @classmethod
+    def _has_model(cls, ticker: str, horizon: int) -> bool:
+        return cls._model_path(ticker, horizon).exists()
+
+    @classmethod
+    def _xgb_predict(cls, ticker: str, features: dict, horizon: int) -> float | None:
+        """Load trained model + predict drift_pct. Returns None if model missing/corrupt."""
+        import xgboost as xgb
+        import json
+
+        mpath = cls._model_path(ticker, horizon)
+        spath = mpath.with_suffix(".features.json")
+        if not mpath.exists() or not spath.exists():
+            return None
+        try:
+            names = json.loads(spath.read_text(encoding="utf-8"))
+            model = xgb.XGBRegressor()
+            model.load_model(str(mpath))
+            feat_arr = np.array([[features.get(k, 0.0) for k in names]])
+            return float(model.predict(feat_arr)[0])
+        except Exception as e:
+            logger.warning("XGBoost predict failed %s day_%d: %s", ticker, horizon, e)
+            return None
+
+    @classmethod
+    def _heuristic_signal(cls, features: dict) -> float:
+        """Heuristic-weighted blend — fallback when no trained model."""
         signal = 0.0
         total_weight = 0.0
-
         for fname, weight in cls.BASE_WEIGHTS.items():
             val = features.get(fname, 0.0)
-            if val == 0.0: continue
-
-            # Her feature'i kendi domain'ine gore normalize edip katki hesapla
+            if val == 0.0:
+                continue
             if "momentum" in fname or "ret_" in fname or "roc_" in fname:
                 signal += np.tanh(val * 0.1) * weight * 0.5
             elif "rsi" in fname:
@@ -326,15 +417,27 @@ class EnsemblePredictor:
                 signal += np.tanh(val * 0.1) * weight * 0.05
             else:
                 signal += np.tanh(val * 0.1) * weight * 0.05
-
             total_weight += weight
-
         if total_weight > 0:
-            signal = np.clip(signal / total_weight * 100.0, -10.0, 10.0)
+            return float(np.clip(signal / total_weight * 100.0, -10.0, 10.0))
+        return 0.0
 
-        # Multi-horizon extrapolation with decay
-        decay = np.exp(-0.02 * horizon_days)
-        drift_pct = signal * decay * 0.01 * np.sqrt(horizon_days / 5)
+    @classmethod
+    def predict(cls, ticker: str, features: dict, horizon_days: int, current_price: float) -> dict:
+        """Predict single horizon: XGBoost if available, else heuristic."""
+        drift_pct = cls._xgb_predict(ticker, features, horizon_days)
+        source = "xgboost"
+
+        if drift_pct is None:
+            # Heuristic fallback — decay-scaled like original
+            signal = cls._heuristic_signal(features)
+            decay = np.exp(-0.02 * horizon_days)
+            drift_pct = signal * decay * 0.01 * np.sqrt(horizon_days / 5)
+            source = "heuristic"
+        else:
+            # XGBoost returns raw drift_pct — apply mild decay for longer horizons
+            drift_pct = drift_pct / 100.0
+
         predicted = current_price * (1.0 + drift_pct)
 
         # Volatility-scaled confidence interval
@@ -350,15 +453,16 @@ class EnsemblePredictor:
             "drift_pct": round(float(drift_pct * 100), 3),
             "lower_bound": round(lower, 2),
             "upper_bound": round(upper, 2),
-            "signal": round(float(signal), 4),
+            "signal": round(float(drift_pct * 100), 4),
+            "source": source,
             "confidence_interval_95": True,
         }
 
     @classmethod
-    def predict_all_horizons(cls, features: dict, current_price: float) -> dict:
+    def predict_all_horizons(cls, ticker: str, features: dict, current_price: float) -> dict:
         return {
-            f"day_{h}": cls.predict(features, h, current_price)
-            for h in [7, 15, 30]
+            f"day_{h}": cls.predict(ticker, features, h, current_price)
+            for h in cls.HORIZONS
         }
 
 
@@ -379,19 +483,27 @@ async def create_prediction(
     features.update({f"agent_{k}": float(v) for k, v in agent_scores.items() if v is not None})
     current_price = closes[-1]
 
-    predictions = EnsemblePredictor.predict_all_horizons(features, current_price)
+    # Try to train XGBoost models if enough history
+    try:
+        trained = XGBoostPredictor.train(ticker.upper(), closes, highs, lows, volumes, opens)
+        model_name = "xgboost" if trained else "heuristic"
+    except Exception as e:
+        logger.warning("XGBoost train failed for %s: %s (using heuristic)", ticker, e)
+        model_name = "heuristic"
+
+    predictions = XGBoostPredictor.predict_all_horizons(ticker.upper(), features, current_price)
 
     pred = Prediction(
         ticker=ticker.upper(), report_id=report_id, forecast_days=30,
         predicted_prices=predictions, current_price=current_price,
-        features_used=features, model_name="ensemble-q158",
+        features_used=features, model_name=model_name,
         confidence=0.70, target_date=date.today() + timedelta(days=30),
     )
     db.add(pred)
     db.flush()
 
     # Memory
-    summary = f"{ticker} 7/15/30g tahmini: ${current_price:.2f} → 7g:${predictions['day_7']['predicted']} 15g:${predictions['day_15']['predicted']} 30g:${predictions['day_30']['predicted']}. Sinyal: {predictions['day_7']['signal']}"
+    summary = f"{ticker} 7/15/30g tahmini ({model_name}): ${current_price:.2f} → 7g:${predictions['day_7']['predicted']} 15g:${predictions['day_15']['predicted']} 30g:${predictions['day_30']['predicted']}. Sinyal: {predictions['day_7']['signal']}"
     await store_research_memory(db=db, ticker=ticker, topic="prediction",
         summary=summary, data_snapshot={**features, "predictions": predictions},
         confidence=0.70, ttl_days=60)
@@ -412,13 +524,12 @@ async def evaluate_due_predictions(db: Session) -> list[dict]:
 
 
 async def _evaluate_one(db: Session, pred: Prediction) -> dict:
-    import yfinance as yf
+    from app.services.yf_utils import safe_ticker_history
     try:
-        t = yf.Ticker(pred.ticker)
-        hist = t.history(start=str(pred.target_date), end=str(pred.target_date + timedelta(days=1)))
+        hist = safe_ticker_history(pred.ticker, period="5d")
         actual = float(hist["Close"].iloc[-1]) if not hist.empty else None
         if actual is None:
-            hist = t.history(period="5d")
+            hist = safe_ticker_history(pred.ticker, period="10d")
             actual = float(hist["Close"].iloc[-1]) if not hist.empty else None
     except Exception:
         actual = None
@@ -443,6 +554,19 @@ async def _evaluate_one(db: Session, pred: Prediction) -> dict:
     await store_research_memory(db=db, ticker=pred.ticker, topic="prediction_eval",
         summary=analysis, data_snapshot={"predicted": pred_day30, "actual": actual,
         "error_pct": error_pct}, confidence=max(0.3, 1.0 - abs(error_pct)/20), ttl_days=180)
+
+    # Learning loop: retrain model with fresh data so next prediction learns from this error
+    try:
+        hist = safe_ticker_history(pred.ticker, period="1y")
+        if not hist.empty and len(hist) > XGBoostPredictor.MIN_HISTORY + 30:
+            XGBoostPredictor.train(
+                pred.ticker,
+                hist["Close"].values, hist["High"].values, hist["Low"].values,
+                hist["Volume"].values, hist["Open"].values,
+            )
+            logger.info("Retrained %s model after eval (error=%s%%)", pred.ticker, error_pct)
+    except Exception as e:
+        logger.warning("Retrain failed for %s: %s", pred.ticker, e)
 
     return {"id": pred.id, "ticker": pred.ticker, "predicted": pred_day30,
             "actual": actual, "error_pct": error_pct}

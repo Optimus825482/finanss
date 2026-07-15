@@ -58,10 +58,9 @@ class AutonomousAgent:
 
     async def analyze_single(self, ticker: str) -> dict:
         """Tek hisse detayli analiz (full agent pipeline)."""
-        import yfinance as yf
-        t = yf.Ticker(ticker)
-        info = t.info or {}
-        hist = t.history(period="3mo")
+        from app.services.yf_utils import safe_ticker_info, safe_ticker_history
+        info = safe_ticker_info(ticker)
+        hist = safe_ticker_history(ticker, period="3mo")
         hist.index = hist.index.tz_localize(None)
 
         price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
@@ -154,19 +153,14 @@ class AutonomousAgent:
 
     def _log_decision(self, db: Session, ticker: str, action: str, quantity: float, price: float,
                       amount: float, reasoning: str, confidence: float, portfolio_before: dict, portfolio_after: dict):
-        """Her karari trading_decisions'a yaz."""
-        # Manual insert
-        import sqlalchemy as sa
-        meta = sa.MetaData()
-        meta.reflect(bind=db.get_bind())
-        td_table = meta.tables["trading_decisions"]
-        db.execute(td_table.insert().values(
+        """Her karari trading_decisions'a yaz (TradingDecision modeli ile)."""
+        from app.models.core import TradingDecision
+        db.add(TradingDecision(
             ticker=ticker.upper(), action=action, quantity=quantity, price=price,
             total_amount=amount, reasoning=reasoning[:1000],
             factors=json.dumps({}), confidence=confidence,
             portfolio_value_before=portfolio_before.get("total_market_value"),
             portfolio_value_after=portfolio_after.get("total_market_value"),
-            created_at=datetime.utcnow(),
         ))
         db.flush()
 
@@ -465,9 +459,7 @@ JSON format (sadece JSON, aciklama yok):
         """Ajanı manuel veya scheduler'dan cagirmak icin sync wrapper."""
         db = SessionLocal()
         try:
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(self.think_and_act(db, exchanges))
-            return result
+            return asyncio.run(self.think_and_act(db, exchanges))
         finally:
             db.close()
 
@@ -476,16 +468,19 @@ JSON format (sadece JSON, aciklama yok):
 
 def get_trading_logs(db: Session, ticker: str | None = None, limit: int = 50) -> list[dict]:
     """Trading kararlarinin logunu dondur."""
-    from sqlalchemy import text
+    from app.models.core import TradingDecision
+    q = db.query(TradingDecision)
     if ticker:
-        query = db.execute(
-            text("SELECT * FROM trading_decisions WHERE ticker = :t ORDER BY created_at DESC LIMIT :l"),
-            {"t": ticker.upper(), "l": limit},
-        )
-    else:
-        query = db.execute(
-            text("SELECT * FROM trading_decisions ORDER BY created_at DESC LIMIT :l"),
-            {"l": limit},
-        )
-    rows = query.fetchall()
-    return [dict(r._mapping) for r in rows]
+        q = q.filter(TradingDecision.ticker == ticker.upper())
+    q = q.order_by(TradingDecision.created_at.desc()).limit(limit)
+    return [
+        {
+            "id": r.id, "ticker": r.ticker, "action": r.action,
+            "quantity": r.quantity, "price": r.price, "total_amount": r.total_amount,
+            "reasoning": r.reasoning, "confidence": r.confidence,
+            "portfolio_value_before": r.portfolio_value_before,
+            "portfolio_value_after": r.portfolio_value_after,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in q.all()
+    ]
