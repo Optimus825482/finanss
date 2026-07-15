@@ -164,15 +164,64 @@ class AutonomousAgent:
         ))
         db.flush()
 
+    # ── Stuck Position Cleanup ──
+
+    def _cleanup_stuck_positions(self, db: Session, portfolio: dict):
+        """Fiyatı tutarlı şekilde gelemeyen (delisted/veya yfinance sorunlu)
+        pozisyonları son bilinen entry_price ile kapat. Her turda çalışır."""
+        from app.models.core import TradingDecision
+
+        stuck_tickers = [p["ticker"] for p in portfolio["positions"]
+                         if p.get("current_price") is None]
+        if not stuck_tickers:
+            return
+
+        logger.info("Stuck position cleanup: %s", stuck_tickers)
+        for pos_data in portfolio["positions"]:
+            if pos_data.get("current_price") is not None:
+                continue
+
+            ticker = pos_data["ticker"]
+            pos_id = pos_data["id"]
+            entry_price = pos_data["entry_price"]
+            quantity = pos_data.get("quantity", 1)
+
+            # Pozisyonu entry_price ile kapat (breakeven — fiyat alınamadığı için)
+            pos = db.query(PortfolioPosition).filter(PortfolioPosition.id == pos_id).first()
+            if not pos or pos.status != "open":
+                continue
+
+            pos.status = "closed"
+            pos.exit_price = entry_price
+            pos.exit_date = datetime.utcnow()
+            pos.notes = "Auto-closed: price unavailable (delisted/yfinance error)"
+            proceeds = round(quantity * entry_price, 2)
+            record_position_closed(db, pos_id, proceeds, ticker)
+
+            self._log_decision(
+                db, ticker, "sell", quantity, entry_price, proceeds,
+                f"Otomatik kapatma: fiyat alinamiyor (delisted/yfinance hatasi), "
+                f"entry_price={entry_price} ile kapatildi",
+                confidence=0.5, portfolio_before=portfolio,
+                portfolio_after=self.get_portfolio(db),
+            )
+            logger.info("Closed stuck position: %s x%s @ $%s (breakeven)", ticker, quantity, entry_price)
+            db.commit()
+
     # ── Main Decision Loop (LLM-powered) ──
 
     async def think_and_act(self, db: Session, exchanges: list[str] | None = None) -> dict:
         """Ana dusunme dongusu:
-        1. Son rapordaki pick'leri kullan (varsa) — hizli yol
-        2. Rapor yoksa piyasayi tara + analiz et — yavas yol
-        3. LLM/kural-bazli karar ver + uygula
+        1. Takili pozisyonlari temizle (delisted/fiyat alinamayan)
+        2. Son rapordaki pick'leri kullan (varsa) — hizli yol
+        3. Rapor yoksa piyasayi tara + analiz et — yavas yol
+        4. LLM/kural-bazli karar ver + uygula
         """
         portfolio = self.get_portfolio(db)
+
+        # 0. Takili pozisyonlari kapat (fiyati olmayanlar)
+        self._cleanup_stuck_positions(db, portfolio)
+        portfolio = self.get_portfolio(db)  # refresh after cleanup
 
         # 1. Son rapordaki pick'leri dene (hazir veri, tekrar indirme yok)
         from app.models.core import Report

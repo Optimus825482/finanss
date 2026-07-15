@@ -4,13 +4,18 @@ yfinance rate-limit koruması: exponential backoff + retry wrapper.
 Yahoo Finance resmi olmayan API'si ara sıra rate-limit veya geçici hata döner.
 Bu modül tüm yfinance çağrı noktalarında kullanılır.
 """
+import io
 import logging
 import time
+import contextlib
 from typing import Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+# Suppress yfinance's stderr noise ("possibly delisted", "Failed download")
+_YF_DEVNULL = contextlib.redirect_stderr(io.StringIO())
 
 
 def with_retry(
@@ -41,7 +46,8 @@ def safe_download(*args, retries: int = 3, **kwargs):
     """yf.download wrapper — hata durumunda None döner (caller None kontrolü yapar)."""
     import yfinance as yf
     try:
-        return with_retry(yf.download, *args, retries=retries, **kwargs)
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(yf.download, *args, retries=retries, **kwargs)
     except Exception as e:
         logger.warning("yf.download failed after %d retries: %s", retries, e)
         return None
@@ -51,7 +57,8 @@ def safe_ticker_info(ticker: str, retries: int = 3) -> dict:
     """yf.Ticker(ticker).info wrapper — hata durumunda {} döner."""
     import yfinance as yf
     try:
-        return with_retry(lambda: yf.Ticker(ticker).info, retries=retries) or {}
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).info, retries=retries) or {}
     except Exception as e:
         logger.warning("yf.Ticker(%s).info failed: %s", ticker, e)
         return {}
@@ -62,7 +69,8 @@ def safe_ticker_history(ticker: str, period: str = "3mo", retries: int = 3, **kw
     import yfinance as yf
     import pandas as pd
     try:
-        return with_retry(yf.Ticker(ticker).history, period=period, retries=retries, **kwargs)
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(yf.Ticker(ticker).history, period=period, retries=retries, **kwargs)
     except Exception as e:
         logger.warning("yf.Ticker(%s).history failed: %s", ticker, e)
         return pd.DataFrame()
@@ -72,7 +80,8 @@ def safe_ticker_news(ticker: str, retries: int = 3) -> list:
     """yf.Ticker(ticker).news wrapper — hata durumunda [] döner."""
     import yfinance as yf
     try:
-        return with_retry(lambda: yf.Ticker(ticker).news or [], retries=retries)
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).news or [], retries=retries)
     except Exception as e:
         logger.warning("yf.Ticker(%s).news failed: %s", ticker, e)
         return []
