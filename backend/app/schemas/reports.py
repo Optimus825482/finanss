@@ -53,3 +53,6 @@ class AgentStatusOut(BaseModel):
 class PipelineStatusOut(BaseModel):
     running: bool
     agents: list[AgentStatusOut]
+    mode: Optional[str] = None
+    progress: list[str] = []
+    last_error: Optional[str] = None
