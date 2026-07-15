@@ -78,7 +78,7 @@ async def stage1_prescreen(
         return result
 
     logger.info("Non-BIST tickers, using batch yf.download...")
-    data = safe_download(tickers, period="1mo", interval="1d", progress=False)
+    data = await asyncio.to_thread(safe_download, tickers, period="1mo", interval="1d", progress=False)
     if data is None or data.empty:
         return []
 

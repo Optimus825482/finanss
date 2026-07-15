@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from app.agents.scanner_agent import ScannerAgent
+from app.agents.base import AgentStatus
 from app.agents.fundamental_agent import FundamentalAgent
 from app.agents.sentiment_agent import SentimentAgent
 from app.agents.risk_agent import RiskAgent
@@ -72,11 +73,11 @@ class Orchestrator:
         self._log(f"Pipeline basladi: {total_scanned} hisse, islem: {exchanges or 'tum evren'}")
 
         # Stage 1 — Technical pre-screen
-        self.scanner._set(self.scanner.RUNNING, f"{total_scanned} hisse taranacak...")
+        self.scanner._set(AgentStatus.RUNNING, f"{total_scanned} hisse taranacak...")
         self._log(f"Stage 1 basliyor: {total_scanned} hisse taranacak...")
         stage1 = await stage1_prescreen(tickers)
         self._log(f"Stage 1 sonuc: {len(stage1)}/{total_scanned} aday secti")
-        self.scanner._set(self.scanner.DONE, f"Stage 1: {len(stage1)}/{total_scanned} hisse secti")
+        self.scanner._set(AgentStatus.DONE, f"Stage 1: {len(stage1)}/{total_scanned} hisse secti")
 
         if not stage1:
             self._log("Stage 1: aday bulunamadi, rapor kaydedilmiyor")
@@ -84,11 +85,11 @@ class Orchestrator:
                                    "candidates_scanned": total_scanned, "picks": []})
 
         # Stage 2 — Deep analysis
-        self.fundamental._set(self.fundamental.RUNNING, f"Stage 2: {len(stage1)} hisse derin analize giriyor")
+        self.fundamental._set(AgentStatus.RUNNING, f"Stage 2: {len(stage1)} hisse derin analize giriyor")
         self._log(f"Stage 2 basliyor: {len(stage1)} hisse derin analiz...")
         stage2 = await stage2_deep_analysis(stage1)
         self._log(f"Stage 2 sonuc: {len(stage2)} hisse analiz edildi")
-        self.fundamental._set(self.fundamental.DONE if stage2 else self.fundamental.ERROR,
+        self.fundamental._set(AgentStatus.DONE if stage2 else AgentStatus.ERROR,
                               f"Derin analiz: {len(stage2)}")
 
         if not stage2:
