@@ -6,6 +6,7 @@ Orchestrator — Two-stage pipeline:
 import logging
 from datetime import datetime
 
+from app.agents.scanner_agent import ScannerAgent
 from app.agents.fundamental_agent import FundamentalAgent
 from app.agents.sentiment_agent import SentimentAgent
 from app.agents.risk_agent import RiskAgent
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class Orchestrator:
     def __init__(self):
+        self.scanner = ScannerAgent()  # sentinel — Stage 1 ilerleme gostergesi
         self.fundamental = FundamentalAgent()
         self.sentiment = SentimentAgent()
         self.risk = RiskAgent()
@@ -31,7 +33,7 @@ class Orchestrator:
 
     @property
     def agents(self):
-        return [self.fundamental, self.sentiment, self.risk, self.reporter]
+        return [self.scanner, self.fundamental, self.sentiment, self.risk, self.reporter]
 
     def status_snapshot(self) -> dict:
         return {
@@ -70,9 +72,11 @@ class Orchestrator:
         self._log(f"Pipeline basladi: {total_scanned} hisse, islem: {exchanges or 'tum evren'}")
 
         # Stage 1 — Technical pre-screen
+        self.scanner._set(self.scanner.RUNNING, f"{total_scanned} hisse taranacak...")
         self._log(f"Stage 1 basliyor: {total_scanned} hisse taranacak...")
         stage1 = await stage1_prescreen(tickers)
         self._log(f"Stage 1 sonuc: {len(stage1)}/{total_scanned} aday secti")
+        self.scanner._set(self.scanner.DONE, f"Stage 1: {len(stage1)}/{total_scanned} hisse secti")
 
         if not stage1:
             self._log("Stage 1: aday bulunamadi, rapor kaydedilmiyor")
