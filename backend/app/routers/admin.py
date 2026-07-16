@@ -190,7 +190,7 @@ class VLMModelIn(BaseModel):
 async def api_test_vlm(body: VLMModelIn):
     """VLM modeli test et — basit 1x1 siyah PNG ile bağlantı kontrolü.
 
-    Model ister Ollama/OpenAI/Anthropic/Gemini formatta (liteLLM).
+    Model ister Ollama/OpenAI/Anthropic/Gemini formatında (liteLLM).
     Başarılı → {'ok': True, 'response': '...'} döner.
     """
     from app.services.llm_bridge import generate_vision
@@ -211,6 +211,42 @@ async def api_test_vlm(body: VLMModelIn):
         return {"ok": False, "model": body.model, "error": str(e)[:300]}
     except Exception as e:
         return {"ok": False, "model": body.model, "error": f"Bağlantı hatası: {str(e)[:300]}"}
+
+
+@router.post("/models/{model_id}/test")
+def api_test_model(model_id: int, db: Session = Depends(get_db)):
+    """Belirli bir LLM modelini test et — basit chat completion.
+
+    Provider base_url + api_key + model_id → LiteLLM completion.
+    Başarılı → {'ok': True, 'response': '...'} döner.
+    """
+    from app.models.llm import LLMModel
+    import litellm as _litellm
+
+    m = db.query(LLMModel).filter(LLMModel.id == model_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Model bulunamadi")
+    if not m.provider:
+        raise HTTPException(status_code=400, detail="Modelin provider bağlantısı yok")
+
+    provider = m.provider
+    # Model adı inşa et: slug/model_id (liteLLM formatı)
+    # NVIDIA NIM: provider slug "nvidia-nim" → liteLLM "nvidia_nim" (underscore)
+    slug = provider.slug.replace("-", "_")
+    full_model = f"{slug}/{m.model_id}"
+
+    try:
+        resp = _litellm.completion(
+            model=full_model,
+            messages=[{"role": "user", "content": "Merhaba, test mesajı. Tek kelime ile cevap ver."}],
+            api_base=provider.base_url or None,
+            api_key=provider.api_key or None,
+            max_tokens=32,
+        )
+        content = resp.choices[0].message.content or "(boş yanıt)"
+        return {"ok": True, "model": full_model, "response": content[:200]}
+    except Exception as e:
+        return {"ok": False, "model": full_model, "error": f"{type(e).__name__}: {str(e)[:300]}"}
 
 
 # -- Sistem Sıfırlama --

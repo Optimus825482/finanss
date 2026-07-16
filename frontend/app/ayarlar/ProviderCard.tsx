@@ -36,6 +36,22 @@ export default function ProviderCard({
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [keySaved, setKeySaved] = useState(false);
+  const [modelTestLoading, setModelTestLoading] = useState<Record<number, boolean>>({});
+  const [modelTestResults, setModelTestResults] = useState<Record<number, { ok: boolean; response?: string; error?: string }>>({});
+
+  const handleModelTest = async (modelId: number) => {
+    setModelTestLoading(p => ({ ...p, [modelId]: true }));
+    setModelTestResults(p => ({ ...p, [modelId]: {} as any }));
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/models/${modelId}/test`, { method: "POST" });
+      const data = await res.json();
+      setModelTestResults(p => ({ ...p, [modelId]: data }));
+    } catch (e) {
+      setModelTestResults(p => ({ ...p, [modelId]: { ok: false, error: `Bağlantı hatası: ${e instanceof Error ? e.message : "bilinmeyen"}` } }));
+    } finally {
+      setModelTestLoading(p => ({ ...p, [modelId]: false }));
+    }
+  };
 
   const providerModels = models.filter(m => m.provider_id === provider.id);
 
@@ -116,15 +132,37 @@ export default function ProviderCard({
       </div>
       <div className="space-y-1">
         {providerModels.map((m) => (
-          <div key={m.id} className="flex items-center justify-between text-xs font-mono py-1.5 px-2 rounded-sm"
-            style={{ backgroundColor: "var(--term-bg)" }}>
-            <div className="flex items-center gap-2">
-              <span style={text}>{m.model_id}</span>
-              <span style={muted}>({m.display_name})</span>
-              <span style={muted}>max {m.max_tokens} token</span>
+          <div key={m.id}>
+            <div className="flex items-center justify-between text-xs font-mono py-1.5 px-2 rounded-sm"
+              style={{ backgroundColor: "var(--term-bg)" }}>
+              <div className="flex items-center gap-2">
+                <span style={text}>{m.model_id}</span>
+                <span style={muted}>({m.display_name})</span>
+                <span style={muted}>max {m.max_tokens} token</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleModelTest(m.id)}
+                  disabled={modelTestLoading[m.id]}
+                  className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm transition-none disabled:opacity-40"
+                  style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}
+                >
+                  {modelTestLoading[m.id] ? "…" : "TEST"}
+                </button>
+                <button onClick={() => onDeleteModel(m.id)}
+                  className="text-term-red text-[10px] transition-none">✕</button>
+              </div>
             </div>
-            <button onClick={() => onDeleteModel(m.id)}
-              className="text-term-red text-[10px] transition-none">✕</button>
+            {modelTestResults[m.id] && (
+              <div className="text-[10px] font-mono mx-2 mb-1 p-1.5 rounded-sm" style={{
+                backgroundColor: modelTestResults[m.id].ok ? "rgba(74,222,128,0.08)" : "rgba(248,113,113,0.08)",
+                color: modelTestResults[m.id].ok ? "var(--term-green)" : "var(--term-red)",
+              }}>
+                {modelTestResults[m.id].ok
+                  ? `✅ ${(modelTestResults[m.id].response || "").slice(0, 100)}`
+                  : `❌ ${modelTestResults[m.id].error}`}
+              </div>
+            )}
           </div>
         ))}
       </div>
