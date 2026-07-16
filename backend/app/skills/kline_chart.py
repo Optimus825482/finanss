@@ -135,10 +135,11 @@ Türkçe yanıt ver. Şunları belirt:
 """
 
 
-async def _vlm_analyze(png_b64: str, ticker: str, period: str, model: Optional[str] = None) -> tuple[Optional[str], bool]:
+async def _vlm_analyze(png_b64: str, ticker: str, period: str, model: Optional[str] = None, api_key: Optional[str] = None, api_base: Optional[str] = None) -> tuple[Optional[str], bool]:
     """VLM ile grafik analizi. RuntimeError → fallback None.
 
     model: Ayarlar'dan seçilen VLM modeli (liteLLM formatı). None → _get_vision_model fallback.
+    api_key/api_base: DB-kayıtlı provider credentials.
     """
     try:
         analysis = await generate_vision(
@@ -148,6 +149,8 @@ async def _vlm_analyze(png_b64: str, ticker: str, period: str, model: Optional[s
             temperature=0.2,
             max_tokens=800,
             model=model,
+            api_key=api_key,
+            api_base=api_base,
         )
         return analysis, False  # used_fallback=False
     except RuntimeError as e:
@@ -201,10 +204,11 @@ def _detect_latest_pattern(history) -> str:
 
 # --- Async run ---
 
-async def run(ticker: str, period: str = "6mo", db=None, model: Optional[str] = None) -> dict:
+async def run(ticker: str, period: str = "6mo", db=None, model: Optional[str] = None, api_key: Optional[str] = None, api_base: Optional[str] = None) -> dict:
     """K-line grafik üret + VLM ile pattern analizi.
 
     model: Ayarlar'dan seçilen VLM modeli (liteLLM formatı). None → _get_vision_model fallback.
+    api_key/api_base: DB-kayıtlı provider credentials (NVIDIA NIM vb için).
     """
     ticker = ticker.upper().strip()
 
@@ -227,7 +231,7 @@ async def run(ticker: str, period: str = "6mo", db=None, model: Optional[str] = 
     error = None
 
     if png_b64:
-        vlm_analysis, used_fallback = await _vlm_analyze(png_b64, ticker, period, model=model)
+        vlm_analysis, used_fallback = await _vlm_analyze(png_b64, ticker, period, model=model, api_key=api_key, api_base=api_base)
         if used_fallback:
             vlm_analysis = await asyncio.to_thread(_fallback_technical_analysis, history, ticker)
     else:

@@ -143,12 +143,15 @@ async def generate_vision(
     model: Optional[str] = None,
     temperature: float = 0.3,
     max_tokens: int = 1024,
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
 ) -> str:
     """Vision-capable model ile görüntü analizi (LiteLLM multipart content).
 
     Kullanım: K-line grafik yorumu (skills.kline_chart), ekran görüntüsü analizi.
     image_base64: PNG gibi raw base64 string (data: prefix olmadan).
     Model: liteLLM formatı ("provider/model"). - → _ normalizasyonu (örn nvidia-nim → nvidia_nim).
+    api_key / api_base: DB-kayıtlı provider için credentials (NVIDIA NIM vb).
 
     Raises RuntimeError when no vision-capable model configured.
     """
@@ -160,7 +163,6 @@ async def generate_vision(
         )
 
     # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
-    # format: provider/model → provider'da -'leri _ yap
     if "/" in model:
         parts = model.split("/")
         normalized_provider = parts[0].replace("-", "_")
@@ -179,10 +181,17 @@ async def generate_vision(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": user_content})
 
-    response = await litellm.acompletion(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    # Build call kwargs — api_key/api_base from DB-registered provider
+    call_kwargs: dict = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if api_key:
+        call_kwargs["api_key"] = api_key
+    if api_base:
+        call_kwargs["api_base"] = api_base
+
+    response = await litellm.acompletion(**call_kwargs)
     return response.choices[0].message.content

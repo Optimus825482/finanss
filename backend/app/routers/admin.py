@@ -187,35 +187,48 @@ class VLMModelIn(BaseModel):
 
 
 @router.post("/vlm-test")
-async def api_test_vlm(body: VLMModelIn):
+async def api_test_vlm(body: VLMModelIn, db: Session = Depends(get_db)):
     """VLM modeli test et — basit 1x1 siyah PNG ile bağlantı kontrolü.
 
-    Model ister Ollama/OpenAI/Anthropic/Gemini formatında (liteLLM).
-    Başarılı → {'ok': True, 'response': '...'} döner.
+    VLM model'deki provider slug'dan DB kaydını bulup api_key/api_base geçer.
     """
     from app.services.llm_bridge import generate_vision
-    # 1x1 siyah PNG base64
+    from app.models.llm import LLMProvider
+
+    raw_model = body.model.strip()
+    api_key = None
+    api_base = None
+
+    # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
+    if "/" in raw_model:
+        parts = raw_model.split("/")
+        provider_slug = parts[0]
+        norm_model = f"{provider_slug.replace('-', '_')}/{'/'.join(parts[1:])}"
+        provider = db.query(LLMProvider).filter(LLMProvider.slug == provider_slug).first()
+        if provider:
+            api_key = provider.api_key or None
+            api_base = provider.base_url or None
+    else:
+        norm_model = raw_model.replace("-", "_")
+
     tiny_png = (
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
         "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     )
     try:
-        # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
-        norm_model = body.model.strip()
-        if "/" in norm_model:
-            parts = norm_model.split("/")
-            norm_model = f"{parts[0].replace('-', '_')}/{'/'.join(parts[1:])}"
         resp = await generate_vision(
             prompt="Bu görüntüde ne var? Tek kelime ile cevap ver.",
             image_base64=tiny_png,
-            model=body.model.strip(),
+            model=norm_model,
             max_tokens=32,
+            api_key=api_key,
+            api_base=api_base,
         )
-        return {"ok": True, "model": body.model, "response": resp[:200]}
+        return {"ok": True, "model": raw_model, "response": resp[:200]}
     except RuntimeError as e:
-        return {"ok": False, "model": body.model, "error": str(e)[:300]}
+        return {"ok": False, "model": raw_model, "error": str(e)[:300]}
     except Exception as e:
-        return {"ok": False, "model": body.model, "error": f"Bağlantı hatası: {str(e)[:300]}"}
+        return {"ok": False, "model": raw_model, "error": f"Bağlantı hatası: {str(e)[:300]}"}
 
 
 @router.post("/models/{model_id}/test")

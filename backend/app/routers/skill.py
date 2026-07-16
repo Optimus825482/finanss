@@ -44,5 +44,16 @@ async def scan_rumors(req: RumorScanRequest, db: Session = Depends(get_db)):
 async def analyze_kline(req: KlineRequest, db: Session = Depends(get_db)):
     """K线 — mum grafiği + VLM pattern analizi. Ayarlar'daki vlm_model kullanılır."""
     from app.services.admin_service import get_setting
+    from app.models.llm import LLMProvider
+
     vlm_model = get_setting(db, "vlm_model", "") or None
-    return await kline_chart.run(req.ticker, period=req.period, db=db, model=vlm_model)
+    # Provider credentials — VLM model'indeki provider slug'dan DB kaydını bul
+    api_key = None
+    api_base = None
+    if vlm_model and "/" in vlm_model:
+        provider_slug = vlm_model.split("/")[0]
+        provider = db.query(LLMProvider).filter(LLMProvider.slug == provider_slug).first()
+        if provider:
+            api_key = provider.api_key or None
+            api_base = provider.base_url or None
+    return await kline_chart.run(req.ticker, period=req.period, db=db, model=vlm_model, api_key=api_key, api_base=api_base)
