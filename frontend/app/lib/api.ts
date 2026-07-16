@@ -124,6 +124,7 @@ export type StockAnalysisResult = {
   price_history: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>;
   scores: { fundamental?: number | null; sentiment?: number | null; risk?: number | null; composite?: number | null };
   position_pl: { cost_total: number; current_total: number; pl: number; pl_pct: number } | null;
+  macro_indicators: Array<{ ticker: string; name: string; label: string; price: number | null; change_pct: number | null; sentiment: "bullish" | "bearish" | "neutral" | null; unit: string }>;
 };
 
 export type DividendResult = {

@@ -35,7 +35,7 @@ from app.skills._rules import (
     format_pl,
     ma,
 )
-from app.services.market_data import get_live_prices
+from app.services.market_data import get_live_prices, get_macro_indicators, format_macro_markdown
 from app.services.screener_service import stage1_prescreen, stage2_deep_analysis
 from app.services.yf_utils import safe_ticker_history, safe_ticker_info
 
@@ -64,6 +64,7 @@ def format_report(
     conclusion: str,
     position_pl: Optional[dict],
     data_missing: list[str],
+    macro_indicators: list[dict] | None = None,
 ) -> str:
     """Markdown rapor üret — StockAnalysisResult.markdown için."""
     md = [f"# {ticker} — Hisse Analiz Raporu", ""]
@@ -140,8 +141,11 @@ def format_report(
     md.append("")
 
     # 🌍 Macro stub
-    md.append("## 🌍 Küresel Makro (stub)")
-    md.append("- VERİ YOK — harici makro veri gerektirir (gelecek: web search entegrasyonu)")
+    if macro_indicators:
+        md.append(format_macro_markdown(macro_indicators))
+    else:
+        md.append("## 🌍 Küresel Makro")
+        md.append("- VERİ YOK — harici makro veri gerektirir")
     md.append("")
 
     return "\n".join(md)
@@ -222,12 +226,19 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         bias,
     )
 
-    # 4. P/L (pozisyon verildiyse)
+    # 4. Küresel makro göstergeler
+    macro_indicators: list[dict] = []
+    try:
+        macro_indicators = await get_macro_indicators()
+    except Exception as e:
+        logger.warning("macro indicators failed: %s", e)
+
+    # 5. P/L (pozisyon verildiyse)
     position_pl = None
     if position and position.get("status") == "holding" and position.get("cost") is not None:
         position_pl = _format_pl(position.get("cost"), position.get("shares"), price)
 
-    # 5. Data missing tespiti
+    # 6. Data missing tespiti
     data_missing = []
     if not candidate:
         data_missing.append("candidate")
@@ -240,14 +251,14 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     if position and position.get("status") == "holding" and position_pl is None:
         data_missing.append("position_pl")
 
-    # 6. Markdown rapor
-    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing)
+    # 7. Markdown rapor
+    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing, macro_indicators=macro_indicators or None)
 
-    # 7. Watchlist signal güncelle (sessiz)
+    # 8. Watchlist signal güncelle (sessiz)
     if db is not None:
         await asyncio.to_thread(_update_watchlist_signal, db, ticker, conclusion)
 
-    # 8. Görsel dashboard için ham veriler
+    # 9. Görsel dashboard için ham veriler
     price_history: list[dict] = []
     if history is not None and not history.empty and "Close" in history:
         hist_tail = history.tail(60)
@@ -286,4 +297,5 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "price_history": price_history,
         "scores": scores,
         "position_pl": position_pl,
+        "macro_indicators": macro_indicators,
     }

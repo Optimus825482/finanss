@@ -47,6 +47,11 @@ class StockAnalysisResult(BaseModel):
     position_pl: Optional[dict] = Field(
         None, description="P/L: {cost_total, current_total, pl, pl_pct}",
     )
+    # Küresel makro göstergeler
+    macro_indicators: list[dict] = Field(
+        default_factory=list,
+        description="Küresel makro: [{name, label, price, change_pct, sentiment, unit}]",
+    )
 
 
 # --- 股息分析 (dividend) ---
