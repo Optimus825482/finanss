@@ -157,15 +157,16 @@ Kurallar:
         )
     except Exception as e:
         logger.warning("rumor_scanner: LLM classify failed (%s) — fallback to neutral", e)
-        # Fallback: tüm haberleri earnings tipinde neutral işaretle
+        # Fallback: tüm haberleri earnings tipinde neutral işaretle — ana sinyal formatı ile uyumlu
         return [
             {
+                "signal_type": "earnings",
+                "impact_score": impact_for_type("earnings"),  # = 2
                 "headline": h.get("title", ""),
-                "type": "earnings",
-                "summary": "LLM sınıflandırma başarısız — varsayılan tip",
                 "source": h.get("publisher"),
                 "url": h.get("link"),
                 "timestamp": _parse_ts(h.get("providerPublishTime")),
+                "summary": "LLM sınıflandırma başarısız — varsayılan tip",
             }
             for h in headlines[:20]
         ]
@@ -251,7 +252,7 @@ async def run(query: Optional[str] = None, db=None) -> dict:
 
     # Dedup 24h pencere
     deduped = dedup_signals(all_signals, window_hours=24)
-    total_impact = sum(s["impact_score"] for s in deduped)
+    total_impact = sum(s.get("impact_score", 0) for s in deduped)
 
     return {
         "query": ticker,
