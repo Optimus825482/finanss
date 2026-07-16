@@ -26,9 +26,13 @@ from sqlalchemy.orm import Session, joinedload
 logger = logging.getLogger(__name__)
 
 from app.database import SessionLocal
-from app.models.core import PortfolioPosition
+from app.models.core import PortfolioPosition, TradingDecision
 from app.models.balance import BalanceTransaction
-from app.services.balance_service import get_balance, deposit, record_position_opened, record_position_closed
+from app.models.portfolio import Portfolio
+from app.services.balance_service import (
+    get_balance, deposit, record_position_opened, record_position_closed,
+    ensure_portfolio,
+)
 from app.services.market_data import get_live_prices
 from app.services.memory_service import store_research_memory
 
@@ -36,17 +40,37 @@ from app.services.memory_service import store_research_memory
 # ── Agent Brain ──
 
 class AutonomousAgent:
-    """Tamamen otonom trading ajani. LLM karar verir, DB'ye loglar."""
+    """Tamamen otonom trading ajani. LLM karar verir, DB'ye loglar.
 
-    def __init__(self, model: str = "ensemble-light"):
+    Çoklu portföy: portfolio_slug ile belirli portföyü yönetir.
+    """
+
+    def __init__(self, portfolio_slug: str = "bist", model: str = "ensemble-light"):
         self.model = model
-        self.max_positions = 8
-        self.max_per_position_pct = 0.25  # max %25 bakiye tek hisseye
-        self.min_confidence = 0.6      # bu guvenin altinda alim yapma
+        self.portfolio_slug = portfolio_slug
+        # Portfolio kaydını DB'de guarantee et — slug geçersizse ValueError
+        from app.config import PORTFOLIOS
+        cfg = PORTFOLIOS.get(portfolio_slug)
+        if cfg is None:
+            raise ValueError(f"Bilinmeyen portföy slug: {portfolio_slug}")
+        self.portfolio_display_name = cfg["display_name"]
+        self.portfolio_exchanges = cfg.get("exchanges", [])
+        self.max_positions = cfg.get("max_positions", 8)
+        self.max_per_position_pct = cfg.get("max_per_position_pct", 0.25)
+        self.min_confidence = 0.6
+        # portfolio_id lazy — run() sırasında ensure_portfolio ile set edilir
+        self._portfolio_id: Optional[int] = None
+
+    def _ensure_portfolio_id(self, db: Session) -> int:
+        """Portfolio.id'yi DB'den al (ilk çağrıda)."""
+        if self._portfolio_id is None:
+            p = ensure_portfolio(db, self.portfolio_slug)
+            self._portfolio_id = p.id
+        return self._portfolio_id
 
     @property
     def name(self) -> str:
-        return "autonomous_agent"
+        return f"autonomous_agent_{self.portfolio_slug}"
 
     # ── Tools ──
 
@@ -87,9 +111,16 @@ class AutonomousAgent:
         return c[0] if c else candidate
 
     def get_portfolio(self, db: Session) -> dict:
-        """Mevcut portfoy ve bakiye durumu."""
-        balance = get_balance(db)
-        positions = db.query(PortfolioPosition).filter(PortfolioPosition.status == "open").all()
+        """Mevcut portfoy ve bakiye durumu — sadece bu portföyün pozisyonları."""
+        portfolio_id = self._ensure_portfolio_id(db)
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        cash = portfolio.cash if portfolio else 0.0
+        positions = (
+            db.query(PortfolioPosition)
+            .filter(PortfolioPosition.status == "open")
+            .filter(PortfolioPosition.portfolio_id == portfolio_id)
+            .all()
+        )
         total_cost = sum(p.quantity * p.entry_price for p in positions)
         tickers = [p.ticker for p in positions]
         prices = get_live_prices(tickers) if tickers else {}
@@ -99,7 +130,10 @@ class AutonomousAgent:
             total_market += p.quantity * px
 
         return {
-            "cash": balance.cash,
+            "portfolio_id": portfolio_id,
+            "portfolio_slug": self.portfolio_slug,
+            "portfolio_name": self.portfolio_display_name,
+            "cash": cash,
             "position_count": len(positions),
             "total_cost": round(total_cost, 2),
             "total_market_value": round(total_market, 2),
@@ -115,16 +149,22 @@ class AutonomousAgent:
 
     def execute_buy(self, db: Session, ticker: str, quantity: float, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7) -> dict:
         """Alim yap."""
-        balance = get_balance(db)
+        portfolio_id = self._ensure_portfolio_id(db)
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio is None:
+            return {"success": False, "error": f"Portföy bulunamadı: {portfolio_id}"}
         total_cost = round(quantity * price, 2)
-        if balance.cash < total_cost:
-            return {"success": False, "error": f"Yetersiz bakiye. Gereken: ${total_cost}, Mevcut: ${balance.cash}"}
+        if portfolio.cash < total_cost:
+            return {"success": False, "error": f"Yetersiz bakiye. Gereken: ${total_cost}, Mevcut: ${portfolio.cash}"}
 
-        pos = PortfolioPosition(ticker=ticker.upper(), quantity=quantity, entry_price=price,
-                                entry_date=datetime.utcnow(), status="open")
+        pos = PortfolioPosition(
+            ticker=ticker.upper(), quantity=quantity, entry_price=price,
+            entry_date=datetime.utcnow(), status="open",
+            portfolio_id=portfolio_id,
+        )
         db.add(pos)
         db.flush()
-        record_position_opened(db, pos.id, total_cost, ticker)
+        record_position_opened(db, pos.id, total_cost, ticker, portfolio_id=portfolio_id)
 
         # Log decision
         self._log_decision(db, ticker, "buy", quantity, price, total_cost, reasoning, confidence,
@@ -135,15 +175,18 @@ class AutonomousAgent:
 
     def execute_sell(self, db: Session, position_id: int, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7) -> dict:
         """Satis yap."""
+        portfolio_id = self._ensure_portfolio_id(db)
         pos = db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id).first()
         if not pos:
             return {"success": False, "error": "Pozisyon bulunamadi"}
+        if pos.portfolio_id != portfolio_id:
+            return {"success": False, "error": f"Pozisyon bu portföye ait değil (pos.portfolio_id={pos.portfolio_id})"}
 
         proceeds = round(pos.quantity * price, 2)
         pos.status = "closed"
         pos.exit_price = price
         pos.exit_date = datetime.utcnow()
-        record_position_closed(db, pos.id, proceeds, pos.ticker)
+        record_position_closed(db, pos.id, proceeds, pos.ticker, portfolio_id=portfolio_id)
 
         self._log_decision(db, pos.ticker, "sell", pos.quantity, price, proceeds, reasoning, confidence,
                            portfolio_before, self.get_portfolio(db))
@@ -154,13 +197,14 @@ class AutonomousAgent:
     def _log_decision(self, db: Session, ticker: str, action: str, quantity: float, price: float,
                       amount: float, reasoning: str, confidence: float, portfolio_before: dict, portfolio_after: dict):
         """Her karari trading_decisions'a yaz (TradingDecision modeli ile)."""
-        from app.models.core import TradingDecision
+        portfolio_id = self._ensure_portfolio_id(db)
         db.add(TradingDecision(
             ticker=ticker.upper(), action=action, quantity=quantity, price=price,
             total_amount=amount, reasoning=reasoning[:1000],
             factors=json.dumps({}), confidence=confidence,
             portfolio_value_before=portfolio_before.get("total_market_value"),
             portfolio_value_after=portfolio_after.get("total_market_value"),
+            portfolio_id=portfolio_id,
         ))
         db.flush()
 
@@ -216,7 +260,11 @@ class AutonomousAgent:
         2. Son rapordaki pick'leri kullan (varsa) — hizli yol
         3. Rapor yoksa piyasayi tara + analiz et — yavas yol
         4. LLM/kural-bazli karar ver + uygula
+
+        exchanges None ise PORTFOLIOS[slug]["exchanges"] kullanılır.
         """
+        if exchanges is None:
+            exchanges = self.portfolio_exchanges
         portfolio = self.get_portfolio(db)
 
         # 0. Takili pozisyonlari kapat (fiyati olmayanlar)
@@ -535,7 +583,12 @@ JSON format (sadece JSON, aciklama yok):
     # ── Scheduler-friendly sync wrapper ──
 
     def run(self, exchanges: list[str] | None = None) -> dict:
-        """Ajanı manuel veya scheduler'dan cagirmak icin sync wrapper."""
+        """Ajanı manuel veya scheduler'dan cagirmak icin sync wrapper.
+
+        exchanges None ise PORTFOLIOS[slug]["exchanges"] kullanılır.
+        """
+        if exchanges is None:
+            exchanges = self.portfolio_exchanges
         db = SessionLocal()
         try:
             return asyncio.run(self.think_and_act(db, exchanges))
@@ -545,18 +598,21 @@ JSON format (sadece JSON, aciklama yok):
 
 # ── Log/history API ──
 
-def get_trading_logs(db: Session, ticker: str | None = None, limit: int = 50) -> list[dict]:
-    """Trading kararlarinin logunu dondur."""
+def get_trading_logs(db: Session, ticker: str | None = None, limit: int = 50, portfolio_id: int | None = None) -> list[dict]:
+    """Trading kararlarinin logunu dondur. portfolio_id verilirse sadece o portföyün."""
     from app.models.core import TradingDecision
     q = db.query(TradingDecision)
     if ticker:
         q = q.filter(TradingDecision.ticker == ticker.upper())
+    if portfolio_id is not None:
+        q = q.filter(TradingDecision.portfolio_id == portfolio_id)
     q = q.order_by(TradingDecision.created_at.desc()).limit(limit)
     return [
         {
             "id": r.id, "ticker": r.ticker, "action": r.action,
             "quantity": r.quantity, "price": r.price, "total_amount": r.total_amount,
             "reasoning": r.reasoning, "confidence": r.confidence,
+            "portfolio_id": r.portfolio_id,
             "portfolio_value_before": r.portfolio_value_before,
             "portfolio_value_after": r.portfolio_value_after,
             "created_at": r.created_at.isoformat() if r.created_at else None,

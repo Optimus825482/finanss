@@ -81,6 +81,9 @@ export type PortfolioSummary = {
 // ── Autonomous Agent ──
 
 export type AgentPortfolio = {
+  portfolio_id?: number;
+  portfolio_slug?: string;
+  portfolio_name?: string;
   cash: number;
   position_count: number;
   total_cost: number;
@@ -106,6 +109,7 @@ export type AgentDecision = {
   total_amount: number;
   reasoning: string;
   confidence: number;
+  portfolio_id?: number | null;
   created_at: string;
 };
 
@@ -218,13 +222,13 @@ export const api = {
   deletePortfolioPosition: (id: number) =>
     fetch(`${API_BASE}/api/portfolio/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
 
-  // ── Autonomous Agent ──
-  getAgentPortfolio: () =>
-    fetch(`${API_BASE}/api/autonomous/portfolio`).then(j<AgentPortfolio>),
-  runAgent: () =>
-    fetch(`${API_BASE}/api/autonomous/run`, { method: "POST" }).then(j<{ started: boolean; mode: string }>),
-  getAgentDecisions: (limit = 20) =>
-    fetch(`${API_BASE}/api/autonomous/decisions?limit=${limit}`).then(j<AgentDecision[]>),
+  // ── Autonomous Agent (portföy-bilinçli) ──
+  getAgentPortfolio: (portfolioSlug: string = "bist") =>
+    fetch(`${API_BASE}/api/autonomous/portfolio?portfolio_slug=${portfolioSlug}`).then(j<AgentPortfolio>),
+  runAgent: (portfolioSlug: string = "bist") =>
+    fetch(`${API_BASE}/api/autonomous/run?portfolio_slug=${portfolioSlug}`, { method: "POST" }).then(j<{ started: boolean; portfolio_slug: string; mode: string }>),
+  getAgentDecisions: (portfolioSlug: string = "bist", limit = 20) =>
+    fetch(`${API_BASE}/api/autonomous/decisions?portfolio_slug=${portfolioSlug}&limit=${limit}`).then(j<AgentDecision[]>),
 
   // ── Skill (stock_analysis entegrasyonu) ──
   analyzeStock: (ticker: string, position?: { status: "empty" | "holding"; cost?: number; shares?: number }) =>
@@ -252,14 +256,14 @@ export const api = {
       body: JSON.stringify({ ticker, period }),
     }).then(j<KlineResult>),
 
-  // ── Sistem Sıfırlama (admin) ──
-  resetPortfolio: () =>
-    fetch(`${API_BASE}/api/admin/reset/portfolio`, { method: "POST" })
-      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number }>),
+  // ── Sistem Sıfırlama (admin) — portföy-bilinçli ──
+  resetPortfolio: (portfolioSlug?: string) =>
+    fetch(`${API_BASE}/api/admin/reset/portfolio${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, { method: "POST" })
+      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number; portfolio_slug?: string }>()),
   resetReports: () =>
     fetch(`${API_BASE}/api/admin/reset/reports`, { method: "POST" })
       .then(j<{ deleted: Record<string, number> }>),
-  resetAll: () =>
-    fetch(`${API_BASE}/api/admin/reset/all`, { method: "POST" })
-      .then(j<{ portfolio: { deleted: Record<string, number>; balance_cash: number }; reports: { deleted: Record<string, number> } }>),
+  resetAll: (portfolioSlug?: string) =>
+    fetch(`${API_BASE}/api/admin/reset/all${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, { method: "POST" })
+      .then(j<{ portfolio: { deleted: Record<string, number>; balance_cash: number; portfolio_slug?: string }; reports: { deleted: Record<string, number> } }>),
 };

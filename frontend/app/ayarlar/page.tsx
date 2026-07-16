@@ -32,6 +32,7 @@ export default function AyarlarPage() {
   const [testLoading, setTestLoading] = useState<Record<number, boolean>>({});
   const [resetLoading, setResetLoading] = useState<"" | "portfolio" | "reports" | "all">("");
   const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetPortfolioSlug, setResetPortfolioSlug] = useState<"bist" | "us" | "all">("all");
 
   const loadProviders = async () => {
     const res = await fetch(`${API}/api/admin/providers`);
@@ -91,13 +92,17 @@ export default function AyarlarPage() {
   };
 
   // ── Sistem Sıfırlama ──
+  const _slugParam = () => resetPortfolioSlug === "all" ? undefined : resetPortfolioSlug;
+
   const handleResetPortfolio = async () => {
-    if (!confirm("PORTFÖYÜ SIFIRLA\n\nTüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?")) return;
+    const label = resetPortfolioSlug === "all" ? "TÜM PORTFÖYLERİ" : `${resetPortfolioSlug.toUpperCase()} PORTFÖYÜNÜ`;
+    if (!confirm(`${label} SIFIRLA\n\nTüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`)) return;
     setResetLoading("portfolio");
     setResetResult(null);
     try {
-      const r = await api.resetPortfolio();
-      setResetResult(`✓ Portföy sıfırlandı. Pozisyonlar: ${r.deleted.portfolio_positions ?? 0} · Kararlar: ${r.deleted.trading_decisions ?? 0} · Bakiye: $${r.balance_cash}`);
+      const r = await api.resetPortfolio(_slugParam());
+      const scope = resetPortfolioSlug === "all" ? "Tüm portföyler" : `${resetPortfolioSlug.toUpperCase()} portföyü`;
+      setResetResult(`✓ ${scope} sıfırlandı. Pozisyonlar: ${r.deleted.portfolio_positions ?? 0} · Kararlar: ${r.deleted.trading_decisions ?? 0} · Bakiye: $${r.balance_cash}`);
     } catch (e) {
       setResetResult(`✗ Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
     } finally {
@@ -120,12 +125,14 @@ export default function AyarlarPage() {
   };
 
   const handleResetAll = async () => {
-    if (!confirm("TÜM SİSTEMİ SIFIRLA\n\nPortföy + raporlar + bakiye tamamen sıfırlanacak.\nBakiye $10.000'dan başlatılacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?")) return;
+    const label = resetPortfolioSlug === "all" ? "TÜM SİSTEMİ (BIST + US)" : `${resetPortfolioSlug.toUpperCase()} + RAPORLAR`;
+    if (!confirm(`${label} SIFIRLA\n\nSeçili portföy + raporlar tamamen sıfırlanacak.\nBakiye $10.000'dan başlatılacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`)) return;
     setResetLoading("all");
     setResetResult(null);
     try {
-      const r = await api.resetAll();
-      setResetResult(`✓ Sistem sıfırlandı. Portföy: ${r.portfolio.deleted.portfolio_positions ?? 0} pozisyon · Raporlar: ${r.reports.deleted.reports ?? 0} rapor · Bakiye: $${r.portfolio.balance_cash}`);
+      const r = await api.resetAll(_slugParam());
+      const scope = resetPortfolioSlug === "all" ? "Sistem (tüm portföyler)" : `${resetPortfolioSlug.toUpperCase()} portföyü`;
+      setResetResult(`✓ ${scope} + raporlar sıfırlandı. Portföy: ${r.portfolio.deleted.portfolio_positions ?? 0} pozisyon · Raporlar: ${r.reports.deleted.reports ?? 0} rapor · Bakiye: $${r.portfolio.balance_cash}`);
     } catch (e) {
       setResetResult(`✗ Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
     } finally {
@@ -216,6 +223,34 @@ export default function AyarlarPage() {
               </span>
             </div>
           )}
+
+          {/* Portföy seçici — hangi portföy sıfırlanacak */}
+          <div className="rounded-sm px-4 py-3" style={borderStyle}>
+            <div className="font-mono text-xs tracking-wider mb-2" style={muted}>
+              HEDEF PORTFÖY
+            </div>
+            <div className="flex gap-2">
+              {(["bist", "us", "all"] as const).map((slug) => (
+                <button
+                  key={slug}
+                  onClick={() => setResetPortfolioSlug(slug)}
+                  className="font-mono text-[11px] tracking-wider px-3 py-1.5 rounded-sm transition-none"
+                  style={{
+                    border: "1px solid var(--term-border)",
+                    backgroundColor: resetPortfolioSlug === slug ? "var(--term-border)" : "var(--term-bg)",
+                    color: resetPortfolioSlug === slug ? "var(--term-amber)" : "var(--term-muted)",
+                  }}
+                >
+                  {slug === "bist" ? "BIST" : slug === "us" ? "US (NASDAQ+DJIA)" : "TÜMÜ"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] font-mono mt-1.5" style={muted}>
+              {resetPortfolioSlug === "all"
+                ? "İki portföy birden (BIST + US) sıfırlanır."
+                : `Sadece ${resetPortfolioSlug.toUpperCase()} portföyü sıfırlanır.`}
+            </p>
+          </div>
 
           {/* Portföy sıfırla */}
           <div className="rounded-sm px-4 py-4" style={borderStyle}>

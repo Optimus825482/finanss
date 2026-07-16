@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -169,32 +170,81 @@ def api_get_translation_config(db: Session = Depends(get_db)):
 
 # -- Sistem Sıfırlama --
 
-def _reset_portfolio_internal(db: Session) -> dict:
+def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None) -> dict:
     """Portföy + kararlar + bakiye transactions sil, bakiyeyi $10000'a sıfırla.
 
+    portfolio_slug verilirse ("bist"|"us") sadece o portföyü sıfırla.
+    None ise tüm portföyleri sıfırla (legacy).
+
     Sıralama FK güvenliği için: balance_transactions → portfolio_positions → trading_decisions.
-    Count'lar silmeden önce alınır (delete() rowcount davranışı versiyona göre değişir).
     """
     from app.models import (
-        PortfolioPosition, TradingDecision, BalanceTransaction, VirtualBalance,
+        PortfolioPosition, TradingDecision, BalanceTransaction, VirtualBalance, Portfolio,
     )
-    from app.services.balance_service import reset_balance
+    from app.services.balance_service import reset_balance, ensure_portfolio
 
+    if portfolio_slug is not None:
+        # Tek portföy sıfırla
+        portfolio = ensure_portfolio(db, portfolio_slug)
+        portfolio_id = portfolio.id
+        counts = {
+            "balance_transactions": db.query(BalanceTransaction).filter(
+                BalanceTransaction.portfolio_id == portfolio_id
+            ).count(),
+            "portfolio_positions": db.query(PortfolioPosition).filter(
+                PortfolioPosition.portfolio_id == portfolio_id
+            ).count(),
+            "trading_decisions": db.query(TradingDecision).filter(
+                TradingDecision.portfolio_id == portfolio_id
+            ).count(),
+        }
+        db.query(BalanceTransaction).filter(
+            BalanceTransaction.portfolio_id == portfolio_id
+        ).delete(synchronize_session=False)
+        db.query(PortfolioPosition).filter(
+            PortfolioPosition.portfolio_id == portfolio_id
+        ).delete(synchronize_session=False)
+        db.query(TradingDecision).filter(
+            TradingDecision.portfolio_id == portfolio_id
+        ).delete(synchronize_session=False)
+        reset_balance(db, portfolio_id, starting_cash=10_000.0)
+        db.commit()
+        return {
+            "portfolio_slug": portfolio_slug,
+            "portfolio_id": portfolio_id,
+            "deleted": counts,
+            "balance_cash": portfolio.cash,
+            "balance_starting": 10_000.0,
+        }
+
+    # Tüm portföyleri sıfırla (legacy — portfolio_id None olanlar dahil)
     counts = {
         "balance_transactions": db.query(BalanceTransaction).count(),
         "portfolio_positions": db.query(PortfolioPosition).count(),
         "trading_decisions": db.query(TradingDecision).count(),
     }
-    # FK sıralamasıyla sil
     db.query(BalanceTransaction).delete(synchronize_session=False)
     db.query(PortfolioPosition).delete(synchronize_session=False)
     db.query(TradingDecision).delete(synchronize_session=False)
-    balance = reset_balance(db, starting_cash=10_000.0)
+
+    # Tüm Portfolio'ların cash'ini $10000'a sıfırla
+    portfolios = db.query(Portfolio).all()
+    for p in portfolios:
+        p.cash = round(10_000.0, 2)
+        p.updated_at = datetime.utcnow()
+    # Legacy VirtualBalance da sıfırla
+    legacy = db.query(VirtualBalance).first()
+    if legacy is None:
+        legacy = VirtualBalance(cash=10_000.0)
+        db.add(legacy)
+    else:
+        legacy.cash = round(10_000.0, 2)
     db.commit()
     return {
         "deleted": counts,
-        "balance_cash": balance.cash,
+        "balance_cash": 10_000.0,
         "balance_starting": 10_000.0,
+        "portfolios_reset": len(portfolios),
     }
 
 
@@ -222,12 +272,18 @@ def _reset_reports_internal(db: Session) -> dict:
 
 
 @router.post("/reset/portfolio")
-def api_reset_portfolio(db: Session = Depends(get_db)):
+def api_reset_portfolio(
+    portfolio_slug: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     """Portföyü sıfırla: pozisyonlar + kararlar + transactions silinir, bakiye $10.000'a ayarlanır.
+
+    portfolio_slug query parametresi ("bist" | "us") verilirse sadece o portföyü sıfırla.
+    Verilmezse tüm portföyleri sıfırla.
 
     Destructive — geri alınamaz. Frontend onay dialogu göstermeli.
     """
-    return _reset_portfolio_internal(db)
+    return _reset_portfolio_internal(db, portfolio_slug=portfolio_slug)
 
 
 @router.post("/reset/reports")
@@ -240,13 +296,18 @@ def api_reset_reports(db: Session = Depends(get_db)):
 
 
 @router.post("/reset/all")
-def api_reset_all(db: Session = Depends(get_db)):
+def api_reset_all(
+    portfolio_slug: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     """Tüm sistem sıfırla: portföy + raporlar (ikisi birden).
 
-    Destructive — geri alınamaz. Eski pozisyonlar, kararlar, raporlar, picks,
-    predictions ve balance transactions tamamen silinir. Bakiye $10.000.
+    portfolio_slug verilirse sadece o portföyü sıfırla (raporlar yine de silinir).
+    Verilmezse tüm portföyleri sıfırla.
+
+    Destructive — geri alınamaz.
     """
-    portfolio_result = _reset_portfolio_internal(db)
+    portfolio_result = _reset_portfolio_internal(db, portfolio_slug=portfolio_slug)
     reports_result = _reset_reports_internal(db)
     return {
         "portfolio": portfolio_result,

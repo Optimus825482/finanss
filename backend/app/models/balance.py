@@ -22,4 +22,6 @@ class BalanceTransaction(Base):
     amount = Column(Float)
     note = Column(String, nullable=True)
     position_id = Column(Integer, ForeignKey("portfolio_positions.id"), nullable=True)
+    # Çoklu portföy: nullable — null = legacy
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

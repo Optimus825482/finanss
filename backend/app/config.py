@@ -42,6 +42,12 @@ STOCK_UNIVERSE = {
         "DUK","SO","NEE","D","AEP","XEL","SRE","ED","PEG","EXC",
         "LIN","APD","ECL","SHW","FCX","NEM","GOLD","AEM",
     ],
+    "DOWJONES": [
+        # Dow Jones Industrial Average 30 (2026)
+        "MMM","AMGN","AMZN","AXP","AAPL","BA","CAT","CVX","CSCO","KO",
+        "DOW","GS","HD","HON","IBM","INTC","JNJ","JPM","MCD","MRK",
+        "MSFT","NKE","PG","CRM","TRV","UNH","VZ","V","WMT","DIS",
+    ],
     "BIST": [
         # Bankacilik
         "AKBNK.IS","GARAN.IS","ISCTR.IS","YKBNK.IS","VAKBN.IS",
@@ -90,6 +96,24 @@ STOCK_UNIVERSE = {
 }
 
 BENCHMARK_TICKER = "^GSPC"
+
+# Coklu portfoy yapilandirmasi — her portfoye ayrı bakiye + universe.
+PORTFOLIOS = {
+    "bist": {
+        "display_name": "BIST Portföyü",
+        "exchanges": ["BIST"],
+        "cash": 10_000.0,
+        "max_positions": 8,
+        "max_per_position_pct": 0.25,
+    },
+    "us": {
+        "display_name": "US Portföyü (NASDAQ+DJIA)",
+        "exchanges": ["NASDAQ", "DOWJONES"],
+        "cash": 10_000.0,
+        "max_positions": 8,
+        "max_per_position_pct": 0.25,
+    },
+}
 
 SCORING_WEIGHTS = {
     "fundamental": 0.40,

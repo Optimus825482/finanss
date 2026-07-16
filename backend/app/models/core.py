@@ -100,6 +100,8 @@ class PortfolioPosition(Base):
     entry_price = Column(Float)
     entry_date = Column(DateTime, default=datetime.utcnow)
     notes = Column(String, nullable=True)
+    # Çoklu portföy: nullable — null = legacy (portföy-bağımsız)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
 
     status = Column(String, default="open")  # open | closed
     exit_price = Column(Float, nullable=True)
@@ -122,4 +124,6 @@ class TradingDecision(Base):
     confidence = Column(Float)
     portfolio_value_before = Column(Float, nullable=True)
     portfolio_value_after = Column(Float, nullable=True)
+    # Çoklu portföy: nullable — null = legacy
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)

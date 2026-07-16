@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, AgentPortfolio, AgentDecision } from "../lib/api";
 
 export default function AgentPortfolioCard() {
+  const [selectedPortfolio, setSelectedPortfolio] = useState<"bist" | "us">("bist");
   const [portfolio, setPortfolio] = useState<AgentPortfolio | null>(null);
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
   const [running, setRunning] = useState(false);
@@ -11,14 +12,14 @@ export default function AgentPortfolioCard() {
 
   const load = useCallback(async () => {
     try {
-      setPortfolio(await api.getAgentPortfolio());
+      setPortfolio(await api.getAgentPortfolio(selectedPortfolio));
     } catch { /* agent not configured yet */ }
     try {
-      setDecisions(await api.getAgentDecisions(10));
+      setDecisions(await api.getAgentDecisions(selectedPortfolio, 10));
     } catch { /* no decisions yet */ }
-  }, []);
+  }, [selectedPortfolio]);
 
-  // Initial load + auto-refresh every 60s
+  // Initial load + auto-refresh every 60s + portföy değişince reload
   useEffect(() => {
     load();
     const i = setInterval(load, 60_000);
@@ -29,7 +30,7 @@ export default function AgentPortfolioCard() {
     setRunning(true);
     setError(null);
     try {
-      await api.runAgent();
+      await api.runAgent(selectedPortfolio);
       // Wait a moment then refresh
       setTimeout(load, 3000);
     } catch {
@@ -65,6 +66,24 @@ export default function AgentPortfolioCard() {
         >
           {running ? "ÇALIŞIYOR…" : "▶ ÇALIŞTIR"}
         </button>
+      </div>
+
+      {/* Portföy selector — BIST | US */}
+      <div className="flex gap-1 px-4 py-2" style={{ borderBottom: `1px solid ${borderColor}` }}>
+        {(["bist", "us"] as const).map((slug) => (
+          <button
+            key={slug}
+            onClick={() => setSelectedPortfolio(slug)}
+            className="font-mono text-[11px] tracking-wider px-3 py-1 rounded-sm transition-none"
+            style={{
+              border: "1px solid var(--term-border)",
+              backgroundColor: selectedPortfolio === slug ? "var(--term-border)" : "var(--term-bg)",
+              color: selectedPortfolio === slug ? "var(--term-amber)" : "var(--term-muted)",
+            }}
+          >
+            {slug === "bist" ? "BIST" : "US (NASDAQ+DJIA)"}
+          </button>
+        ))}
       </div>
 
       {error && (

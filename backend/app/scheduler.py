@@ -19,16 +19,28 @@ def _run_pipeline_sync():
         logger.error(f"Zamanlanmis pipeline calistirmasi basarisiz: {e}")
 
 
-def _run_autonomous_agent_sync():
-    """Otonom ajan periyodik calismasi."""
+def _run_autonomous_bist_sync():
+    """BIST portföyü için otonom ajan periyodik çalışması."""
     try:
         from app.services.autonomous_agent import AutonomousAgent
-        agent = AutonomousAgent()
-        result = agent.run(["NASDAQ", "NYSE", "BIST"])
-        logger.info("Otonom ajan kararlari: %d islem, %d karar",
+        agent = AutonomousAgent(portfolio_slug="bist")
+        result = agent.run()  # exchanges config'den (["BIST"])
+        logger.info("BIST ajan: %d islem, %d karar",
                      len(result.get("actions", [])), len(result.get("decisions", [])))
     except Exception as e:
-        logger.error("Otonom ajan calismasi basarisiz: %s", e)
+        logger.error(f"BIST otonom ajan calismasi basarisiz: {e}")
+
+
+def _run_autonomous_us_sync():
+    """US portföyü (NASDAQ+DJIA) için otonom ajan periyodik çalışması."""
+    try:
+        from app.services.autonomous_agent import AutonomousAgent
+        agent = AutonomousAgent(portfolio_slug="us")
+        result = agent.run()  # exchanges config'den (["NASDAQ","DOWJONES"])
+        logger.info("US ajan: %d islem, %d karar",
+                     len(result.get("actions", [])), len(result.get("decisions", [])))
+    except Exception as e:
+        logger.error(f"US otonom ajan calismasi basarisiz: {e}")
 
 
 def start_scheduler() -> BackgroundScheduler:
@@ -42,15 +54,21 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
     )
 
-    # Otonom ajan (her 30 dakikada bir)
+    # Otonom ajan — 2 paralel job (BIST + US)
     scheduler.add_job(
-        _run_autonomous_agent_sync,
+        _run_autonomous_bist_sync,
         trigger=IntervalTrigger(minutes=30),
-        id="autonomous_agent",
+        id="autonomous_bist",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _run_autonomous_us_sync,
+        trigger=IntervalTrigger(minutes=30),
+        id="autonomous_us",
         replace_existing=True,
     )
 
     scheduler.start()
-    logger.info("Scheduler baslatildi: gunluk rapor (%02d:%02d) + otonom ajan (30dk)",
+    logger.info("Scheduler baslatildi: gunluk rapor (%02d:%02d) + BIST ajan (30dk) + US ajan (30dk)",
                  SCHEDULE_HOUR, SCHEDULE_MINUTE)
     return scheduler
