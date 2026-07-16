@@ -200,6 +200,11 @@ async def api_test_vlm(body: VLMModelIn):
         "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     )
     try:
+        # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
+        norm_model = body.model.strip()
+        if "/" in norm_model:
+            parts = norm_model.split("/")
+            norm_model = f"{parts[0].replace('-', '_')}/{'/'.join(parts[1:])}"
         resp = await generate_vision(
             prompt="Bu görüntüde ne var? Tek kelime ile cevap ver.",
             image_base64=tiny_png,

@@ -148,6 +148,7 @@ async def generate_vision(
 
     Kullanım: K-line grafik yorumu (skills.kline_chart), ekran görüntüsü analizi.
     image_base64: PNG gibi raw base64 string (data: prefix olmadan).
+    Model: liteLLM formatı ("provider/model"). - → _ normalizasyonu (örn nvidia-nim → nvidia_nim).
 
     Raises RuntimeError when no vision-capable model configured.
     """
@@ -157,6 +158,15 @@ async def generate_vision(
             "No vision-capable model configured. Set OPENAI_API_KEY, "
             "ANTHROPIC_API_KEY, GEMINI_API_KEY, or OLLAMA_VISION_MODEL + Ollama."
         )
+
+    # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
+    # format: provider/model → provider'da -'leri _ yap
+    if "/" in model:
+        parts = model.split("/")
+        normalized_provider = parts[0].replace("-", "_")
+        model = f"{normalized_provider}/{'/'.join(parts[1:])}"
+    else:
+        model = model.replace("-", "_")
 
     litellm = _get_litellm()
 
