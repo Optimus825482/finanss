@@ -263,7 +263,6 @@ export const api = {
   suggestTickers: (q: string) =>
     fetch(`${API_BASE}/api/screener/suggest?q=${encodeURIComponent(q)}`, { cache: "no-store" })
       .then(j<Array<{ ticker: string; name: string; exchange: string; exchange_name: string; type: string; sector?: string; industry?: string }>>),
-};
 
   // ── Sistem Sıfırlama (admin) — portföy-bilinçli ──
   resetPortfolio: (portfolioSlug?: string) =>
