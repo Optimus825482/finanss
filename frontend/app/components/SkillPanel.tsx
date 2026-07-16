@@ -378,13 +378,57 @@ export default function SkillPanel() {
             </div>
           )}
 
-          {/* Markdown — haber/özet — hafif panel */}
-          <div className="rounded-xl border border-white/10 p-4" style={{ backgroundColor: "rgba(15,23,42,0.6)" }}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm">📋</span>
-              <span className="text-[11px] font-mono font-semibold tracking-wider text-slate-400">DETAYLI RAPOR</span>
+          {/* Markdown — haber/özet — canlı renkli panel */}
+          <div className="rounded-xl border border-white/10 p-5" style={{ backgroundColor: "rgba(15,23,42,0.6)" }}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-base">📋</span>
+              <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">Detaylı Rapor</span>
             </div>
-            <div className="prose prose-invert prose-sm max-w-none prose-headings:text-cyan-300 prose-strong:text-white prose-table:text-xs">
+
+            {/* Hızlı bakış kartları — canlı renk */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              {[
+                ["Tavsiye", stockResult.conclusion.replace(/_/g, " ").toUpperCase(),
+                  stockResult.conclusion.startsWith("strong_buy") ? "#22c55e" : stockResult.conclusion === "buy" ? "#16a34a" : stockResult.conclusion === "hold" ? "#eab308" : "#ef4444"],
+                ["Fiyat", `$${stockResult.price_history[stockResult.price_history.length - 1]?.close?.toFixed(2) ?? "—"}`, "#06b6d4"],
+                ["MA20 Sapma", stockResult.bias_pct !== null ? `${stockResult.bias_pct > 0 ? "+" : ""}${stockResult.bias_pct}%` : "—", stockResult.bias_pct !== null ? (stockResult.bias_pct < -5 ? "#22c55e" : stockResult.bias_pct > 5 ? "#ef4444" : "#eab308") : "#64748b"],
+                ["Pozisyon", stockResult.position_pl ? `${stockResult.position_pl.pl >= 0 ? "+" : ""}$${stockResult.position_pl.pl.toFixed(0)}` : "Yok", stockResult.position_pl ? (stockResult.position_pl.pl >= 0 ? "#22c55e" : "#ef4444") : "#64748b"],
+              ].map(([label, value, color]) => (
+                <div key={label as string} className="rounded-lg p-2.5 text-center border border-white/5" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
+                  <div className="text-[10px] font-mono tracking-wider text-slate-500 mb-1">{label}</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: color as string }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Fundamental veri ızgarası — renkli etiketler */}
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {([
+                ["Fundamental", stockResult.scores.fundamental],
+                ["Sentiment", stockResult.scores.sentiment],
+                ["Risk", stockResult.scores.risk],
+                ["Composite", stockResult.scores.composite],
+              ] as Array<[string, number | null | undefined]>).map(([label, val]) => {
+                const scoreColor = val != null ? (val >= 60 ? "#22c55e" : val >= 40 ? "#eab308" : "#ef4444") : "#64748b";
+                return (
+                  <div key={label} className="flex items-center justify-between rounded-md px-2.5 py-1.5 border border-white/5" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
+                    <span className="text-[10px] font-mono text-slate-400">{label}</span>
+                    <span className="text-xs font-bold font-mono" style={{ color: scoreColor }}>
+                      {val != null ? `${val.toFixed(0)}/100` : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Markdown — tablo ve liste halinde */}
+            <div className="prose prose-invert prose-sm max-w-none
+              prose-headings:text-cyan-300 prose-headings:font-mono prose-headings:tracking-wider prose-headings:text-xs prose-headings:uppercase prose-headings:mt-3 prose-headings:mb-1
+              prose-p:text-slate-300 prose-p:text-xs prose-p:font-mono
+              prose-table:text-[10px] prose-table:font-mono
+              prose-thead:text-slate-400 prose-tbody:text-slate-200
+              prose-strong:text-white
+              prose-li:text-slate-300 prose-li:text-[10px] prose-li:font-mono">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                 {stockResult.markdown}
               </ReactMarkdown>
