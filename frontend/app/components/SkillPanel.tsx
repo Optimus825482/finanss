@@ -353,7 +353,7 @@ export default function SkillPanel() {
                     ].map(([l, v, c]) => (
                       <div key={l as string} className="flex justify-between text-xs font-mono">
                         <span className="text-slate-400">{l}</span>
-                        <span className="font-semibold" style={{ color: c }}>${(v as number).toFixed(2)}</span>
+                        <span className="font-semibold" style={{ color: c as string }}>${(v as number).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
