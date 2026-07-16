@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.services.llm_bridge import generate
+from app.services.web_search import fetch_rumor_format
 from app.services.yf_utils import safe_ticker_news
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -231,10 +232,22 @@ async def run(query: Optional[str] = None, db=None) -> dict:
     all_signals: list[dict] = []
     for t in targets:
         news = await asyncio.to_thread(safe_ticker_news, t)
-        if not news:
-            continue
-        signals = await _classify_headlines(news, ticker=t)
-        all_signals.extend(signals)
+        if news:
+            signals = await _classify_headlines(news, ticker=t)
+            all_signals.extend(signals)
+
+        # --- Web search zenginleştirme (anahtarsız kaynaklar) ---
+        # DuckDuckGo + Google News + Reddit + HN birleştirilir
+        try:
+            web_hits = await fetch_rumor_format(
+                f"{t} stock news OR earnings OR acquisition OR analyst",
+                limit_per_source=5,
+            )
+            if web_hits:
+                web_signals = await _classify_headlines(web_hits, ticker=t)
+                all_signals.extend(web_signals)
+        except Exception as e:
+            logger.debug("rumor_scanner web_search %s failed: %s", t, e)
 
     # Dedup 24h pencere
     deduped = dedup_signals(all_signals, window_hours=24)

@@ -88,3 +88,25 @@ def get_transaction_history(db: Session, limit: int = 50) -> list[BalanceTransac
         .limit(limit)
         .all()
     )
+
+
+def reset_balance(db: Session, starting_cash: float = 10_000.0) -> VirtualBalance:
+    """Bakiyeyi başlangıç değerine sıfırla — tüm transactions silinir.
+
+    Kullanıcı: 'Sistem sıfırlama' butonu. Default $10.000 (eski 100k değil).
+    Caller must commit.
+    """
+    # Tüm transactions sil (position_id FK'lar bâtıl olur ama önce positions silinmeli —
+    # bu fonksiyon portfolio reset sonrası çağrılır)
+    db.query(BalanceTransaction).delete(synchronize_session=False)
+
+    balance = db.query(VirtualBalance).first()
+    if balance is None:
+        balance = VirtualBalance(cash=float(starting_cash))
+        db.add(balance)
+    else:
+        balance.cash = round(float(starting_cash), 2)
+    balance.updated_at = datetime.utcnow()
+    db.flush()
+    db.refresh(balance)
+    return balance

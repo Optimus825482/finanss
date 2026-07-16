@@ -109,6 +109,54 @@ export type AgentDecision = {
   created_at: string;
 };
 
+// ── Skill (stock_analysis) ──
+
+export type StockAnalysisResult = {
+  ticker: string;
+  markdown: string;
+  conclusion: "strong_buy" | "buy" | "hold" | "sell" | "strong_sell" | "unknown";
+  bias_pct: number | null;
+  data_missing: string[];
+};
+
+export type DividendResult = {
+  ticker: string;
+  safety_score: number;
+  income_rating: "excellent" | "good" | "moderate" | "poor";
+  payout_status: "safe" | "moderate" | "high" | "unsustainable" | "unknown";
+  payout_ratio: number | null;
+  cagr_5y: number | null;
+  consecutive_growth_years: number | null;
+  dividend_aristocrat: boolean;
+  current_yield: number | null;
+  data_missing: string[];
+};
+
+export type RumorSignal = {
+  signal_type: "ma" | "insider" | "analyst" | "regulatory" | "earnings";
+  impact_score: number;
+  headline: string;
+  source: string | null;
+  url: string | null;
+  timestamp: string | null;
+  summary: string | null;
+};
+
+export type RumorScanResult = {
+  query: string | null;
+  signals: RumorSignal[];
+  total_impact: number;
+};
+
+export type KlineResult = {
+  ticker: string;
+  chart_png_base64: string | null;
+  vlm_analysis: string | null;
+  pattern_detected: string | null;
+  used_fallback: boolean;
+  error: string | null;
+};
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     // Backend'ten detay mesajını çıkarmaya çalış
@@ -177,4 +225,41 @@ export const api = {
     fetch(`${API_BASE}/api/autonomous/run`, { method: "POST" }).then(j<{ started: boolean; mode: string }>),
   getAgentDecisions: (limit = 20) =>
     fetch(`${API_BASE}/api/autonomous/decisions?limit=${limit}`).then(j<AgentDecision[]>),
+
+  // ── Skill (stock_analysis entegrasyonu) ──
+  analyzeStock: (ticker: string, position?: { status: "empty" | "holding"; cost?: number; shares?: number }) =>
+    fetch(`${API_BASE}/api/skill/analyze-stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, position }),
+    }).then(j<StockAnalysisResult>),
+  analyzeDividend: (ticker: string) =>
+    fetch(`${API_BASE}/api/skill/analyze-dividend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<DividendResult>),
+  scanRumors: (query?: string) =>
+    fetch(`${API_BASE}/api/skill/scan-rumors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }).then(j<RumorScanResult>),
+  analyzeKline: (ticker: string, period = "6mo") =>
+    fetch(`${API_BASE}/api/skill/analyze-kline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, period }),
+    }).then(j<KlineResult>),
+
+  // ── Sistem Sıfırlama (admin) ──
+  resetPortfolio: () =>
+    fetch(`${API_BASE}/api/admin/reset/portfolio`, { method: "POST" })
+      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number }>),
+  resetReports: () =>
+    fetch(`${API_BASE}/api/admin/reset/reports`, { method: "POST" })
+      .then(j<{ deleted: Record<string, number> }>),
+  resetAll: () =>
+    fetch(`${API_BASE}/api/admin/reset/all`, { method: "POST" })
+      .then(j<{ portfolio: { deleted: Record<string, number>; balance_cash: number }; reports: { deleted: Record<string, number> } }>),
 };

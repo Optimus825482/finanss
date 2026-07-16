@@ -165,3 +165,86 @@ def api_get_prediction_config(db: Session = Depends(get_db)):
 @router.get("/translation-config")
 def api_get_translation_config(db: Session = Depends(get_db)):
     return get_translation_config(db)
+
+
+# -- Sistem Sıfırlama --
+
+def _reset_portfolio_internal(db: Session) -> dict:
+    """Portföy + kararlar + bakiye transactions sil, bakiyeyi $10000'a sıfırla.
+
+    Sıralama FK güvenliği için: balance_transactions → portfolio_positions → trading_decisions.
+    Count'lar silmeden önce alınır (delete() rowcount davranışı versiyona göre değişir).
+    """
+    from app.models import (
+        PortfolioPosition, TradingDecision, BalanceTransaction, VirtualBalance,
+    )
+    from app.services.balance_service import reset_balance
+
+    counts = {
+        "balance_transactions": db.query(BalanceTransaction).count(),
+        "portfolio_positions": db.query(PortfolioPosition).count(),
+        "trading_decisions": db.query(TradingDecision).count(),
+    }
+    # FK sıralamasıyla sil
+    db.query(BalanceTransaction).delete(synchronize_session=False)
+    db.query(PortfolioPosition).delete(synchronize_session=False)
+    db.query(TradingDecision).delete(synchronize_session=False)
+    balance = reset_balance(db, starting_cash=10_000.0)
+    db.commit()
+    return {
+        "deleted": counts,
+        "balance_cash": balance.cash,
+        "balance_starting": 10_000.0,
+    }
+
+
+def _reset_reports_internal(db: Session) -> dict:
+    """Raporlar + stock_picks + predictions sil.
+
+    Sıralama: stock_picks → predictions → reports (her ikisi report_id FK).
+    """
+    from app.models import StockPick, Prediction, Report
+
+    counts = {
+        "stock_picks": db.query(StockPick).count(),
+        "predictions": db.query(Prediction).count(),
+        "reports": db.query(Report).count(),
+    }
+    db.query(StockPick).delete(synchronize_session=False)
+    db.query(Prediction).delete(synchronize_session=False)
+    db.query(Report).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": counts}
+
+
+@router.post("/reset/portfolio")
+def api_reset_portfolio(db: Session = Depends(get_db)):
+    """Portföyü sıfırla: pozisyonlar + kararlar + transactions silinir, bakiye $10.000'a ayarlanır.
+
+    Destructive — geri alınamaz. Frontend onay dialogu göstermeli.
+    """
+    return _reset_portfolio_internal(db)
+
+
+@router.post("/reset/reports")
+def api_reset_reports(db: Session = Depends(get_db)):
+    """Raporları sıfırla: reports + stock_picks + predictions silinir.
+
+    Destructive — geri alınamaz.
+    """
+    return _reset_reports_internal(db)
+
+
+@router.post("/reset/all")
+def api_reset_all(db: Session = Depends(get_db)):
+    """Tüm sistem sıfırla: portföy + raporlar (ikisi birden).
+
+    Destructive — geri alınamaz. Eski pozisyonlar, kararlar, raporlar, picks,
+    predictions ve balance transactions tamamen silinir. Bakiye $10.000.
+    """
+    portfolio_result = _reset_portfolio_internal(db)
+    reports_result = _reset_reports_internal(db)
+    return {
+        "portfolio": portfolio_result,
+        "reports": reports_result,
+    }

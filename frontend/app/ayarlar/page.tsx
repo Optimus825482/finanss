@@ -6,6 +6,7 @@ import ProviderCard from "./ProviderCard";
 import ProviderForm from "./ProviderForm";
 import TranslationTab from "./TranslationTab";
 import PredictionTab from "./PredictionTab";
+import { api } from "../lib/api";
 
 interface Provider {
   id: number; name: string; slug: string; base_url: string;
@@ -23,12 +24,14 @@ interface Model {
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function AyarlarPage() {
-  const [tab, setTab] = useState<"providers" | "translation" | "prediction">("providers");
+  const [tab, setTab] = useState<"providers" | "translation" | "prediction" | "system">("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [showProviderForm, setShowProviderForm] = useState(false);
   const [testResults, setTestResults] = useState<Record<number, { ok: boolean; response?: string; error?: string }>>({});
   const [testLoading, setTestLoading] = useState<Record<number, boolean>>({});
+  const [resetLoading, setResetLoading] = useState<"" | "portfolio" | "reports" | "all">("");
+  const [resetResult, setResetResult] = useState<string | null>(null);
 
   const loadProviders = async () => {
     const res = await fetch(`${API}/api/admin/providers`);
@@ -87,6 +90,49 @@ export default function AyarlarPage() {
     loadProviders();
   };
 
+  // ── Sistem Sıfırlama ──
+  const handleResetPortfolio = async () => {
+    if (!confirm("PORTFÖYÜ SIFIRLA\n\nTüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?")) return;
+    setResetLoading("portfolio");
+    setResetResult(null);
+    try {
+      const r = await api.resetPortfolio();
+      setResetResult(`✓ Portföy sıfırlandı. Pozisyonlar: ${r.deleted.portfolio_positions ?? 0} · Kararlar: ${r.deleted.trading_decisions ?? 0} · Bakiye: $${r.balance_cash}`);
+    } catch (e) {
+      setResetResult(`✗ Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
+    } finally {
+      setResetLoading("");
+    }
+  };
+
+  const handleResetReports = async () => {
+    if (!confirm("RAPORLARI SIFIRLA\n\nTüm raporlar, stock picks ve predictions silinecek.\n\nGERİ ALINAMAZ. Onaylıyor musun?")) return;
+    setResetLoading("reports");
+    setResetResult(null);
+    try {
+      const r = await api.resetReports();
+      setResetResult(`✓ Raporlar sıfırlandı. Raporlar: ${r.deleted.reports ?? 0} · Picks: ${r.deleted.stock_picks ?? 0} · Predictions: ${r.deleted.predictions ?? 0}`);
+    } catch (e) {
+      setResetResult(`✗ Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
+    } finally {
+      setResetLoading("");
+    }
+  };
+
+  const handleResetAll = async () => {
+    if (!confirm("TÜM SİSTEMİ SIFIRLA\n\nPortföy + raporlar + bakiye tamamen sıfırlanacak.\nBakiye $10.000'dan başlatılacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?")) return;
+    setResetLoading("all");
+    setResetResult(null);
+    try {
+      const r = await api.resetAll();
+      setResetResult(`✓ Sistem sıfırlandı. Portföy: ${r.portfolio.deleted.portfolio_positions ?? 0} pozisyon · Raporlar: ${r.reports.deleted.reports ?? 0} rapor · Bakiye: $${r.portfolio.balance_cash}`);
+    } catch (e) {
+      setResetResult(`✗ Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
+    } finally {
+      setResetLoading("");
+    }
+  };
+
   const borderStyle = { backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" };
   const muted = { color: "var(--term-muted)" };
 
@@ -103,6 +149,7 @@ export default function AyarlarPage() {
           ["providers", "LLM PROVIDER'LAR"],
           ["translation", "ÇEVİRİ"],
           ["prediction", "ÖNGÖRÜ"],
+          ["system", "SİSTEM SIFIRLAMA"],
         ].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as any)}
             className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none"
@@ -150,6 +197,81 @@ export default function AyarlarPage() {
 
       {tab === "translation" && <TranslationTab />}
       {tab === "prediction" && <PredictionTab />}
+
+      {tab === "system" && (
+        <div className="space-y-4">
+          <div className="rounded-sm px-4 py-3" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-red)" }}>
+              ⚠ DİKKAT — GERİ ALINAMAZ İŞLEMLER
+            </div>
+            <p className="text-xs font-mono" style={muted}>
+              Aşağıdaki butonlar veritabanındaki kayıtları kalıcı olarak siler. Sistem sıfırlama, otonom ajanın yeni başlangıç ​​yapması için kullanılır.
+            </p>
+          </div>
+
+          {resetResult && (
+            <div className="rounded-sm px-4 py-3 font-mono text-sm" style={borderStyle}>
+              <span style={{ color: resetResult.startsWith("✓") ? "var(--term-green)" : "var(--term-red)" }}>
+                {resetResult}
+              </span>
+            </div>
+          )}
+
+          {/* Portföy sıfırla */}
+          <div className="rounded-sm px-4 py-4" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-text)" }}>
+              PORTFÖYÜ SIFIRLA
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Tüm pozisyonlar, al/sat kararları ve balance transactions silinir. Bakiye <span style={{ color: "var(--term-green)" }}>$10.000</span>'a ayarlanır. Raporlar ve picks korunur.
+            </p>
+            <button
+              onClick={handleResetPortfolio}
+              disabled={resetLoading !== ""}
+              className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none disabled:opacity-40"
+              style={{ border: "1px solid var(--term-red)", color: "var(--term-red)", backgroundColor: "var(--term-bg)" }}
+            >
+              {resetLoading === "portfolio" ? "SIFIRLANIYOR..." : "PORTFÖYÜ SIFIRLA"}
+            </button>
+          </div>
+
+          {/* Raporları sıfırla */}
+          <div className="rounded-sm px-4 py-4" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-text)" }}>
+              RAPORLARI SIFIRLA
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Tüm raporlar, stock picks ve predictions silinir. Portföy ve bakiye korunur.
+            </p>
+            <button
+              onClick={handleResetReports}
+              disabled={resetLoading !== ""}
+              className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none disabled:opacity-40"
+              style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)", backgroundColor: "var(--term-bg)" }}
+            >
+              {resetLoading === "reports" ? "SIFIRLANIYOR..." : "RAPORLARI SIFIRLA"}
+            </button>
+          </div>
+
+          {/* Tümünü sıfırla */}
+          <div className="rounded-sm px-4 py-4" style={{ ...borderStyle, borderColor: "var(--term-red)" }}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-red)" }}>
+              TÜM SİSTEMİ SIFIRLA
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Portföy + raporlar + bakiye tamamen sıfırlanır. Sistem <span style={{ color: "var(--term-green)" }}>$10.000</span> bakiye ile sıfırdan başlatılır. <strong style={{ color: "var(--term-red)" }}>En tehlikeli işlem — tüm geçmiş veri kaybı.</strong>
+            </p>
+            <button
+              onClick={handleResetAll}
+              disabled={resetLoading !== ""}
+              className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none disabled:opacity-40"
+              style={{ border: "2px solid var(--term-red)", color: "var(--term-red)", backgroundColor: "var(--term-bg)" }}
+            >
+              {resetLoading === "all" ? "SİSTEM SIFIRLANIYOR..." : "TÜMÜNÜ SIFIRLA"}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
