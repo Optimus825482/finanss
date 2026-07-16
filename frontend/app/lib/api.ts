@@ -141,6 +141,11 @@ export type StockAnalysisResult = {
   scores: { fundamental?: number | null; sentiment?: number | null; risk?: number | null; composite?: number | null };
   position_pl: { cost_total: number; current_total: number; pl: number; pl_pct: number } | null;
   macro_indicators: Array<{ ticker: string; name: string; label: string; price: number | null; change_pct: number | null; sentiment: "bullish" | "bearish" | "neutral" | null; unit: string }>;
+  // LLM zenginleştirme
+  llm_reasoning?: string | null;
+  llm_target_price?: number | null;
+  llm_expected_return_pct?: number | null;
+  momentum_pct?: number | null;
 };
 
 export type DividendResult = {

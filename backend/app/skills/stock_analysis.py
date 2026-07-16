@@ -314,6 +314,71 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "composite": candidate.get("composite_score"),
     }
 
+    # Composite fallback: ReportAgent formülüyle hesapla (skill pipeline'da yok)
+    if scores["composite"] is None and scores["fundamental"] is not None:
+        from app.config import SCORING_WEIGHTS
+        w = SCORING_WEIGHTS
+        f = scores["fundamental"] or 50
+        s = scores["sentiment"] or 50
+        r = scores["risk"] or 50
+        scores["composite"] = round(f * w["fundamental"] + s * w["sentiment"] + (100 - r) * w["risk"], 1)
+        candidate["composite_score"] = scores["composite"]
+        logger.debug("composite fallback computed: %.1f", scores["composite"])
+
+    # Momentum fallback: fiyat geçmişinden son 5 günlük momentum
+    momentum_pct = candidate.get("momentum_pct")
+    if momentum_pct is None and closes and len(closes) >= 6:
+        momentum_pct = round((closes[-1] / closes[-6] - 1) * 100, 2)
+        candidate["momentum_pct"] = momentum_pct
+        logger.debug("momentum fallback computed: %.2f%%", momentum_pct)
+
+    # ── LLM zenginleştirme: gerekçe + hedef fiyat ──
+    llm_reasoning: str | None = None
+    llm_target_price: float | None = None
+    llm_expected_return: float | None = None
+    try:
+        from app.services.llm_bridge import generate
+        composite = scores.get("composite")
+        context = {
+            "ticker": ticker,
+            "conclusion": conclusion,
+            "bias_pct": bias,
+            "fundamental_score": scores.get("fundamental"),
+            "sentiment_score": scores.get("sentiment"),
+            "risk_score": scores.get("risk"),
+            "composite_score": composite,
+            "momentum_pct": momentum_pct,
+            "price": price,
+            "pe_ratio": candidate.get("pe_ratio"),
+            "narrative": candidate.get("narrative", ""),
+        }
+        prompt = (
+            f"Sen bir hisse senedi analiz asistanısın. Aşağıdaki verilere dayanarak "
+            f"bu hisse için KISA bir gerekçe (2-3 cümle, Türkçe) ve skorlara göre "
+            f"12 aylık hedef fiyat tahmini yap.\n\n"
+            f"Veriler:\n"
+        )
+        for k, v in context.items():
+            prompt += f"- {k}: {v}\n"
+        prompt += (
+            "\nYanıt formatı (JSON): "
+            '{"reasoning": "...", "target_price": 123.45, "expected_return_pct": 12.3}'
+            "\nSadece JSON döndür, başka bir şey yazma."
+        )
+        import json as _json
+        raw = await generate(prompt=prompt, max_tokens=256, temperature=0.4)
+        # JSON extract
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+        parsed = _json.loads(raw)
+        llm_reasoning = str(parsed.get("reasoning", ""))[:300]
+        llm_target_price = float(parsed.get("target_price", 0)) if parsed.get("target_price") else None
+        llm_expected_return = float(parsed.get("expected_return_pct", 0)) if parsed.get("expected_return_pct") else None
+        logger.info("LLM reasoning for %s: target=%.2f, return=%.1f%%", ticker, llm_target_price or 0, llm_expected_return or 0)
+    except Exception as e:
+        logger.warning("LLM reasoning failed for %s: %s", ticker, e)
+
     return {
         "ticker": ticker,
         "markdown": markdown,
@@ -324,4 +389,8 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "scores": scores,
         "position_pl": position_pl,
         "macro_indicators": macro_indicators,
+        "llm_reasoning": llm_reasoning,
+        "llm_target_price": llm_target_price,
+        "llm_expected_return_pct": llm_expected_return,
+        "momentum_pct": momentum_pct,
     }

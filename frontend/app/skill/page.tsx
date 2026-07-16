@@ -15,10 +15,10 @@ export default function SkillPage() {
         }}
       >
         <h1 className="font-mono text-xl font-semibold mb-1" style={{ color: "var(--term-text)" }}>
-          STOCK ANALİZ SKILL'İ
+          SEMBOL ANALİZ MODÜLÜ
         </h1>
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
-          4 komut: hisse analizi · temettü · rumor tarama · K-line grafik
+          4 komut: hisse analizi · temettü · rumor tarama · K-line grafik · LLM destekli karar gerekçesi
         </p>
       </div>
 

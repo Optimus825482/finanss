@@ -52,6 +52,19 @@ class StockAnalysisResult(BaseModel):
         default_factory=list,
         description="Küresel makro: [{name, label, price, change_pct, sentiment, unit}]",
     )
+    # LLM zenginleştirme
+    llm_reasoning: Optional[str] = Field(
+        None, description="AI gerekçe açıklaması (2-3 cümle, Türkçe)"
+    )
+    llm_target_price: Optional[float] = Field(
+        None, description="12 aylık hedef fiyat tahmini"
+    )
+    llm_expected_return_pct: Optional[float] = Field(
+        None, description="Beklenen % getiri (12 aylık)"
+    )
+    momentum_pct: Optional[float] = Field(
+        None, description="Son 5 günlük momentum %"
+    )
 
 
 # --- 股息分析 (dividend) ---

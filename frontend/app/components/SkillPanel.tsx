@@ -405,6 +405,37 @@ export default function SkillPanel() {
             </div>
           )}
 
+          {/* ── LLM Gerekçe + Hedef Fiyat ── */}
+          {stockResult.llm_reasoning && (
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", background: "linear-gradient(135deg, rgba(168,85,247,0.08), rgba(6,182,212,0.05))" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">🤖</span>
+                <span className="text-[11px] font-mono font-bold tracking-wider uppercase" style={{ color: "#a855f7" }}>AI Karar Gerekçesi</span>
+              </div>
+              <p className="text-xs font-mono leading-relaxed mb-3" style={{ color: "var(--term-text)" }}>
+                {stockResult.llm_reasoning}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {stockResult.llm_target_price != null && (
+                  <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.15)" }}>
+                    <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>🎯 12 Aylık Hedef</div>
+                    <div className="text-lg font-bold font-mono" style={{ color: "var(--term-green)" }}>
+                      $ {stockResult.llm_target_price.toFixed(2)}
+                    </div>
+                  </div>
+                )}
+                {stockResult.llm_expected_return_pct != null && (
+                  <div className="rounded-lg p-3 text-center" style={{ backgroundColor: stockResult.llm_expected_return_pct > 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: stockResult.llm_expected_return_pct > 0 ? "1px solid rgba(34,197,94,0.15)" : "1px solid rgba(239,68,68,0.15)" }}>
+                    <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>📈 Beklenen Getiri</div>
+                    <div className="text-lg font-bold font-mono" style={{ color: stockResult.llm_expected_return_pct > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                      {stockResult.llm_expected_return_pct > 0 ? "+" : ""}{stockResult.llm_expected_return_pct.toFixed(1)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ═══════════════════════════════════════════════
               DETAILED REPORT — FULL CARD DASHBOARD
               ═══════════════════════════════════════════════ */}
