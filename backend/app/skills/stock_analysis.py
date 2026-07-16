@@ -174,38 +174,64 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     """
     ticker = ticker.upper().strip()
 
-    # 1. Pipeline: stage1 + stage2
+    # 1. Pipeline: stage1 + stage2 + fallback
     stage1 = await stage1_prescreen([ticker])
     candidate: dict = {}
     if stage1:
         stage2 = await stage2_deep_analysis(stage1)
         if stage2:
             candidate = stage2[0]
-        else:
-            # stage2 başarısız → doğrudan agent pipeline ile analiz et (fallback)
-            logger.info("stage2_deep_analysis başarısız, fallback agent pipeline: %s", ticker)
-            try:
-                hist = await asyncio.to_thread(safe_ticker_history, ticker, "3mo")
-                if hist is not None and not hist.empty and len(hist) >= 5:
-                    hist.index = hist.index.tz_localize(None)
-                    price_val = prices.get(ticker, {}).get("price") if prices else None
-                    single_cand = {
-                        "ticker": ticker,
-                        "price": price_val or float(hist["Close"].iloc[-1]),
-                        "momentum_pct": float((hist["Close"].iloc[-1] / hist["Close"].iloc[-6] - 1) * 100) if len(hist) >= 6 else 0,
-                        "volume_ratio": 1.0,
-                        "history": hist,
-                    }
-                    from app.agents.fundamental_agent import FundamentalAgent
-                    from app.agents.sentiment_agent import SentimentAgent
-                    from app.agents.risk_agent import RiskAgent
-                    single_cands = await FundamentalAgent().run([single_cand])
-                    single_cands = await SentimentAgent().run(single_cands)
-                    single_cands = await RiskAgent().run(single_cands)
-                    if single_cands:
-                        candidate = single_cands[0]
-            except Exception as e:
-                logger.warning("fallback agent pipeline failed for %s: %s", ticker, e)
+
+    # stage1/stage2 başarısız olabilir (özellikle küçük/egzotik ticker'lar için)
+    # → yfinance info + history ile doğrudan agent pipeline çalıştır
+    if not candidate:
+        logger.info("pipeline boş, doğrudan agent pipeline: %s", ticker)
+        try:
+            from app.services.yf_utils import safe_ticker_info
+            info = await asyncio.to_thread(safe_ticker_info, ticker)
+            hist = await asyncio.to_thread(safe_ticker_history, ticker, "3mo")
+            price_val = info.get("currentPrice") or info.get("regularMarketPrice")
+            if hist is not None and not hist.empty and len(hist) >= 5:
+                hist.index = hist.index.tz_localize(None)
+                single_cand = {
+                    "ticker": ticker,
+                    "price": price_val or float(hist["Close"].iloc[-1]),
+                    "momentum_pct": float((hist["Close"].iloc[-1] / hist["Close"].iloc[-6] - 1) * 100) if len(hist) >= 6 else 0,
+                    "volume_ratio": 1.0,
+                    "history": hist,
+                }
+                from app.agents.fundamental_agent import FundamentalAgent
+                from app.agents.sentiment_agent import SentimentAgent
+                from app.agents.risk_agent import RiskAgent
+                single_cands = await FundamentalAgent().run([single_cand])
+                single_cands = await SentimentAgent().run(single_cands)
+                single_cands = await RiskAgent().run(single_cands)
+                if single_cands:
+                    candidate = single_cands[0]
+        except Exception as e:
+            logger.warning("agent pipeline failed for %s: %s", ticker, e)
+
+    # Son çare: info dict'ten minimum veri çıkar
+    if not candidate:
+        try:
+            from app.services.yf_utils import safe_ticker_info
+            info = await asyncio.to_thread(safe_ticker_info, ticker)
+            if info:
+                pe = info.get("trailingPE") or info.get("forwardPE")
+                candidate = {
+                    "ticker": ticker,
+                    "fundamental_score": 50.0,  # nötr
+                    "sentiment_score": 50.0,
+                    "risk_score": 50.0,
+                    "composite_score": 50.0,
+                    "pe_ratio": round(float(pe), 2) if pe else None,
+                    "volatility_annualized": None,
+                    "max_drawdown_pct": None,
+                    "momentum_pct": None,
+                    "narrative": f"{info.get('shortName', ticker)} — {info.get('sector', 'N/A')} · {info.get('industry', '')}",
+                }
+        except Exception:
+            pass
 
     # 2. Fiyat + MA20 hesap
     prices = await asyncio.to_thread(get_live_prices, [ticker])

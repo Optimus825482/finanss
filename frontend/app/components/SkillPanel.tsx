@@ -431,12 +431,82 @@ export default function SkillPanel() {
               ))}
             </div>
 
-            {/* Fundamental veri ızgarası — renkli etiketler */}
-            <div className="grid grid-cols-2 gap-1.5 mb-4">
-              {([
-                ["Fundamental", stockResult.scores.fundamental],
-                ["Sentiment", stockResult.scores.sentiment],
-                ["Risk", stockResult.scores.risk],
+            {/* Küresel Makro card grid — tablo yerine */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">🌍 Küresel Makro</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {stockResult.macro_indicators?.map((m) => {
+                  const ch = m.change_pct;
+                  const isUp = ch !== null && ch > 0;
+                  const isDown = ch !== null && ch < 0;
+                  const isVIX = m.ticker === "^VIX";
+                  // VIX: düşüş=iyi, yükseliş=kötü
+                  const sentimentColor = m.sentiment === "bullish" ? "#22c55e" : m.sentiment === "bearish" ? "#ef4444" : "#64748b";
+                  return (
+                    <div key={m.ticker} className="rounded-lg p-2.5 border border-white/5 flex flex-col justify-between" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono tracking-wider text-slate-500">{m.label}</span>
+                        <span className="text-[10px] font-mono font-bold" style={{ color: sentimentColor }}>
+                          {m.sentiment === "bullish" ? "▲" : m.sentiment === "bearish" ? "▼" : "→"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold font-mono text-white">
+                          {m.price !== null ? `${m.price.toFixed(1)}` : "—"}
+                        </span>
+                        {ch !== null && (
+                          <span className={`ml-1.5 text-[10px] font-mono font-semibold ${(isVIX ? !isUp : isUp) ? "text-emerald-400" : "text-rose-400"}`}>
+                            {isVIX && isDown ? "+" : isVIX && isUp ? "-" : isUp ? "+" : ""}{isVIX ? -ch.toFixed(1) : ch.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Piyasa değerlendirmesi — makro veriden çıkar */}
+            {(() => {
+              const vix = stockResult.macro_indicators?.find(m => m.ticker === "^VIX");
+              const sp500 = stockResult.macro_indicators?.find(m => m.ticker === "^GSPC");
+              const vixVal = vix?.price;
+              const spCh = sp500?.change_pct;
+              let mode = "Belirsiz";
+              let modeColor = "#64748b";
+              if (vixVal !== null && vixVal !== undefined) {
+                if (vixVal < 15) { mode = "🟢 Risk-On (Sakin Piyasa)"; modeColor = "#22c55e"; }
+                else if (vixVal < 20) { mode = "🟡 Normal"; modeColor = "#eab308"; }
+                else if (vixVal < 30) { mode = "🟠 Temkinli"; modeColor = "#f97316"; }
+                else { mode = "🔴 Panik Modu"; modeColor = "#ef4444"; }
+              }
+              return (
+                <div className="rounded-lg px-3 py-2 border border-white/5 flex items-center justify-between" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
+                  <span className="text-[10px] font-mono tracking-wider text-slate-500">PİYASA MODU</span>
+                  <span className="text-xs font-bold font-mono" style={{ color: modeColor }}>{mode}</span>
+                </div>
+              );
+            })()}
+
+            {/* Sayısal veri ızgarası — PE/Volatilite/DD/Momentum */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5 mb-4">
+              {[
+                ["PE Oranı", stockResult.markdown.match(/PE oranı\s*\|?\s*([\d.]+)/)?.[1] || null, "#06b6d4"],
+                ["Volatilite (Yıllık)", stockResult.markdown.match(/Volatilite.*?\|?\s*([\d.]+)/)?.[1] || null, "#a855f7"],
+                ["Max DD %", stockResult.markdown.match(/Max drawdown.*?\|?\s*([\d.-]+)/)?.[1] || null, "#f97316"],
+                ["Momentum %", stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1] || null,
+                  (() => { const m = stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1]; return m ? (parseFloat(m) > 0 ? "#22c55e" : "#ef4444") : "#64748b"; })()],
+              ].map(([label, val, color]) => (
+                <div key={label as string} className="rounded-lg p-2 border border-white/5 text-center" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
+                  <div className="text-[10px] font-mono text-slate-500 mb-0.5">{label}</div>
+                  <div className="text-xs font-bold font-mono" style={{ color: color as string }}>
+                    {val || "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
                 ["Composite", stockResult.scores.composite],
               ] as Array<[string, number | null | undefined]>).map(([label, val]) => {
                 const scoreColor = val != null ? (val >= 60 ? "#22c55e" : val >= 40 ? "#eab308" : "#ef4444") : "#64748b";
