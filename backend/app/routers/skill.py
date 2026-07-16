@@ -54,6 +54,6 @@ async def analyze_kline(req: KlineRequest, db: Session = Depends(get_db)):
         provider_slug = vlm_model.split("/")[0]
         provider = db.query(LLMProvider).filter(LLMProvider.slug == provider_slug).first()
         if provider:
-            api_key = provider.api_key or None
+            api_key = provider.get_decrypted_api_key() or None
             api_base = provider.base_url or None
     return await kline_chart.run(req.ticker, period=req.period, db=db, model=vlm_model, api_key=api_key, api_base=api_base)

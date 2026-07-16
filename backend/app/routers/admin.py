@@ -206,7 +206,7 @@ async def api_test_vlm(body: VLMModelIn, db: Session = Depends(get_db)):
         norm_model = f"{provider_slug.replace('-', '_')}/{'/'.join(parts[1:])}"
         provider = db.query(LLMProvider).filter(LLMProvider.slug == provider_slug).first()
         if provider:
-            api_key = provider.api_key or None
+            api_key = provider.get_decrypted_api_key() or None
             api_base = provider.base_url or None
     else:
         norm_model = raw_model.replace("-", "_")
