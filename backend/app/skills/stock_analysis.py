@@ -4,7 +4,7 @@ Kaynak: stock_analysis skill'in analyzer.ts port. Mevcut proje pipeline'ını
 (screener_service.stage1/2 + prediction_engine + fair_value + market_data)
 yeniden kullanır. Behavior rules Python ile zorunlu kılınır (LLM'e bırakılmaz):
 
-1. 乖离率 (bias) = (price - MA20) / MA20 * 100. >5 → "buy"/"strong_buy" engellenir.
+1. Bias (MA20 sapma) = (price - MA20) / MA20 * 100. >5 → "buy"/"strong_buy" engellenir.
 2. Veri eksik → "VERİ YOK" işaretlenir, asla uydurma.
 3. Pozisyon verildiyse → P/L analizi zorunlu.
 4. Pozisyon yok → hem empty/holding önerisi.
@@ -70,7 +70,7 @@ def format_report(
     md.append("## 📌 Çekirdek Sonuç")
     md.append(f"- **Tavsiye:** `{conclusion}`")
     if bias is not None:
-        md.append(f"- **乖离率 (MA20 sapma):** {bias:+.2f}%")
+        md.append(f"- **MA20 Sapma:** {bias:+.2f}%")
     else:
         md.append("- **MA20 Sapma:** VERİ YOK")
     md.append("")

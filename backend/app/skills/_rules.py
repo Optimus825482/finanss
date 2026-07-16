@@ -9,7 +9,7 @@ from typing import Optional
 
 
 def bias_pct(price: Optional[float], ma20: Optional[float]) -> Optional[float]:
-    """乖离率 = (price - MA20) / MA20 * 100. None → veri yok."""
+    """Bias (MA20 sapma) = (price - MA20) / MA20 * 100. None → veri yok."""
     if price is None or ma20 is None or ma20 == 0:
         return None
     return round((price - ma20) / ma20 * 100, 2)
@@ -22,7 +22,7 @@ def enforce_bias_rule(
 ) -> str:
     """bias > threshold → "buy"/"strong_buy" "hold"'a düşürülür.
 
-    Skill behavior rule: 乖离率 > 5% → conclusion buy olamaz.
+    Skill behavior rule: bias (MA20 sapma) > 5% → conclusion buy olamaz.
     """
     if bias is None:
         return conclusion

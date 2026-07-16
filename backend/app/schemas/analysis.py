@@ -30,7 +30,7 @@ class StockAnalysisResult(BaseModel):
     markdown: str
     conclusion: Literal["strong_buy", "buy", "hold", "sell", "strong_sell", "unknown"]
     bias_pct: Optional[float] = Field(
-        None, description="乖离率: (price - MA20) / MA20 * 100. >5 → buy engellenir"
+        None, description="bias: (price - MA20) / MA20 * 100. >5 → buy engellenir"
     )
     data_missing: list[str] = Field(
         default_factory=list, description="Eksik veri alanları — 'veri yok' işaretlenmiş"
