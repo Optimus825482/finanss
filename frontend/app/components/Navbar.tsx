@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { label: "BIST", href: "/bist" },
   { label: "İZLEME", href: "/izleme" },
   { label: "PORTFÖY", href: "/portfoy" },
-  { label: "SKILL", href: "/skill" },
+  { label: "SEMBOL ANALİZ", href: "/skill" },
   { label: "TAKİP", href: "/takip" },
   { label: "RAPORLAR", href: "/raporlar" },
   { label: "AYARLAR", href: "/ayarlar" },
