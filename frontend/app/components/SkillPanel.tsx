@@ -507,19 +507,6 @@ export default function SkillPanel() {
                 </div>
               ))}
             </div>
-                ["Composite", stockResult.scores.composite],
-              ] as Array<[string, number | null | undefined]>).map(([label, val]) => {
-                const scoreColor = val != null ? (val >= 60 ? "#22c55e" : val >= 40 ? "#eab308" : "#ef4444") : "#64748b";
-                return (
-                  <div key={label} className="flex items-center justify-between rounded-md px-2.5 py-1.5 border border-white/5" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
-                    <span className="text-[10px] font-mono text-slate-400">{label}</span>
-                    <span className="text-xs font-bold font-mono" style={{ color: scoreColor }}>
-                      {val != null ? `${val.toFixed(0)}/100` : "—"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
 
             {/* Markdown — tablo ve liste halinde */}
             <div className="prose prose-invert prose-sm max-w-none
