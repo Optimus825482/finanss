@@ -172,23 +172,45 @@ def api_get_translation_config(db: Session = Depends(get_db)):
 def api_get_vlm_config(db: Session = Depends(get_db)):
     """K-line grafik analizi için yapılandırılmış VLM modeli döndür.
 
-    SystemSettings 'vlm_model' key'inde liteLLM formatında model adı saklanır
-    (örn 'openai/gpt-4o', 'anthropic/claude-3-5-sonnet-20240620').
+    SystemSettings 'vlm_model' key'inde liteLLM formatında model adı saklanır.
     """
     from app.services.admin_service import get_setting
     vlm_model = get_setting(db, "vlm_model", "")
     return {
         "vlm_model": vlm_model if vlm_model else None,
         "configured": bool(vlm_model),
-        "suggestions": [
-            "openai/gpt-4o-mini",
-            "openai/gpt-4o",
-            "anthropic/claude-3-5-sonnet-20240620",
-            "gemini/gemini-1.5-pro",
-            "ollama/llava",
-            "ollama/llama3.2-vision",
-        ],
     }
+
+
+class VLMModelIn(BaseModel):
+    model: str  # liteLLM formatı: openai/gpt-4o-mini
+
+
+@router.post("/vlm-test")
+async def api_test_vlm(body: VLMModelIn):
+    """VLM modeli test et — basit 1x1 siyah PNG ile bağlantı kontrolü.
+
+    Model ister Ollama/OpenAI/Anthropic/Gemini formatta (liteLLM).
+    Başarılı → {'ok': True, 'response': '...'} döner.
+    """
+    from app.services.llm_bridge import generate_vision
+    # 1x1 siyah PNG base64
+    tiny_png = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+        "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    )
+    try:
+        resp = await generate_vision(
+            prompt="Bu görüntüde ne var? Tek kelime ile cevap ver.",
+            image_base64=tiny_png,
+            model=body.model.strip(),
+            max_tokens=32,
+        )
+        return {"ok": True, "model": body.model, "response": resp[:200]}
+    except RuntimeError as e:
+        return {"ok": False, "model": body.model, "error": str(e)[:300]}
+    except Exception as e:
+        return {"ok": False, "model": body.model, "error": f"Bağlantı hatası: {str(e)[:300]}"}
 
 
 # -- Sistem Sıfırlama --
