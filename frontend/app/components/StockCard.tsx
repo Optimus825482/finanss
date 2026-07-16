@@ -61,7 +61,7 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
         <ScoreBar label="RİSK" value={pick.risk_score} tone="bg-term-red" />
       </div>
 
-      <p className="text-xs text-term-text/80 leading-relaxed border-t border-term-border pt-3">
+      <p className="text-xs leading-relaxed border-t border-term-border pt-3" style={{ color: "var(--term-text)", opacity: 0.8 }}>
         {pick.narrative}
       </p>
 

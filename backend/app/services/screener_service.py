@@ -208,11 +208,15 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             peak = np.maximum.accumulate(window)
             dd = float(np.min((window - peak) / peak) * 100) if len(peak) > 0 else 0.0
 
-            if momentum_5d < -15:
+            if momentum_5d < cfg["min_momentum_5d"]:
                 return None
-            if rsi_val > 85:
+            if rsi_val > cfg["max_rsi"]:
                 return None
-            if vol_20 > 120:
+            if rsi_val < cfg["min_rsi"]:
+                return None
+            if volume_ratio < cfg["min_volume_ratio"]:
+                return None
+            if vol_20 > cfg["max_volatility"]:
                 return None
 
             mom_score = np.clip((momentum_5d + 15) * 1.5, 0, 100)

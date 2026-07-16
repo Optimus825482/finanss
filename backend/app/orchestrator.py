@@ -146,6 +146,10 @@ class Orchestrator:
                     pe_ratio=pick.get("pe_ratio"),
                     volatility_annualized=pick.get("volatility_annualized"),
                     max_drawdown_pct=pick.get("max_drawdown_pct"),
+                    rsi_14=pick.get("rsi_14"),
+                    volume_ratio=pick.get("volume_ratio"),
+                    momentum_20d=pick.get("momentum_20d"),
+                    technical_score=pick.get("technical_score"),
                     narrative=pick["narrative"]))
             db.commit()
             return report.id

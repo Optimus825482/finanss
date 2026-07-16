@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -60,10 +61,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    refreshStatus();
-    refreshReport();
-    refreshHistory();
-    refreshWatchlist();
+    Promise.all([refreshStatus(), refreshReport(), refreshHistory(), refreshWatchlist()])
+      .finally(() => setInitialLoading(false));
   }, [refreshStatus, refreshReport, refreshHistory, refreshWatchlist]);
 
   useEffect(() => {
@@ -148,18 +147,27 @@ export default function Dashboard() {
       </div>
 
       {error && (
-	      <div
-	          className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
-	          style={{
-	            backgroundColor: "rgba(220, 38, 38, 0.1)",
-	            color: "var(--term-red)",
-	            border: "1px solid var(--term-red)",
-	          }}
-        >
-          {error}
-        </div>
-      )}
+		      <div
+		          className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
+		          style={{
+		            backgroundColor: "rgba(220, 38, 38, 0.1)",
+		            color: "var(--term-red)",
+		            border: "1px solid var(--term-red)",
+		          }}
+	        >
+	          {error}
+	        </div>
+	      )}
 
+	      {/* Initial loading */}
+	      {initialLoading && !error && (
+	        <div className="mb-6 rounded-sm p-8 text-center font-mono text-sm" style={{ color: "var(--term-muted)", border: "1px dashed var(--term-border)" }}>
+	          Veriler yükleniyor…
+	        </div>
+	      )}
+
+      {!initialLoading && (
+        <div>
       {/* Sinyal zinciri */}
       {status && (
         <div className="mb-6">
@@ -279,5 +287,6 @@ export default function Dashboard() {
       </div>
     </main>
     </ErrorBoundary>
+    </div>)}
   );
 }

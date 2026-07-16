@@ -36,7 +36,7 @@ export default function IzlemePage() {
               value={ticker}
               onChange={(e) => handleTickerChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={() => suggestions.length > 0}
+              onFocus={() => { handleTickerChange(ticker); }}
               placeholder="Sembol ara (örn: AAPL, NVDA, THYAO.IS)"
               autoComplete="off"
               className="w-full rounded-sm px-3 py-2.5 text-sm font-mono focus:outline-none"

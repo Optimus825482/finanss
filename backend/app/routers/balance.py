@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.deps import get_db
+from app.database import get_db
 from app.schemas import BalanceOut, BalanceTxOut, BalanceDepositIn
 from app.services.balance_service import get_balance, deposit, get_transaction_history
 

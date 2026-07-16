@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api, ReportListItem, Report } from "../lib/api";
 import StockCard from "../components/StockCard";
 import Loader from "../components/Loader";
@@ -11,6 +11,7 @@ export default function RaporlarPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     api.getHistory().then(setHistory).catch(() => {});
@@ -20,23 +21,30 @@ export default function RaporlarPage() {
     api.markAllNotificationsRead().catch(() => {});
   }, []);
 
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
   const handleGenerate = async (exchange?: string) => {
     const label = exchange || "TÜM";
     setGenerating(label);
+    // Clear any previous poll
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     try {
       await api.generate(exchange);
-      // Poll for completion
-      const poll = setInterval(async () => {
+      pollRef.current = setInterval(async () => {
         try {
           const s = await api.getStatus();
           if (!s.running) {
-            clearInterval(poll);
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
             const h = await api.getHistory();
             setHistory(h);
             if (h.length > 0) loadReport(h[0].id);
             setGenerating(null);
           }
-        } catch { clearInterval(poll); setGenerating(null); }
+        } catch { clearInterval(pollRef.current!); pollRef.current = null; setGenerating(null); }
       }, 2000);
     } catch {
       setGenerating(null);

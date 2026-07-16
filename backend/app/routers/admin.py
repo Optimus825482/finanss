@@ -277,7 +277,7 @@ def api_test_model(model_id: int, db: Session = Depends(get_db)):
             model=full_model,
             messages=[{"role": "user", "content": "Merhaba, test mesajı. Tek kelime ile cevap ver."}],
             api_base=provider.base_url or None,
-            api_key=provider.api_key or None,
+            api_key=provider.get_decrypted_api_key() or None,
             max_tokens=32,
         )
         content = resp.choices[0].message.content or "(boş yanıt)"

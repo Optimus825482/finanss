@@ -72,6 +72,12 @@ class StockPick(Base):
     volatility_annualized = Column(Float, nullable=True)
     max_drawdown_pct = Column(Float, nullable=True)
 
+    # Stage 1 pre-screen fields (for agent re-hydration)
+    rsi_14 = Column(Float, nullable=True)
+    volume_ratio = Column(Float, nullable=True)
+    momentum_20d = Column(Float, nullable=True)
+    technical_score = Column(Float, nullable=True)
+
     narrative = Column(Text)
 
     report = relationship("Report", back_populates="picks")

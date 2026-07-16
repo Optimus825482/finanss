@@ -22,7 +22,7 @@ STOCK_UNIVERSE = {
         "MU","ADI","KLAC","SNPS","CDNS","MELI","WDAY","SNOW","DDOG","CRWD",
         "ZS","NET","PLTR","MDB","TEAM","DASH","ABNB","ZM","DKNG",
         "PANW","FTNT","MRVL","NXPI","ASML","CTAS","ORLY","MAR","HLT",
-        "PAYX","FAST","CTSH","BIIB","CHTR","LULU","EA","TTD","SPLK","HUBS",
+        "PAYX","FAST","CTSH","BIIB","CHTR","LULU","EA","TTD","HUBS",
     ],
     "NYSE": [
         # Finans
@@ -30,7 +30,7 @@ STOCK_UNIVERSE = {
         "SCHW","PNC","USB","TFC","BK","COF","AIG","MET","PRU","ALL",
         # Saglik
         "JNJ","UNH","PFE","MRK","ABBV","LLY","TMO","DHR","ABT","BMY",
-        "SYK","CI","HUM","CVS","ANTM",
+        "SYK","CI","HUM","CVS",
         # Enerji & Sanayi
         "XOM","CVX","CAT","GE","BA","HON","LMT","UNP","RTX","DE",
         "MMM","ITW","ETN","EMR","ROK","PH","NSC","FDX","UPS",

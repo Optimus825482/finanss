@@ -39,7 +39,8 @@ def list_providers(db: Session) -> list[dict]:
 
 
 def create_provider(db: Session, name: str, slug: str, base_url: str, api_key: str) -> LLMProvider:
-    provider = LLMProvider(name=name, slug=slug, base_url=base_url, api_key=api_key)
+    provider = LLMProvider(name=name, slug=slug, base_url=base_url)
+    provider.set_encrypted_api_key(api_key)
     db.add(provider)
     db.commit()
     db.refresh(provider)
@@ -50,9 +51,13 @@ def update_provider(db: Session, provider_id: int, **kwargs) -> Optional[LLMProv
     p = db.query(LLMProvider).filter(LLMProvider.id == provider_id).first()
     if not p:
         return None
+    # Handle api_key separately via set_encrypted_api_key for Fernet
+    raw_key = kwargs.pop("api_key", None)
     for key, value in kwargs.items():
         if hasattr(p, key) and value is not None:
             setattr(p, key, value)
+    if raw_key is not None:
+        p.set_encrypted_api_key(raw_key)
     p.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(p)
@@ -139,7 +144,7 @@ def test_provider_connection(provider_id: int, test_message: str = "Merhaba, baÄ
         if not active_model:
             return {"ok": False, "error": "Aktif chat modeli yok"}
 
-        client = OpenAI(base_url=p.base_url, api_key=p.api_key)
+        client = OpenAI(base_url=p.base_url, api_key=p.get_decrypted_api_key())
         resp = client.chat.completions.create(
             model=active_model.model_id,
             messages=[{"role": "user", "content": test_message}],

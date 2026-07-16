@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.deps import get_db
+from app.database import get_db
 from app.services.prediction_engine import (
     create_prediction, evaluate_due_predictions, get_predictions,
 )

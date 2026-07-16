@@ -10,6 +10,8 @@ from app.orchestrator import orchestrator
 
 logger = logging.getLogger("scheduler")
 
+_scheduler: BackgroundScheduler | None = None
+
 
 def _run_pipeline_sync():
     """BackgroundScheduler thread'inden async pipeline'i calistir."""
@@ -44,10 +46,16 @@ def _run_autonomous_us_sync():
 
 
 def start_scheduler() -> BackgroundScheduler:
-    scheduler = BackgroundScheduler(timezone=TIMEZONE)
+    """Start global scheduler singleton. Safe to call multiple times."""
+    global _scheduler
+    if _scheduler is not None:
+        logger.debug("Scheduler already running, skipping duplicate start")
+        return _scheduler
+
+    _scheduler = BackgroundScheduler(timezone=TIMEZONE)
 
     # Günlük pipeline (rapor üretimi)
-    scheduler.add_job(
+    _scheduler.add_job(
         _run_pipeline_sync,
         trigger=CronTrigger(hour=SCHEDULE_HOUR, minute=SCHEDULE_MINUTE),
         id="daily_report",
@@ -55,20 +63,29 @@ def start_scheduler() -> BackgroundScheduler:
     )
 
     # Otonom ajan — 2 paralel job (BIST + US)
-    scheduler.add_job(
+    _scheduler.add_job(
         _run_autonomous_bist_sync,
         trigger=IntervalTrigger(minutes=30),
         id="autonomous_bist",
         replace_existing=True,
     )
-    scheduler.add_job(
+    _scheduler.add_job(
         _run_autonomous_us_sync,
         trigger=IntervalTrigger(minutes=30),
         id="autonomous_us",
         replace_existing=True,
     )
 
-    scheduler.start()
+    _scheduler.start()
     logger.info("Scheduler baslatildi: gunluk rapor (%02d:%02d) + BIST ajan (30dk) + US ajan (30dk)",
                  SCHEDULE_HOUR, SCHEDULE_MINUTE)
-    return scheduler
+    return _scheduler
+
+
+def stop_scheduler():
+    """Stop the global scheduler if running."""
+    global _scheduler
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
+        logger.info("Scheduler durduruldu")

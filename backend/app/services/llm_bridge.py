@@ -61,6 +61,14 @@ async def generate(
     if model is None:
         raise RuntimeError("No LLM configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, or OLLAMA_MODEL + run Ollama.")
 
+    # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
+    if "/" in model:
+        parts = model.split("/")
+        normalized_provider = parts[0].replace("-", "_")
+        model = f"{normalized_provider}/{'/'.join(parts[1:])}"
+    else:
+        model = model.replace("-", "_")
+
     litellm = _get_litellm()
 
     messages = []

@@ -16,11 +16,15 @@
   --term-text: #D9D9D0;
   --term-muted: #6B7280;
   --term-glow: rgba(230, 160, 0, 0.45);
+  --term-blue: #3B82F6;
+  --term-blue-dim: #1E40AF;
 
   --scanline-gradient: linear-gradient(180deg, transparent, rgba(230, 160, 0, 0.06), transparent);
   --bg-dots: radial-gradient(circle at 20% 0%, rgba(230, 160, 0, 0.05), transparent 40%);
   --bg-lines: rgba(255, 255, 255, 0.015);
 }
+
+.shadow-glow { box-shadow: 0 0 8px var(--term-glow); }
 
 /* ── Light Theme ── */
 [data-theme="light"] {
@@ -34,6 +38,8 @@
   --term-text: #0F172A;
   --term-muted: #3B5998;
   --term-glow: rgba(184, 134, 11, 0.20);
+  --term-blue: #1D4ED8;
+  --term-blue-dim: #1E3A8A;
 
   --scanline-gradient: linear-gradient(180deg, transparent, rgba(184, 134, 11, 0.03), transparent);
   --bg-dots: radial-gradient(circle at 20% 0%, rgba(184, 134, 11, 0.05), transparent 40%);

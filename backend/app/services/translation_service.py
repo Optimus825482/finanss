@@ -234,10 +234,11 @@ async def translate_text(text: str, target_lang: str = "tr", use_llm: bool = Tru
                 if config.get("has_api_key") and config.get("base_url") and config.get("model_name"):
                     # Get real API key from provider record (not exposed via config)
                     provider = db.query(LLMProvider).filter(LLMProvider.id == config["provider_id"]).first()
-                    if not provider or not provider.api_key:
+                    provider_key = provider.get_decrypted_api_key() if provider else ""
+                    if not provider or not provider_key:
                         config = None
                     else:
-                        config["api_key"] = provider.api_key  # internal use only
+                        config["api_key"] = provider_key  # internal use only
                 else:
                     config = None
 

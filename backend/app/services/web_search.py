@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 _UA = (
     "Mozilla/5.0 (compatible; OrbisFinaiSkill/1.0; +https://github.com/orbis-finai)"
 )
+# Reddit generic bot UA'yı bloklar — platform:app:version format ister
+_REDDIT_UA = "linux:orbis-finai:1.0.0 (by /u/orbis_finai)"
 _DEFAULT_TIMEOUT = 20.0
 
 
@@ -218,9 +220,14 @@ async def _fetch_reddit(query: str, limit: int = 10) -> list[SearchHit]:
         return []
     try:
         async with httpx.AsyncClient(
-            timeout=_DEFAULT_TIMEOUT, headers={"User-Agent": _UA}
+            timeout=_DEFAULT_TIMEOUT,
+            headers={
+                "User-Agent": _REDDIT_UA,
+                "Accept": "application/json",
+            },
         ) as client:
-            url = f"https://www.reddit.com/search.json?q={query}&limit={limit}&sort=relevance&t=week"
+            from urllib.parse import quote
+            url = f"https://www.reddit.com/search.json?q={quote(query)}&limit={limit}&sort=relevance&t=week"
             resp = await client.get(url)
             resp.raise_for_status()
             return _parse_reddit_json(resp.json())

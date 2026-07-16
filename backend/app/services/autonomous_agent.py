@@ -286,7 +286,7 @@ class AutonomousAgent:
                     "ticker": p.ticker,
                     "price": p.price,
                     "momentum_5d": p.momentum_pct or 0,
-                    "rsi_14": 50,  # rapor RSI tutmaz, nötr varsay
+                    "rsi_14": p.rsi_14 if p.rsi_14 is not None else 50,
                     "technical_score": p.composite_score or 50,
                     "composite_score": p.composite_score or 50,
                     "fundamental_score": p.fundamental_score or 50,
