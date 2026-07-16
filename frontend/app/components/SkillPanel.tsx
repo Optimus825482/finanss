@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import PriceChart from "./PriceChart";
 import {
   api,
   StockAnalysisResult,
@@ -224,25 +225,124 @@ export default function SkillPanel() {
         </div>
       )}
 
-      {/* Stock analysis result — markdown */}
+      {/* Stock analysis result — zengin dashboard */}
       {tab === "stock" && stockResult && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+        <div className="space-y-4">
+          {/* Üst bar — ticker + conclusion + bias */}
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
             <span className="text-lg font-bold text-white">{stockResult.ticker}</span>
-            <span className={`text-sm ${CONCLUSION_COLORS[stockResult.conclusion] ?? "text-gray-400"}`}>
-              {stockResult.conclusion.toUpperCase().replace("_", " ")}
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              stockResult.conclusion === "strong_buy" ? "bg-green-500/30 text-green-300"
+              : stockResult.conclusion === "buy" ? "bg-green-500/20 text-green-200"
+              : stockResult.conclusion === "hold" ? "bg-yellow-500/20 text-yellow-200"
+              : stockResult.conclusion.startsWith("sell") ? "bg-red-500/20 text-red-200"
+              : "bg-gray-500/20 text-gray-300"
+            }`}>
+              {stockResult.conclusion.toUpperCase().replace(/_/g, " ")}
             </span>
             {stockResult.bias_pct !== null && (
-              <span className="text-xs text-gray-400">
-                乖离率: {stockResult.bias_pct > 0 ? "+" : ""}{stockResult.bias_pct}%
+              <span className={`text-xs ${stockResult.bias_pct > 5 ? "text-red-400 font-bold" : stockResult.bias_pct < -5 ? "text-green-400" : "text-gray-400"}`}>
+                乖离率 (MA20 sapma): {stockResult.bias_pct > 0 ? "+" : ""}{stockResult.bias_pct}%
+                {stockResult.bias_pct > 5 && " ⚠ buy engellendi"}
               </span>
             )}
           </div>
+
+          {/* Fiyat grafiği — lightweight-charts */}
+          {stockResult.price_history.length > 1 && (
+            <PriceChart
+              data={stockResult.price_history.map(p => ({ date: p.date, open: p.open, high: p.high, low: p.low, close: p.close, volume: p.volume }))}
+              color="var(--term-green)"
+            />
+          )}
+
+          {/* Skor bar'ları — 4 metrik */}
+          {stockResult.scores && Object.keys(stockResult.scores).length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                ["Fundamental", stockResult.scores.fundamental, "bg-cyan-500"],
+                ["Sentiment", stockResult.scores.sentiment, "bg-purple-500"],
+                ["Risk", stockResult.scores.risk, "bg-orange-500"],
+                ["Composite", stockResult.scores.composite, "bg-green-500"],
+              ] as const).map(([label, val, color]) => {
+                const v = val ?? 0;
+                const barColor = v >= 60 ? "bg-green-500" : v >= 40 ? "bg-yellow-500" : "bg-red-500";
+                return (
+                  <div key={label} className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">{label}</span>
+                      <span className={`font-bold ${v >= 60 ? "text-green-300" : v >= 40 ? "text-yellow-300" : "text-red-300"}`}>
+                        {val !== null && val !== undefined ? v.toFixed(0) : "暂缺"}
+                      </span>
+                    </div>
+                    {val !== null && val !== undefined ? (
+                      <div className="mt-1.5 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div className={`h-full ${barColor}`} style={{ width: `${Math.min(Math.max(v, 0), 100)}%` }} />
+                      </div>
+                    ) : (
+                      <div className="mt-1.5 h-2 rounded-full bg-slate-800" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* P/L kartı + İşlem planı */}
+          <div className="grid grid-cols-2 gap-3">
+            {stockResult.position_pl ? (
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="text-xs text-gray-400 mb-1">Pozisyon P/L</div>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-gray-400">Maliyet:</span><span className="text-white">${stockResult.position_pl.cost_total.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-400">Güncünlük:</span><span className="text-white">${stockResult.position_pl.current_total.toFixed(2)}</span></div>
+                  <div className="flex justify-between font-bold">
+                    <span className="text-gray-400">K/Z:</span>
+                    <span className={stockResult.position_pl.pl >= 0 ? "text-green-400" : "text-red-400"}>
+                      {stockResult.position_pl.pl >= 0 ? "+" : ""}${stockResult.position_pl.pl.toFixed(2)} ({stockResult.position_pl.pl >= 0 ? "+" : ""}{stockResult.position_pl.pl_pct.toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="text-xs text-gray-400 mb-1">Pozisyon</div>
+                <div className="text-xs text-gray-500">暂缺 — pozisyon verilmemiş. Empty/holding iki öneri için markdown'a bak.</div>
+              </div>
+            )}
+
+            {stockResult.price_history.length > 0 && (() => {
+              const last = stockResult.price_history[stockResult.price_history.length - 1].close;
+              const stop = last * 0.92;
+              const target = last * 1.10;
+              const range = target - stop;
+              return (
+                <div className="rounded-lg bg-white/5 px-3 py-2">
+                  <div className="text-xs text-gray-400 mb-1">İşlem Planı</div>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between"><span className="text-gray-400">Giriş:</span><span className="text-white">${last.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Stop (-8%):</span><span className="text-red-300">${stop.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Hedef (+10%):</span><span className="text-green-300">${target.toFixed(2)}</span></div>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-slate-800 relative overflow-hidden">
+                    <div className="absolute h-full" style={{ left: "0%", width: "100%", background: "linear-gradient(90deg, #ef4444 0%, #f59e0b 38%, #22c55e 100%)" }} />
+                  </div>
+                  <div className="mt-0.5 flex justify-between text-[10px] text-gray-500">
+                    <span>${stop.toFixed(0)}</span><span>${last.toFixed(0)}</span><span>${target.toFixed(0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Eksik veri uyarısı */}
           {stockResult.data_missing.length > 0 && (
             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-300">
               Eksik veri: {stockResult.data_missing.join(", ")}
             </div>
           )}
+
+          {/* Markdown — haber/özet */}
           <div className="prose prose-invert prose-sm max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
               {stockResult.markdown}

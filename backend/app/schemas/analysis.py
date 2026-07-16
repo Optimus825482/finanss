@@ -35,6 +35,18 @@ class StockAnalysisResult(BaseModel):
     data_missing: list[str] = Field(
         default_factory=list, description="Eksik veri alanları — '暂缺' işaretlenmiş"
     )
+    # Görsel dashboard için ham veriler
+    price_history: list[dict] = Field(
+        default_factory=list,
+        description="Son 60 gün OHLCV: [{date, open, high, low, close, volume}]",
+    )
+    scores: dict = Field(
+        default_factory=dict,
+        description="Skorlar: {fundamental, sentiment, risk, composite}",
+    )
+    position_pl: Optional[dict] = Field(
+        None, description="P/L: {cost_total, current_total, pl, pl_pct}",
+    )
 
 
 # --- 股息分析 (dividend) ---

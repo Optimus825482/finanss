@@ -121,6 +121,9 @@ export type StockAnalysisResult = {
   conclusion: "strong_buy" | "buy" | "hold" | "sell" | "strong_sell" | "unknown";
   bias_pct: number | null;
   data_missing: string[];
+  price_history: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>;
+  scores: { fundamental?: number | null; sentiment?: number | null; risk?: number | null; composite?: number | null };
+  position_pl: { cost_total: number; current_total: number; pl: number; pl_pct: number } | null;
 };
 
 export type DividendResult = {

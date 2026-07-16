@@ -220,10 +220,37 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     if db is not None:
         await asyncio.to_thread(_update_watchlist_signal, db, ticker, conclusion)
 
+    # 8. Görsel dashboard için ham veriler
+    price_history: list[dict] = []
+    if history is not None and not history.empty and "Close" in history:
+        hist_tail = history.tail(60)
+        for idx, row in hist_tail.iterrows():
+            try:
+                price_history.append({
+                    "date": idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx),
+                    "open": round(float(row.get("Open", 0)), 2),
+                    "high": round(float(row.get("High", 0)), 2),
+                    "low": round(float(row.get("Low", 0)), 2),
+                    "close": round(float(row.get("Close", 0)), 2),
+                    "volume": int(row.get("Volume", 0)) if row.get("Volume") is not None else 0,
+                })
+            except (ValueError, TypeError):
+                continue
+
+    scores = {
+        "fundamental": candidate.get("fundamental_score"),
+        "sentiment": candidate.get("sentiment_score"),
+        "risk": candidate.get("risk_score"),
+        "composite": candidate.get("composite_score"),
+    }
+
     return {
         "ticker": ticker,
         "markdown": markdown,
         "conclusion": conclusion,
         "bias_pct": bias,
         "data_missing": data_missing,
+        "price_history": price_history,
+        "scores": scores,
+        "position_pl": position_pl,
     }

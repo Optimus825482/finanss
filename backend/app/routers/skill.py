@@ -42,5 +42,7 @@ async def scan_rumors(req: RumorScanRequest, db: Session = Depends(get_db)):
 
 @router.post("/analyze-kline", response_model=KlineResult)
 async def analyze_kline(req: KlineRequest, db: Session = Depends(get_db)):
-    """K线 — mum grafiği + VLM pattern analizi."""
-    return await kline_chart.run(req.ticker, period=req.period, db=db)
+    """K线 — mum grafiği + VLM pattern analizi. Ayarlar'daki vlm_model kullanılır."""
+    from app.services.admin_service import get_setting
+    vlm_model = get_setting(db, "vlm_model", "") or None
+    return await kline_chart.run(req.ticker, period=req.period, db=db, model=vlm_model)

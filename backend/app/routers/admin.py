@@ -168,6 +168,29 @@ def api_get_translation_config(db: Session = Depends(get_db)):
     return get_translation_config(db)
 
 
+@router.get("/vlm-config")
+def api_get_vlm_config(db: Session = Depends(get_db)):
+    """K-line grafik analizi için yapılandırılmış VLM modeli döndür.
+
+    SystemSettings 'vlm_model' key'inde liteLLM formatında model adı saklanır
+    (örn 'openai/gpt-4o', 'anthropic/claude-3-5-sonnet-20240620').
+    """
+    from app.services.admin_service import get_setting
+    vlm_model = get_setting(db, "vlm_model", "")
+    return {
+        "vlm_model": vlm_model if vlm_model else None,
+        "configured": bool(vlm_model),
+        "suggestions": [
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "anthropic/claude-3-5-sonnet-20240620",
+            "gemini/gemini-1.5-pro",
+            "ollama/llava",
+            "ollama/llama3.2-vision",
+        ],
+    }
+
+
 # -- Sistem Sıfırlama --
 
 def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None) -> dict:

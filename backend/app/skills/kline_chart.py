@@ -135,8 +135,11 @@ Türkçe yanıt ver. Şunları belirt:
 """
 
 
-async def _vlm_analyze(png_b64: str, ticker: str, period: str) -> tuple[Optional[str], bool]:
-    """VLM ile grafik analizi. RuntimeError → fallback None."""
+async def _vlm_analyze(png_b64: str, ticker: str, period: str, model: Optional[str] = None) -> tuple[Optional[str], bool]:
+    """VLM ile grafik analizi. RuntimeError → fallback None.
+
+    model: Ayarlar'dan seçilen VLM modeli (liteLLM formatı). None → _get_vision_model fallback.
+    """
     try:
         analysis = await generate_vision(
             prompt=_VLM_PROMPT_TEMPLATE.format(ticker=ticker, period=period),
@@ -144,6 +147,7 @@ async def _vlm_analyze(png_b64: str, ticker: str, period: str) -> tuple[Optional
             system="Finansal grafik analizcisisin. Sadece grafikte görüneni söyle, uydurma.",
             temperature=0.2,
             max_tokens=800,
+            model=model,
         )
         return analysis, False  # used_fallback=False
     except RuntimeError as e:
@@ -197,8 +201,11 @@ def _detect_latest_pattern(history) -> str:
 
 # --- Async run ---
 
-async def run(ticker: str, period: str = "6mo", db=None) -> dict:
-    """K-line grafik üret + VLM ile pattern analizi."""
+async def run(ticker: str, period: str = "6mo", db=None, model: Optional[str] = None) -> dict:
+    """K-line grafik üret + VLM ile pattern analizi.
+
+    model: Ayarlar'dan seçilen VLM modeli (liteLLM formatı). None → _get_vision_model fallback.
+    """
     ticker = ticker.upper().strip()
 
     history = await asyncio.to_thread(safe_ticker_history, ticker, period)
@@ -220,7 +227,7 @@ async def run(ticker: str, period: str = "6mo", db=None) -> dict:
     error = None
 
     if png_b64:
-        vlm_analysis, used_fallback = await _vlm_analyze(png_b64, ticker, period)
+        vlm_analysis, used_fallback = await _vlm_analyze(png_b64, ticker, period, model=model)
         if used_fallback:
             vlm_analysis = await asyncio.to_thread(_fallback_technical_analysis, history, ticker)
     else:
