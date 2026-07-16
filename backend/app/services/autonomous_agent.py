@@ -405,8 +405,14 @@ class AutonomousAgent:
         return actions, decisions
 
     async def _llm_decide_with_llm(self, portfolio: dict, candidates: list[dict], db: Session) -> tuple:
-        """LLM ile portfoy kararlari."""
+        """LLM ile portfoy kararlari.
+
+        stock_analysis skill entegrasyonu: karar öncesi top adayları analyze_stock
+        skill'ile zengin analiz eder (bias rule Python ile uygulanır), sonuç prompt'a
+        enjekte edilir. LLM zengin analiz görür, mevcut JSON karar formatı korunur.
+        """
         from app.services.llm_bridge import generate
+        from app.skills import stock_analysis as _stock_skill
 
         pos_text = "\n".join(
             f"  {p['ticker']} x{p['quantity']} @ ${p['entry_price']:.2f} (su an: ${p.get('current_price', '?')}) "
@@ -424,8 +430,28 @@ class AutonomousAgent:
             for c in candidates
         )
 
+        # --- stock_analysis skill zenginleştirme (behavior rules uygulandı) ---
+        enhanced_analyses: list[dict] = []
+        for c in candidates[:3]:  # en güçlü 3 aday
+            try:
+                result = await _stock_skill.run(c["ticker"], db=db)
+                enhanced_analyses.append({
+                    "ticker": result["ticker"],
+                    "conclusion": result["conclusion"],
+                    "bias_pct": result["bias_pct"],
+                    "data_missing": result["data_missing"],
+                })
+            except Exception as e:
+                logger.warning("skill analyze_stock %s başarısız: %s", c.get("ticker"), e)
+
+        enhanced_text = "\n".join(
+            f"  {a['ticker']}: {a['conclusion']} (bias: {a.get('bias_pct', '暂缺')}%)"
+            + (f" [eksik veri: {', '.join(a['data_missing'])}]" if a["data_missing"] else "")
+            for a in enhanced_analyses
+        ) if enhanced_analyses else "  (skill analizi başarısız — tarama verisiyle devam)"
+
         prompt = f"""Sen ORBIS FINAI'nin otonom portfoy yoneticisisin. $10,000 sanal bakiye ile gercek piyasa kosullarinda islem yapiyorsun.
-Amacin: riski yonetererk maksimum getiri saglamak.
+Amacin: riski yonetererek maksimum getiri saglamak.
 
 === PORTFOY DURUMU ===
 Nakit: ${portfolio['cash']:.2f}
@@ -440,12 +466,16 @@ Mevcut pozisyonlar:
 === YATIRIM ADAYLARI (piyasa taramasindan) ===
 {cand_text}
 
+=== SKILL ZENGIN ANALIZ (bias rule Python ile uygulandi) ===
+{enhanced_text}
+Not: "hold" conclusion'lı adaylar bias>5% nedeniyle buy engellenmiş olabilir.
+
 === GOREV ===
 Asagidaki JSON formatinda al/sat/elde_tut kararlarini ver. Kararlarini verirken:
 - Risk yonetimi: tek hisseye max %25, en az 3 farkli sektor
 - Kar realizasyonu: asiri yukselenleri sat
 - Zarar kesme: düsen pozisyonlari degerlendir
-- Firsat degerlendirme: guclu adaylari ekle
+- Firsat degerlendirme: guclu adaylari ekle (SKILL conclusion'ına dikkat et)
 - Portfoy dengesi: nakit/tahvil benzeri guvenli orani koru
 - Piyasa kosullari: volatilite ve sentiment'e gore temkinli/agresif ol
 
@@ -460,7 +490,7 @@ JSON format (sadece JSON, aciklama yok):
 }}"""
 
         response = await generate(prompt=prompt,
-            system="Sen deneyimli bir portfoy yoneticisisin. Risk yonetimi, sektor cesitlendirmesi ve piyasa zamanlamasi konularinda uzmansin.",
+            system="Sen deneyimli bir portfoy yoneticisisin. Risk yonetimi, sektor cesitlendirmesi ve piyasa zamanlamasi konularinda uzmansin. Skill analiz conclusion'larina saygi goster.",
             temperature=0.4, max_tokens=1024)
 
         import re

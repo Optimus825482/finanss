@@ -85,3 +85,57 @@ def safe_ticker_news(ticker: str, retries: int = 3) -> list:
     except Exception as e:
         logger.warning("yf.Ticker(%s).news failed: %s", ticker, e)
         return []
+
+
+def safe_ticker_dividends(ticker: str, retries: int = 3):
+    """yf.Ticker(ticker).dividends wrapper — hata durumunda empty Series döner.
+
+    Temettü geçmişi (tarih -> ödeme). skills.dividend modülü için eklendi.
+    """
+    import yfinance as yf
+    import pandas as pd
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).dividends, retries=retries) or pd.Series(dtype=float)
+    except Exception as e:
+        logger.warning("yf.Ticker(%s).dividends failed: %s", ticker, e)
+        return pd.Series(dtype=float)
+
+
+def safe_ticker_financials(ticker: str, retries: int = 3):
+    """yf.Ticker(ticker).financials wrapper — yıllık gelir tablosu. Hata → empty DataFrame."""
+    import yfinance as yf
+    import pandas as pd
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).financials, retries=retries) or pd.DataFrame()
+    except Exception as e:
+        logger.warning("yf.Ticker(%s).financials failed: %s", ticker, e)
+        return pd.DataFrame()
+
+
+def safe_ticker_balance_sheet(ticker: str, retries: int = 3):
+    """yf.Ticker(ticker).balance_sheet wrapper — yıllık bilanço. Hata → empty DataFrame."""
+    import yfinance as yf
+    import pandas as pd
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).balance_sheet, retries=retries) or pd.DataFrame()
+    except Exception as e:
+        logger.warning("yf.Ticker(%s).balance_sheet failed: %s", ticker, e)
+        return pd.DataFrame()
+
+
+def safe_ticker_cashflow(ticker: str, retries: int = 3):
+    """yf.Ticker(ticker).cashflow wrapper — yıllık nakit akışı. Hata → empty DataFrame.
+
+    payout ratio = dividendsPaid / netIncome için skills.dividend kullanır.
+    """
+    import yfinance as yf
+    import pandas as pd
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            return with_retry(lambda: yf.Ticker(ticker).cashflow, retries=retries) or pd.DataFrame()
+    except Exception as e:
+        logger.warning("yf.Ticker(%s).cashflow failed: %s", ticker, e)
+        return pd.DataFrame()

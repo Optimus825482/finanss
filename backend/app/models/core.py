@@ -84,6 +84,11 @@ class WatchlistItem(Base):
     ticker = Column(String, unique=True, index=True)
     notes = Column(String, nullable=True)
     added_at = Column(DateTime, default=datetime.utcnow)
+    # stock_analysis skill entegrasyonu: alert/stop/signal takibi
+    target_price = Column(Float, nullable=True)        # hedef fiyat (sell tetikleyici)
+    stop_price = Column(Float, nullable=True)          # stop-loss fiyatı (exit tetikleyici)
+    alert_on_signal = Column(Boolean, default=True)    # sinyal değişiminde uyar
+    last_signal = Column(String(50), nullable=True)    # son conclusion: buy/sell/hold
 
 
 class PortfolioPosition(Base):

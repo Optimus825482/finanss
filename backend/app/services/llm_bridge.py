@@ -116,3 +116,63 @@ async def _ollama_embed(text: str) -> list[float]:
         )
         resp.raise_for_status()
         return resp.json()["embedding"]
+
+
+def _get_vision_model() -> Optional[str]:
+    """Vision-capable model seç. Hiçbiri yoksa None döner (caller RuntimeError fırlatır).
+
+    Öncelik: OpenAI gpt-4o-mini → Anthropic claude-3-5-sonnet → Gemini 1.5-pro
+    → Ollama vision model (llava veya OLLAMA_VISION_MODEL).
+    """
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai/gpt-4o-mini"
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "claude-3-5-sonnet-20240620"
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini/gemini-1.5-pro"
+    if os.getenv("OLLAMA_MODEL") and _has_ollama():
+        ollama_vision = os.getenv("OLLAMA_VISION_MODEL", "llava")
+        return f"ollama/{ollama_vision}"
+    return None
+
+
+async def generate_vision(
+    prompt: str,
+    image_base64: str,
+    system: Optional[str] = None,
+    model: Optional[str] = None,
+    temperature: float = 0.3,
+    max_tokens: int = 1024,
+) -> str:
+    """Vision-capable model ile görüntü analizi (LiteLLM multipart content).
+
+    Kullanım: K-line grafik yorumu (skills.kline_chart), ekran görüntüsü analizi.
+    image_base64: PNG gibi raw base64 string (data: prefix olmadan).
+
+    Raises RuntimeError when no vision-capable model configured.
+    """
+    model = model or _get_vision_model()
+    if model is None:
+        raise RuntimeError(
+            "No vision-capable model configured. Set OPENAI_API_KEY, "
+            "ANTHROPIC_API_KEY, GEMINI_API_KEY, or OLLAMA_VISION_MODEL + Ollama."
+        )
+
+    litellm = _get_litellm()
+
+    user_content = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+    ]
+    messages: list[dict] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": user_content})
+
+    response = await litellm.acompletion(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return response.choices[0].message.content
