@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -115,6 +115,11 @@ class PortfolioPosition(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        Index("ix_portfolio_positions_portfolio_id", "portfolio_id"),
+        Index("ix_portfolio_positions_status", "status"),
+    )
+
 
 class TradingDecision(Base):
     __tablename__ = "trading_decisions"
@@ -133,3 +138,7 @@ class TradingDecision(Base):
     # Çoklu portföy: nullable — null = legacy
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("ix_trading_decisions_portfolio_id", "portfolio_id"),
+    )

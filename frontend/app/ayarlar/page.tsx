@@ -8,7 +8,7 @@ import TranslationTab from "./TranslationTab";
 import PredictionTab from "./PredictionTab";
 import VLMTab from "./VLMTab";
 import RumorModelTab from "./RumorModelTab";
-import { api, API_BASE, apiHeaders } from "../lib/api";
+import { api, apiFetch } from "../lib/api";
 
 interface Provider {
   id: number; name: string; slug: string; base_url: string;
@@ -23,8 +23,6 @@ interface Model {
   provider_name: string;
 }
 
-const API = API_BASE;
-
 export default function AyarlarPage() {
   const [tab, setTab] = useState<"providers" | "translation" | "prediction" | "vlm" | "rumor" | "system">("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -37,20 +35,20 @@ export default function AyarlarPage() {
   const [resetPortfolioSlug, setResetPortfolioSlug] = useState<"bist" | "us" | "all">("all");
 
   const loadProviders = async () => {
-    const res = await fetch(`${API}/api/admin/providers`, { headers: apiHeaders() });
+    const res = await apiFetch("/api/admin/providers");
     if (res.ok) setProviders(await res.json());
   };
 
   const loadModels = async () => {
-    const res = await fetch(`${API}/api/admin/models`, { headers: apiHeaders() });
+    const res = await apiFetch("/api/admin/models");
     if (res.ok) setModels(await res.json());
   };
 
   useEffect(() => { loadProviders(); loadModels(); }, []);
 
   const addProvider = async (data: { name: string; slug: string; base_url: string; api_key: string }) => {
-    await fetch(`${API}/api/admin/providers`, {
-      method: "POST", headers: apiHeaders({ "Content-Type": "application/json" }),
+    await apiFetch("/api/admin/providers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     setShowProviderForm(false);
@@ -59,9 +57,9 @@ export default function AyarlarPage() {
 
   const testProvider = (id: number) => {
     setTestLoading(prev => ({ ...prev, [id]: true }));
-    fetch(`${API}/api/admin/providers/${id}/test`, {
+    apiFetch(`/api/admin/providers/${id}/test`, {
       method: "POST",
-      headers: apiHeaders({ "Content-Type": "application/json" }),
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "Merhaba test" }),
     })
       .then(r => r.json()).then(r => setTestResults(prev => ({ ...prev, [id]: r })))
@@ -71,27 +69,27 @@ export default function AyarlarPage() {
 
   const deleteProvider = async (id: number) => {
     if (!confirm("Bu provider'ı silmek istediğine emin misin? Tüm modelleri de silinecek.")) return;
-    await fetch(`${API}/api/admin/providers/${id}`, { method: "DELETE", headers: apiHeaders() });
+    await apiFetch(`/api/admin/providers/${id}`, { method: "DELETE" });
     loadProviders();
     loadModels();
   };
 
   const addModel = async (providerId: number, data: { model_id: string; display_name: string; max_tokens: number }) => {
-    await fetch(`${API}/api/admin/models`, {
-      method: "POST", headers: apiHeaders({ "Content-Type": "application/json" }),
+    await apiFetch("/api/admin/models", {
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider_id: providerId, ...data }),
     });
     loadModels();
   };
 
   const deleteModel = async (id: number) => {
-    await fetch(`${API}/api/admin/models/${id}`, { method: "DELETE", headers: apiHeaders() });
+    await apiFetch(`/api/admin/models/${id}`, { method: "DELETE" });
     loadModels();
   };
 
   const updateProviderKey = async (id: number, api_key: string) => {
-    await fetch(`${API}/api/admin/providers/${id}`, {
-      method: "PUT", headers: apiHeaders({ "Content-Type": "application/json" }),
+    await apiFetch(`/api/admin/providers/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ api_key }),
     });
     loadProviders();

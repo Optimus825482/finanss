@@ -38,8 +38,8 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
 }){
   const cRef=useRef<HTMLDivElement>(null);
   const chRef=useRef<IChartApi|null>(null);
-  const mainRef=useRef<ISeriesApi<any>|null>(null);
-  const indRefs=useRef<Map<string,ISeriesApi<any>>>(new Map());
+  const mainRef=useRef<ISeriesApi<"Candlestick"|"Line"|"Area">|null>(null);
+  const indRefs=useRef<Map<string,ISeriesApi<"Line">|ISeriesApi<"Histogram">>>(new Map());
   const seenRef=useRef<Map<number,number>>(new Map());
   const [mode,setMode]=useState<ChartMode>("candle");
   const [ready,setReady]=useState(false);
@@ -101,13 +101,13 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
     seenRef.current.clear();
     if(mainRef.current){ch.removeSeries(mainRef.current);mainRef.current=null}
     indRefs.current.forEach(s=>ch.removeSeries(s));indRefs.current.clear();
-    let s:any;
+    let s: ISeriesApi<"Candlestick"> | ISeriesApi<"Area"> | ISeriesApi<"Line">;
     if(mode==="candle"){s=ch.addSeries(CandlestickSeries,{upColor:"#26A69A",downColor:"#EF5350",borderUpColor:"#26A69A",borderDownColor:"#EF5350",wickUpColor:"#26A69A",wickDownColor:"#EF5350",priceLineVisible:false});s.setData(data.map(d=>({time:toTime(d),open:d.open??d.close,high:d.high??d.close,low:d.low??d.close,close:d.close})))}
     else if(mode==="mountain"){s=ch.addSeries(AreaSeries,{lineColor,lineWidth:2,topColor:lineColor+"55",bottomColor:lineColor+"04",priceLineVisible:false});s.setData(data.map(d=>({time:toTime(d),value:d.close})))}
     else{s=ch.addSeries(LineSeries,{color:lineColor,lineWidth:2,lastValueVisible:true,priceLineVisible:false,crosshairMarkerBackgroundColor:lineColor});s.setData(data.map(d=>({time:toTime(d),value:d.close})))}
     mainRef.current=s;
 
-    const al=(id:string,vals:(number|null)[],c:string,lw:1|2|3|4)=>{const se=ch.addSeries(LineSeries,{color:c,lineWidth:lw as any,priceLineVisible:false,lastValueVisible:true});se.setData(vals.map((v,i)=>({time:toTime(data[i]),value:v??0})).filter(x=>x.value!==0||vals[0]!=null));indRefs.current.set(id,se)};
+    const al=(id:string,vals:(number|null)[],c:string,lw:1|2|3|4)=>{const se=ch.addSeries(LineSeries,{color:c,lineWidth:lw,priceLineVisible:false,lastValueVisible:true});se.setData(vals.map((v,i)=>({time:toTime(data[i]),value:v??0})).filter(x=>x.value!==0||vals[0]!=null));indRefs.current.set(id,se)};
     if(inds.has("sma20"))al("sma20",sma(closes,20),"#F59E0B",1);
     if(inds.has("sma50"))al("sma50",sma(closes,50),"#3B82F6",1);
     if(inds.has("sma200"))al("sma200",sma(closes,200),"#EC4899",1);

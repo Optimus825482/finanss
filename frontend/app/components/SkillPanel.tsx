@@ -20,21 +20,12 @@ const TAB_LABELS: Record<SkillTab, string> = {
   kline: "📈 K-Line",
 };
 
-const CONCLUSION_COLORS: Record<string, string> = {
-  strong_buy: "text-green-400 font-bold",
-  buy: "text-green-300",
-  hold: "text-yellow-300",
-  sell: "text-red-300",
-  strong_sell: "text-red-400 font-bold",
-  unknown: "text-gray-400",
-};
-
-const SIGNAL_COLORS: Record<string, string> = {
-  ma: "bg-purple-500/20 text-purple-300",
-  insider: "bg-blue-500/20 text-blue-300",
-  analyst: "bg-cyan-500/20 text-cyan-300",
-  regulatory: "bg-orange-500/20 text-orange-300",
-  earnings: "bg-gray-500/20 text-gray-300",
+const SIGNAL_TYPE_STYLES: Record<string, React.CSSProperties> = {
+  ma: { backgroundColor: "rgba(168,85,247,0.20)", color: "var(--term-text)" },
+  insider: { backgroundColor: "rgba(59,130,246,0.20)", color: "var(--term-text)" },
+  analyst: { backgroundColor: "rgba(230,160,0,0.20)", color: "var(--term-amber)" },
+  regulatory: { backgroundColor: "rgba(249,115,22,0.20)", color: "var(--term-text)" },
+  earnings: { backgroundColor: "rgba(107,114,128,0.20)", color: "var(--term-muted)" },
 };
 
 export default function SkillPanel() {
@@ -122,7 +113,7 @@ export default function SkillPanel() {
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur">
+    <div className="rounded-2xl p-4 backdrop-blur" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
       <div className="mb-4 flex flex-wrap gap-2">
         {(Object.keys(TAB_LABELS) as SkillTab[]).map((k) => (
           <button
@@ -130,9 +121,21 @@ export default function SkillPanel() {
             onClick={() => setTab(k)}
             className={`rounded-lg px-3 py-1.5 text-sm transition ${
               tab === k
-                ? "bg-cyan-500/30 text-cyan-200 ring-1 ring-cyan-400/50"
-                : "bg-white/5 text-gray-400 hover:bg-white/10"
+                ? ""
+                : "brightness-110"
             }`}
+            style={
+              tab === k
+                ? {
+                    backgroundColor: "rgba(230,160,0,0.30)",
+                    color: "var(--term-amber)",
+                    boxShadow: "0 0 0 1px var(--term-amber)",
+                  }
+                : {
+                    backgroundColor: "rgba(255,255,255,0.05)",
+                    color: "var(--term-muted)",
+                  }
+            }
           >
             {TAB_LABELS[k]}
           </button>
@@ -147,14 +150,19 @@ export default function SkillPanel() {
             onChange={(e) => setTicker(e.target.value)}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+            style={{
+              border: "1px solid var(--term-border)",
+              backgroundColor: "var(--term-bg)",
+              color: "var(--term-text)",
+            }}
             placeholder={tab === "rumors" ? "Ticker veya boş (piyasa geneli)" : "Ticker (örn AAPL)"}
-            className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-cyan-400/50 focus:outline-none"
           />
           {suggLoading && (
-            <div className="absolute right-3 top-2.5 text-xs text-gray-500">aranıyor…</div>
+            <div className="absolute right-3 top-2.5 text-xs" style={{ color: "var(--term-muted)" }}>aranıyor…</div>
           )}
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-50 mt-1 w-full rounded-lg border border-white/10 bg-slate-900 shadow-xl max-h-72 overflow-auto">
+            <div className="absolute z-50 mt-1 w-full rounded-lg shadow-xl max-h-72 overflow-auto" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
               {suggestions.map((s) => (
                 <button
                   key={`${s.ticker}-${s.exchange}`}
@@ -163,13 +171,13 @@ export default function SkillPanel() {
                     e.preventDefault();
                     selectSuggestion(s);
                   }}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-cyan-500/20 border-b border-white/5 last:border-0"
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:brightness-110 border-b last:border-0" style={{ borderColor: "var(--term-border)" }}
                 >
                   <div className="min-w-0">
-                    <span className="font-mono font-semibold text-cyan-300">{s.ticker}</span>
-                    <span className="ml-2 truncate text-xs text-gray-400">{s.name}</span>
+                    <span className="font-mono font-semibold" style={{ color: "var(--term-amber)" }}>{s.ticker}</span>
+                    <span className="ml-2 truncate text-xs" style={{ color: "var(--term-muted)" }}>{s.name}</span>
                   </div>
-                  <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-500">
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "var(--term-muted)" }}>
                     {s.exchange_name || s.exchange}
                   </span>
                 </button>
@@ -182,7 +190,12 @@ export default function SkillPanel() {
             <select
               value={positionStatus}
               onChange={(e) => setPositionStatus(e.target.value as "empty" | "holding")}
-              className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-white"
+              className="rounded-lg px-2 py-2 text-sm"
+              style={{
+                border: "1px solid var(--term-border)",
+                backgroundColor: "var(--term-bg)",
+                color: "var(--term-text)",
+              }}
             >
               <option value="empty">Boş pozisyon</option>
               <option value="holding">Pozisyon mevcut</option>
@@ -194,14 +207,24 @@ export default function SkillPanel() {
                   value={positionCost}
                   onChange={(e) => setPositionCost(e.target.value)}
                   placeholder="Maliyet"
-                  className="w-24 rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-white"
+                  className="w-24 rounded-lg px-2 py-2 text-sm"
+                  style={{
+                    border: "1px solid var(--term-border)",
+                    backgroundColor: "var(--term-bg)",
+                    color: "var(--term-text)",
+                  }}
                 />
                 <input
                   type="number"
                   value={positionShares}
                   onChange={(e) => setPositionShares(e.target.value)}
                   placeholder="Adet"
-                  className="w-20 rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-white"
+                  className="w-20 rounded-lg px-2 py-2 text-sm"
+                  style={{
+                    border: "1px solid var(--term-border)",
+                    backgroundColor: "var(--term-bg)",
+                    color: "var(--term-text)",
+                  }}
                 />
               </>
             )}
@@ -210,14 +233,19 @@ export default function SkillPanel() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-200 ring-1 ring-cyan-400/50 transition hover:bg-cyan-500/30 disabled:opacity-50"
+          className="rounded-lg px-4 py-2 text-sm font-medium transition hover:brightness-110 disabled:opacity-50"
+          style={{
+            backgroundColor: "rgba(230,160,0,0.20)",
+            color: "var(--term-amber)",
+            boxShadow: "0 0 0 1px var(--term-amber)",
+          }}
         >
           {loading ? "Çalışıyor..." : "Çalıştır"}
         </button>
       </form>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+        <div className="mb-4 rounded-lg px-3 py-2 text-sm" style={{ border: "1px solid rgba(248,113,113,0.30)", backgroundColor: "rgba(248,113,113,0.10)", color: "var(--term-red)" }}>
           {error}
         </div>
       )}
@@ -226,23 +254,25 @@ export default function SkillPanel() {
       {tab === "stock" && stockResult && (
         <div className="space-y-4">
           {/* Üst bar — ticker + conclusion + bias — canlı renk */}
-          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gradient-to-r from-slate-800/80 to-slate-900/80 px-4 py-3 border border-white/10">
-            <span className="text-xl font-bold text-white tracking-tight">{stockResult.ticker}</span>
-            <span className={`rounded-full px-3 py-1 text-xs font-bold tracking-wider uppercase ${
-              stockResult.conclusion === "strong_buy" ? "bg-emerald-500 text-white"
-              : stockResult.conclusion === "buy" ? "bg-emerald-600/80 text-emerald-100"
-              : stockResult.conclusion === "hold" ? "bg-amber-500 text-white"
-              : stockResult.conclusion.startsWith("sell") ? "bg-rose-500 text-white"
-              : "bg-slate-600 text-slate-300"
-            }`}>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3" style={{ background: "linear-gradient(90deg, var(--term-bg), var(--term-panel))", border: "1px solid var(--term-border)" }}>
+            <span className="text-xl font-bold tracking-tight" style={{ color: "var(--term-text)" }}>{stockResult.ticker}</span>
+            <span className="rounded-full px-3 py-1 text-xs font-bold tracking-wider uppercase" style={
+              stockResult.conclusion === "strong_buy" ? { backgroundColor: "#4ADE80", color: "#12161B" }
+              : stockResult.conclusion === "buy" ? { backgroundColor: "rgba(74,222,128,0.80)", color: "var(--term-text)" }
+              : stockResult.conclusion === "hold" ? { backgroundColor: "#E6A000", color: "#12161B" }
+              : stockResult.conclusion.startsWith("sell") ? { backgroundColor: "#F87171", color: "#12161B" }
+              : { backgroundColor: "var(--term-muted)", color: "var(--term-text)" }
+            }>
               {stockResult.conclusion.replace(/_/g, " ")}
             </span>
             {stockResult.bias_pct !== null && (
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-mono font-bold ${
-                stockResult.bias_pct > 5 ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                : stockResult.bias_pct < -5 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                : "bg-slate-500/20 text-slate-400 border border-slate-500/30"
-              }`}>
+              <span className="rounded-full px-2.5 py-0.5 text-xs font-mono font-bold" style={
+                stockResult.bias_pct > 5
+                  ? { backgroundColor: "rgba(248,113,113,0.20)", color: "var(--term-red)", border: "1px solid rgba(248,113,113,0.30)" }
+                  : stockResult.bias_pct < -5
+                  ? { backgroundColor: "rgba(74,222,128,0.20)", color: "var(--term-green)", border: "1px solid rgba(74,222,128,0.30)" }
+                  : { backgroundColor: "var(--term-muted)", color: "var(--term-text)", border: "1px solid var(--term-border)" }
+              }>
                 MA20 {stockResult.bias_pct > 0 ? "+" : ""}{stockResult.bias_pct}%
                 {stockResult.bias_pct > 5 && " ⚠ BUY ENGELLENDI"}
               </span>
@@ -251,7 +281,7 @@ export default function SkillPanel() {
 
           {/* Fiyat grafiği */}
           {stockResult.price_history.length > 1 && (
-            <div className="rounded-xl overflow-hidden border border-white/10">
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--term-border)" }}>
               <PriceChart
                 data={stockResult.price_history.map(p => ({ date: p.date, open: p.open, high: p.high, low: p.low, close: p.close, volume: p.volume }))}
                 color="var(--term-green)"
@@ -271,7 +301,7 @@ export default function SkillPanel() {
               const hasVal = v !== null && v !== undefined;
               const barColor = hasVal ? (v! >= 60 ? "#22c55e" : v! >= 40 ? "#eab308" : "#ef4444") : "#475569";
               return (
-                <div key={label} className="rounded-xl p-3 border border-white/10" style={{ backgroundColor: "rgba(15,23,42,0.8)" }}>
+                <div key={label} className="rounded-xl p-3" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="text-sm">{icon}</span>
                     <span className="text-[11px] font-mono font-semibold tracking-wider uppercase" style={{ color: accent }}>{label}</span>
@@ -280,11 +310,11 @@ export default function SkillPanel() {
                     {hasVal ? v!.toFixed(0) : "—"}
                   </div>
                   {hasVal ? (
-                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "var(--term-bg)" }}>
                       <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(Math.max(v!, 0), 100)}%`, backgroundColor: barColor }} />
                     </div>
                   ) : (
-                    <div className="h-1.5 rounded-full bg-slate-800/50" />
+                    <div className="h-1.5 rounded-full" style={{ backgroundColor: "var(--term-bg)" }} />
                   )}
                   <div className="mt-1 text-[10px] font-mono text-right" style={{ color: barColor }}>
                     {hasVal ? `${v!.toFixed(0)}/100` : "VERİ YOK"}
@@ -297,23 +327,23 @@ export default function SkillPanel() {
           {/* P/L kartı + İşlem planı — canlı renk */}
           <div className="grid grid-cols-2 gap-3">
             {stockResult.position_pl ? (
-              <div className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(15,23,42,0.8)" }}>
+              <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm">💰</span>
-                  <span className="text-[11px] font-mono font-semibold tracking-wider text-amber-400">POZISYON P/L</span>
+                  <span className="text-[11px] font-mono font-semibold tracking-wider" style={{ color: "var(--term-amber)" }}>POZISYON P/L</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-400">Maliyet</span>
-                    <span className="text-slate-200 font-semibold">${stockResult.position_pl.cost_total.toFixed(2)}</span>
+                    <span style={{ color: "var(--term-muted)" }}>Maliyet</span>
+                    <span className="font-semibold" style={{ color: "var(--term-text)" }}>${stockResult.position_pl.cost_total.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-400">Güncünlük Değer</span>
-                    <span className="text-slate-200 font-semibold">${stockResult.position_pl.current_total.toFixed(2)}</span>
+                    <span style={{ color: "var(--term-muted)" }}>Güncünlük Değer</span>
+                    <span className="font-semibold" style={{ color: "var(--term-text)" }}>${stockResult.position_pl.current_total.toFixed(2)}</span>
                   </div>
-                  <div className="border-t border-white/5 pt-2 flex justify-between text-sm font-mono font-bold">
-                    <span className="text-slate-400">K/Z</span>
-                    <span className={stockResult.position_pl.pl >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                  <div className="pt-2 flex justify-between text-sm font-mono font-bold" style={{ borderTop: "1px solid var(--term-border)" }}>
+                    <span style={{ color: "var(--term-muted)" }}>K/Z</span>
+                    <span style={{ color: stockResult.position_pl.pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
                       {stockResult.position_pl.pl >= 0 ? "+" : ""}${stockResult.position_pl.pl.toFixed(2)}
                       <span className="text-xs ml-1">({stockResult.position_pl.pl >= 0 ? "+" : ""}{stockResult.position_pl.pl_pct.toFixed(2)}%)</span>
                     </span>
@@ -321,11 +351,11 @@ export default function SkillPanel() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl p-4 border border-white/10 flex items-center justify-center" style={{ backgroundColor: "rgba(15,23,42,0.5)" }}>
+              <div className="rounded-xl p-4 flex items-center justify-center" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)", opacity: 0.5 }}>
                 <div className="text-center">
                   <span className="text-2xl block mb-1">💰</span>
-                  <span className="text-xs font-mono text-slate-500">Pozisyon yok</span>
-                  <span className="text-[10px] font-mono text-slate-600 block mt-0.5">P/L için pozisyon bilgisi girin</span>
+                  <span className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>Pozisyon yok</span>
+                  <span className="text-[10px] font-mono block mt-0.5" style={{ color: "var(--term-muted)" }}>P/L için pozisyon bilgisi girin</span>
                 </div>
               </div>
             )}
@@ -337,10 +367,10 @@ export default function SkillPanel() {
               const target = last * 1.10;
               const entryPos = ((last - stop) / (target - stop)) * 100;
               return (
-                <div className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(15,23,42,0.8)" }}>
+                <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-sm">🎯</span>
-                    <span className="text-[11px] font-mono font-semibold tracking-wider text-cyan-400">ISLEM PLANI</span>
+                    <span className="text-[11px] font-mono font-semibold tracking-wider" style={{ color: "var(--term-amber)" }}>ISLEM PLANI</span>
                   </div>
                   <div className="space-y-2 mb-3">
                     {[
@@ -349,7 +379,7 @@ export default function SkillPanel() {
                       ["Hedef (+10%)", target, "#22c55e"],
                     ].map(([l, v, c]) => (
                       <div key={l as string} className="flex justify-between text-xs font-mono">
-                        <span className="text-slate-400">{l}</span>
+                        <span style={{ color: "var(--term-muted)" }}>{l}</span>
                         <span className="font-semibold" style={{ color: c as string }}>${(v as number).toFixed(2)}</span>
                       </div>
                     ))}
@@ -358,9 +388,9 @@ export default function SkillPanel() {
                     <div className="absolute top-0 h-full w-0.5 bg-white shadow-lg" style={{ left: `${entryPos.toFixed(0)}%` }} />
                   </div>
                   <div className="flex justify-between mt-1 text-[10px] font-mono">
-                    <span className="text-rose-400">${stop.toFixed(0)}</span>
-                    <span className="text-cyan-400 font-bold">${last.toFixed(0)}</span>
-                    <span className="text-emerald-400">${target.toFixed(0)}</span>
+                    <span style={{ color: "var(--term-red)" }}>${stop.toFixed(0)}</span>
+                    <span className="font-bold" style={{ color: "var(--term-amber)" }}>${last.toFixed(0)}</span>
+                    <span style={{ color: "var(--term-green)" }}>${target.toFixed(0)}</span>
                   </div>
                 </div>
               );
@@ -369,20 +399,20 @@ export default function SkillPanel() {
 
           {/* Eksik veri uyarısı */}
           {stockResult.data_missing.length > 0 && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 flex items-center gap-2">
+            <div className="rounded-xl px-4 py-2 flex items-center gap-2" style={{ border: "1px solid rgba(230,160,0,0.30)", backgroundColor: "rgba(230,160,0,0.10)" }}>
               <span className="text-sm">⚠️</span>
-              <span className="text-xs font-mono text-amber-300">Eksik veri: {stockResult.data_missing.join(", ")}</span>
+              <span className="text-xs font-mono" style={{ color: "var(--term-amber)" }}>Eksik veri: {stockResult.data_missing.join(", ")}</span>
             </div>
           )}
 
           {/* ═══════════════════════════════════════════════
               DETAILED REPORT — FULL CARD DASHBOARD
               ═══════════════════════════════════════════════ */}
-          <div className="rounded-2xl border border-white/10 p-5 space-y-5" style={{ backgroundColor: "rgba(15,23,42,0.6)" }}>
+          <div className="rounded-2xl p-5 space-y-5" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-panel)" }}>
             {/* ── Section header ── */}
-            <div className="flex items-center gap-2 pb-3 border-b border-white/5">
+            <div className="flex items-center gap-2 pb-3" style={{ borderBottom: "1px solid var(--term-border)" }}>
               <span className="text-base">📋</span>
-              <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">Detaylı Rapor</span>
+              <span className="text-xs font-mono font-bold tracking-wider uppercase" style={{ color: "var(--term-amber)" }}>Detaylı Rapor</span>
             </div>
 
             {/* ── Row 1: Tavsiye + Fiyat + MA20 + Pozisyon (4 col) ── */}
@@ -415,10 +445,10 @@ export default function SkillPanel() {
               ].map(([label, value, color, bg]) => (
                 <div
                   key={label as string}
-                  className="rounded-xl p-4 border border-white/5 text-center transition-all hover:border-white/10"
-                  style={{ backgroundColor: bg as string }}
+                  className="rounded-xl p-4 text-center transition-all"
+                  style={{ border: "1px solid var(--term-border)", backgroundColor: bg as string }}
                 >
-                  <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-2 uppercase">{label}</div>
+                  <div className="text-[10px] font-mono tracking-wider mb-2 uppercase" style={{ color: "var(--term-muted)" }}>{label}</div>
                   <div className="text-base sm:text-lg font-bold font-mono tracking-tight" style={{ color: color as string }}>
                     {value}
                   </div>
@@ -439,16 +469,16 @@ export default function SkillPanel() {
                 const hasVal = v !== null && v !== undefined;
                 const barColor = hasVal ? (v! >= 60 ? "#22c55e" : v! >= 40 ? "#eab308" : "#ef4444") : "#475569";
                 return (
-                  <div key={label} className="rounded-xl p-4 border border-white/5 transition-all hover:border-white/10" style={{ backgroundColor: bg }}>
-                    <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-2 uppercase">{label}</div>
+                  <div key={label} className="rounded-xl p-4 transition-all" style={{ border: "1px solid var(--term-border)", backgroundColor: bg }}>
+                    <div className="text-[10px] font-mono tracking-wider mb-2 uppercase" style={{ color: "var(--term-muted)" }}>{label}</div>
                     <div className="flex items-baseline gap-1 mb-3">
-                      <span className="text-2xl font-bold font-mono" style={{ color: hasVal ? barColor : "#64748b" }}>
+                      <span className="text-2xl font-bold font-mono" style={{ color: hasVal ? barColor : "var(--term-muted)" }}>
                         {hasVal ? v!.toFixed(0) : "—"}
                       </span>
-                      <span className="text-[11px] font-mono text-slate-500">/100</span>
+                      <span className="text-[11px] font-mono" style={{ color: "var(--term-muted)" }}>/100</span>
                     </div>
                     {hasVal ? (
-                      <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
+                      <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--term-bg)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
@@ -458,7 +488,7 @@ export default function SkillPanel() {
                         />
                       </div>
                     ) : (
-                      <div className="h-2 rounded-full bg-slate-800/50" />
+                      <div className="h-2 rounded-full" style={{ backgroundColor: "var(--term-bg)" }} />
                     )}
                   </div>
                 );
@@ -478,11 +508,11 @@ export default function SkillPanel() {
               ].map(([label, val, color, bg, icon]) => (
                 <div
                   key={label as string}
-                  className="rounded-xl p-4 border border-white/5 text-center transition-all hover:border-white/10"
-                  style={{ backgroundColor: bg as string }}
+                  className="rounded-xl p-4 text-center transition-all"
+                  style={{ border: "1px solid var(--term-border)", backgroundColor: bg as string }}
                 >
                   <div className="text-lg mb-1">{icon}</div>
-                  <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-1.5 uppercase">{label}</div>
+                  <div className="text-[10px] font-mono tracking-wider mb-1.5 uppercase" style={{ color: "var(--term-muted)" }}>{label}</div>
                   <div className="text-xl font-bold font-mono" style={{ color: color as string }}>
                     {val ? (label === "PE Oranı" ? val : label === "Volatilite (Yıllık)" ? `%${val}` : label === "Max Drawdown" ? `%${val}` : `%${val}`) : "—"}
                   </div>
@@ -494,7 +524,7 @@ export default function SkillPanel() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-sm">🌍</span>
-                <span className="text-[11px] font-mono font-bold tracking-wider text-cyan-400 uppercase">Küresel Makro</span>
+                <span className="text-[11px] font-mono font-bold tracking-wider uppercase" style={{ color: "var(--term-amber)" }}>Küresel Makro</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {stockResult.macro_indicators?.map((m) => {
@@ -507,17 +537,17 @@ export default function SkillPanel() {
                   return (
                     <div
                       key={m.ticker}
-                      className="rounded-xl p-3.5 border border-white/5 transition-all hover:border-white/10 flex flex-col gap-2"
-                      style={{ backgroundColor: sentimentBg }}
+                      className="rounded-xl p-3.5 transition-all flex flex-col gap-2"
+                      style={{ border: "1px solid var(--term-border)", backgroundColor: sentimentBg }}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono font-semibold text-white tracking-tight">{m.label}</span>
+                        <span className="text-[11px] font-mono font-semibold tracking-tight" style={{ color: "var(--term-text)" }}>{m.label}</span>
                         <span className="text-[14px]" style={{ color: sentimentColor }}>
                           {m.sentiment === "bullish" ? "▲" : m.sentiment === "bearish" ? "▼" : "→"}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-bold font-mono text-white">
+                        <span className="text-lg font-bold font-mono" style={{ color: "var(--term-text)" }}>
                           {m.price !== null ? `${m.price.toFixed(1)}` : "—"}
                         </span>
                         {ch !== null && (
@@ -572,17 +602,17 @@ export default function SkillPanel() {
                   }
                 }
                 return (
-                  <div className="rounded-xl p-4 border border-white/5 flex flex-col gap-3" style={{ background: modeGradient }}>
+                  <div className="rounded-xl p-4 flex flex-col gap-3" style={{ border: "1px solid var(--term-border)", background: modeGradient }}>
                     <div className="flex items-center gap-2">
                       <span className="text-lg">
                         {vixVal !== null && vixVal !== undefined ? (vixVal < 15 ? "🟢" : vixVal < 20 ? "🟡" : vixVal < 30 ? "🟠" : "🔴") : "⚪"}
                       </span>
-                      <span className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">Piyasa Değerlendirmesi</span>
+                      <span className="text-[10px] font-mono tracking-wider uppercase" style={{ color: "var(--term-muted)" }}>Piyasa Değerlendirmesi</span>
                     </div>
                     <div className="text-xl font-bold font-mono tracking-tight" style={{ color: modeColor }}>
                       {mode}
                     </div>
-                    <div className="text-[11px] font-mono text-slate-400">
+                    <div className="text-[11px] font-mono" style={{ color: "var(--term-muted)" }}>
                       VIX: {vixVal !== null && vixVal !== undefined ? vixVal.toFixed(1) : "—"} puan
                     </div>
                   </div>
@@ -590,10 +620,10 @@ export default function SkillPanel() {
               })()}
 
               {/* Kontrol Listesi */}
-              <div className="rounded-xl p-4 border border-white/5 flex flex-col gap-3" style={{ backgroundColor: "rgba(168,85,247,0.06)" }}>
+              <div className="rounded-xl p-4 flex flex-col gap-3" style={{ border: "1px solid var(--term-border)", backgroundColor: "rgba(168,85,247,0.06)" }}>
                 <div className="flex items-center gap-2">
                   <span className="text-lg">✅</span>
-                  <span className="text-[10px] font-mono tracking-wider text-purple-400 uppercase">Kontrol Listesi</span>
+                  <span className="text-[10px] font-mono tracking-wider uppercase" style={{ color: "#a855f7" }}>Kontrol Listesi</span>
                 </div>
                 <div className="space-y-2">
                   {[
@@ -603,7 +633,7 @@ export default function SkillPanel() {
                     ["Eksik Veri", stockResult.data_missing.length > 0 ? `${stockResult.data_missing.length} eksik` : "Tam", stockResult.data_missing.length > 0 ? "#eab308" : "#22c55e"],
                   ].map(([label, val, color]) => (
                     <div key={label as string} className="flex items-center justify-between">
-                      <span className="text-[11px] font-mono text-slate-400">{label}</span>
+                      <span className="text-[11px] font-mono" style={{ color: "var(--term-muted)" }}>{label}</span>
                       <span className="text-[11px] font-mono font-semibold" style={{ color: color as string }}>
                         {val}
                       </span>
@@ -619,38 +649,38 @@ export default function SkillPanel() {
       {/* Dividend result */}
       {tab === "dividend" && dividendResult && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-            <span className="text-lg font-bold text-white">{dividendResult.ticker}</span>
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{dividendResult.ticker}</span>
             {dividendResult.dividend_aristocrat && (
-              <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">
+              <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(168,85,247,0.20)", color: "#a855f7" }}>
                 Temettü Aristokratı
               </span>
             )}
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="text-xs text-gray-400">Safety Score</div>
-              <div className="text-lg font-bold text-white">{dividendResult.safety_score}/100</div>
-              <div className="text-xs text-gray-400">{dividendResult.income_rating}</div>
+            <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>Safety Score</div>
+              <div className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{dividendResult.safety_score}/100</div>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>{dividendResult.income_rating}</div>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="text-xs text-gray-400">Payout Status</div>
-              <div className="text-lg font-bold text-white capitalize">{dividendResult.payout_status}</div>
-              <div className="text-xs text-gray-400">
+            <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>Payout Status</div>
+              <div className="text-lg font-bold capitalize" style={{ color: "var(--term-text)" }}>{dividendResult.payout_status}</div>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>
                 {dividendResult.payout_ratio !== null
                   ? `%${(dividendResult.payout_ratio * 100).toFixed(1)}`
                   : "VERİ YOK"}
               </div>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="text-xs text-gray-400">5Y CAGR</div>
-              <div className="text-lg font-bold text-white">
+            <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>5Y CAGR</div>
+              <div className="text-lg font-bold" style={{ color: "var(--term-text)" }}>
                 {dividendResult.cagr_5y !== null ? `%${dividendResult.cagr_5y}` : "VERİ YOK"}
               </div>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="text-xs text-gray-400">Artış Yılı</div>
-              <div className="text-lg font-bold text-white">
+            <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+              <div className="text-xs" style={{ color: "var(--term-muted)" }}>Artış Yılı</div>
+              <div className="text-lg font-bold" style={{ color: "var(--term-text)" }}>
                 {dividendResult.consecutive_growth_years !== null
                   ? `${dividendResult.consecutive_growth_years} yıl`
                   : "VERİ YOK"}
@@ -658,12 +688,12 @@ export default function SkillPanel() {
             </div>
           </div>
           {dividendResult.current_yield !== null && (
-            <div className="text-sm text-gray-300">
-              Güncünlük temettü verimi: <span className="font-bold text-green-300">%{dividendResult.current_yield}</span>
+            <div className="text-sm" style={{ color: "var(--term-muted)" }}>
+              Güncünlük temettü verimi: <span className="font-bold" style={{ color: "var(--term-green)" }}>%{dividendResult.current_yield}</span>
             </div>
           )}
           {dividendResult.data_missing.length > 0 && (
-            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-300">
+            <div className="rounded-lg px-3 py-1.5 text-xs" style={{ border: "1px solid rgba(230,160,0,0.30)", backgroundColor: "rgba(230,160,0,0.10)", color: "var(--term-amber)" }}>
               Eksik veri: {dividendResult.data_missing.join(", ")}
             </div>
           )}
@@ -673,37 +703,40 @@ export default function SkillPanel() {
       {/* Rumor signals */}
       {tab === "rumors" && rumorResult && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-            <span className="text-sm text-gray-400">
-              Sorgu: <span className="text-white">{rumorResult.query || "piyasa geneli"}</span>
+          <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-sm" style={{ color: "var(--term-muted)" }}>
+              Sorgu: <span style={{ color: "var(--term-text)" }}>{rumorResult.query || "piyasa geneli"}</span>
             </span>
-            <span className="text-sm text-cyan-300">
+            <span className="text-sm" style={{ color: "var(--term-amber)" }}>
               Toplam etki: <span className="font-bold">{rumorResult.total_impact}</span>
             </span>
           </div>
           {rumorResult.signals.length === 0 ? (
-            <div className="text-sm text-gray-500">Sinyal bulunamadı.</div>
+            <div className="text-sm" style={{ color: "var(--term-muted)" }}>Sinyal bulunamadı.</div>
           ) : (
             rumorResult.signals.map((s, i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-slate-950/40 p-2">
+              <div key={i} className="rounded-lg p-2" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${SIGNAL_COLORS[s.signal_type] ?? "bg-gray-500/20 text-gray-300"}`}>
+                  <span className="rounded-full px-2 py-0.5 text-xs" style={
+                    SIGNAL_TYPE_STYLES[s.signal_type] ?? { backgroundColor: "rgba(107,114,128,0.20)", color: "var(--term-muted)" }
+                  }>
                     {s.signal_type} (+{s.impact_score})
                   </span>
                   <a
                     href={s.url ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-white hover:text-cyan-300"
+                    className="text-sm"
+                    style={{ color: "var(--term-text)" }}
                   >
                     {s.headline}
                   </a>
                 </div>
                 {s.summary && (
-                  <div className="mt-1 text-xs text-gray-400">{s.summary}</div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--term-muted)" }}>{s.summary}</div>
                 )}
                 {s.source && (
-                  <div className="mt-1 text-xs text-gray-500">Kaynak: {s.source}</div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--term-muted)" }}>Kaynak: {s.source}</div>
                 )}
               </div>
             ))
@@ -714,17 +747,17 @@ export default function SkillPanel() {
       {/* Kline result */}
       {tab === "kline" && klineResult && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-            <span className="text-lg font-bold text-white">{klineResult.ticker}</span>
-            <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs text-cyan-300">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{klineResult.ticker}</span>
+            <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(230,160,0,0.20)", color: "var(--term-amber)" }}>
               Pattern: {klineResult.pattern_detected || "none"}
             </span>
             {klineResult.used_fallback && (
-              <span className="text-xs text-yellow-300">VLM yok → metin fallback</span>
+              <span className="text-xs" style={{ color: "var(--term-amber)" }}>VLM yok → metin fallback</span>
             )}
           </div>
           {klineResult.error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ border: "1px solid rgba(248,113,113,0.30)", backgroundColor: "rgba(248,113,113,0.10)", color: "var(--term-red)" }}>
               {klineResult.error}
             </div>
           )}
@@ -732,11 +765,11 @@ export default function SkillPanel() {
             <img
               src={`data:image/png;base64,${klineResult.chart_png_base64}`}
               alt={`${klineResult.ticker} candlestick`}
-              className="rounded-lg border border-white/10"
+              className="rounded-lg" style={{ border: "1px solid var(--term-border)" }}
             />
           )}
           {klineResult.vlm_analysis && (
-            <div className="rounded-lg bg-white/5 p-3 text-sm text-gray-200 whitespace-pre-wrap">
+            <div className="rounded-lg p-3 text-sm whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "var(--term-text)" }}>
               {klineResult.vlm_analysis}
             </div>
           )}

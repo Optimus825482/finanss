@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE, apiHeaders } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 interface Provider { id: number; name: string; slug: string; base_url: string; is_active: boolean }
 interface Model { id: number; provider_id: number; model_id: string; display_name: string; supports_chat: boolean; supports_embedding: boolean }
 interface VLMConfig { vlm_model?: string | null; configured: boolean }
-
-const API = API_BASE;
 
 export default function VLMTab() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -21,9 +19,9 @@ export default function VLMTab() {
   const load = async () => {
     try {
       const [pRes, mRes, cRes] = await Promise.all([
-        fetch(`${API}/api/admin/providers`, { headers: apiHeaders() }),
-        fetch(`${API}/api/admin/models`, { headers: apiHeaders() }),
-        fetch(`${API}/api/admin/vlm-config`, { headers: apiHeaders() }),
+        apiFetch("/api/admin/providers"),
+        apiFetch("/api/admin/models"),
+        apiFetch("/api/admin/vlm-config"),
       ]);
       if (pRes.ok) setProviders(await pRes.json());
       if (mRes.ok) setModels(await mRes.json());
@@ -40,9 +38,9 @@ export default function VLMTab() {
   const save = async () => {
     if (!selectedModel.trim()) return;
     try {
-      await fetch(`${API}/api/admin/settings`, {
+      await apiFetch("/api/admin/settings", {
         method: "POST",
-        headers: apiHeaders({ "Content-Type": "application/json" }),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: "vlm_model",
           value: selectedModel.trim(),
@@ -62,9 +60,9 @@ export default function VLMTab() {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${API}/api/admin/vlm-test`, {
+      const res = await apiFetch("/api/admin/vlm-test", {
         method: "POST",
-        headers: apiHeaders({ "Content-Type": "application/json" }),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: selectedModel.trim() }),
       });
       const data = await res.json();

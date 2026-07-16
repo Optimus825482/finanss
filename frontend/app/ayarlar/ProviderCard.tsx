@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { API_BASE, apiHeaders } from "../lib/api";
-
-const API = API_BASE;
+import { apiFetch } from "../lib/api";
 
 interface Provider {
   id: number; name: string; slug: string; base_url: string;
@@ -46,7 +44,7 @@ export default function ProviderCard({
     setModelTestLoading(p => ({ ...p, [modelId]: true }));
     setModelTestResults(p => ({ ...p, [modelId]: {} as any }));
     try {
-      const res = await fetch(`${API}/api/admin/models/${modelId}/test`, { method: "POST", headers: apiHeaders() });
+      const res = await apiFetch(`/api/admin/models/${modelId}/test`, { method: "POST" });
       const data = await res.json();
       setModelTestResults(p => ({ ...p, [modelId]: data }));
     } catch (e) {
