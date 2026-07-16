@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -13,6 +13,7 @@ import {
 } from "../lib/api";
 
 type SkillTab = "stock" | "dividend" | "rumors" | "kline";
+type Suggestion = { ticker: string; name: string; exchange: string; exchange_name: string; type: string };
 
 const TAB_LABELS: Record<SkillTab, string> = {
   stock: "📊 Hisse Analizi",
@@ -46,6 +47,45 @@ export default function SkillPanel() {
   const [positionShares, setPositionShares] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sembol arama autocomplete state
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggLoading, setSuggLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced ticker arama — Yahoo Finance autocomplete
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = ticker.trim();
+    if (q.length < 1 || tab === "rumors") {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSuggLoading(true);
+      try {
+        const results = await api.suggestTickers(q);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setSuggLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [ticker, tab]);
+
+  const selectSuggestion = (s: Suggestion) => {
+    setTicker(s.ticker);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
 
   const [stockResult, setStockResult] = useState<StockAnalysisResult | null>(null);
   const [dividendResult, setDividendResult] = useState<DividendResult | null>(null);
@@ -102,13 +142,43 @@ export default function SkillPanel() {
       </div>
 
       <form onSubmit={handleRun} className="mb-4 flex flex-wrap gap-2">
-        <input
-          type="text"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-          placeholder={tab === "rumors" ? "Ticker veya boş (piyasa geneli)" : "Ticker (örn AAPL)"}
-          className="flex-1 rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-cyan-400/50 focus:outline-none"
-        />
+        <div className="relative flex-1 min-w-[200px]">
+          <input
+            type="text"
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder={tab === "rumors" ? "Ticker veya boş (piyasa geneli)" : "Ticker (örn AAPL)"}
+            className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-cyan-400/50 focus:outline-none"
+          />
+          {suggLoading && (
+            <div className="absolute right-3 top-2.5 text-xs text-gray-500">aranıyor…</div>
+          )}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-lg border border-white/10 bg-slate-900 shadow-xl max-h-72 overflow-auto">
+              {suggestions.map((s) => (
+                <button
+                  key={`${s.ticker}-${s.exchange}`}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectSuggestion(s);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-cyan-500/20 border-b border-white/5 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <span className="font-mono font-semibold text-cyan-300">{s.ticker}</span>
+                    <span className="ml-2 truncate text-xs text-gray-400">{s.name}</span>
+                  </div>
+                  <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-500">
+                    {s.exchange_name || s.exchange}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {tab === "stock" && (
           <>
             <select
