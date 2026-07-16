@@ -170,13 +170,38 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     """
     ticker = ticker.upper().strip()
 
-    # 1. Pipeline: stage1 + stage2 (her ikisi async — to_thread değil direkt await)
+    # 1. Pipeline: stage1 + stage2
     stage1 = await stage1_prescreen([ticker])
     candidate: dict = {}
     if stage1:
         stage2 = await stage2_deep_analysis(stage1)
         if stage2:
             candidate = stage2[0]
+        else:
+            # stage2 başarısız → doğrudan agent pipeline ile analiz et (fallback)
+            logger.info("stage2_deep_analysis başarısız, fallback agent pipeline: %s", ticker)
+            try:
+                hist = await asyncio.to_thread(safe_ticker_history, ticker, "3mo")
+                if hist is not None and not hist.empty and len(hist) >= 5:
+                    hist.index = hist.index.tz_localize(None)
+                    price_val = prices.get(ticker, {}).get("price") if prices else None
+                    single_cand = {
+                        "ticker": ticker,
+                        "price": price_val or float(hist["Close"].iloc[-1]),
+                        "momentum_pct": float((hist["Close"].iloc[-1] / hist["Close"].iloc[-6] - 1) * 100) if len(hist) >= 6 else 0,
+                        "volume_ratio": 1.0,
+                        "history": hist,
+                    }
+                    from app.agents.fundamental_agent import FundamentalAgent
+                    from app.agents.sentiment_agent import SentimentAgent
+                    from app.agents.risk_agent import RiskAgent
+                    single_cands = await FundamentalAgent().run([single_cand])
+                    single_cands = await SentimentAgent().run(single_cands)
+                    single_cands = await RiskAgent().run(single_cands)
+                    if single_cands:
+                        candidate = single_cands[0]
+            except Exception as e:
+                logger.warning("fallback agent pipeline failed for %s: %s", ticker, e)
 
     # 2. Fiyat + MA20 hesap
     prices = await asyncio.to_thread(get_live_prices, [ticker])
