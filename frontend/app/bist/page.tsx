@@ -15,8 +15,8 @@ export default function BistPage() {
   const [progress, setProgress] = useState<string[]>([]);
 
   const load = async () => {
-    try { setPortfolio(await api.getAgentPortfolio()); } catch { /* */ }
-    try { setDecisions(await api.getAgentDecisions(10)); } catch { /* */ }
+    try { setPortfolio(await api.getAgentPortfolio("bist")); } catch { /* */ }
+    try { setDecisions(await api.getAgentDecisions("bist", 10)); } catch { /* */ }
     try {
       const s = await api.getStatus();
       setGenerating(s.running);
