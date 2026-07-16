@@ -1,285 +1,241 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
-import { api, PortfolioSummary } from "../lib/api";
-import AgentPortfolioCard from "../components/AgentPortfolioCard";
+import { useEffect, useState, useCallback, FormEvent } from "react";
+import { api, AgentPortfolio, AgentDecision } from "../lib/api";
+
+type PortfolioSlug = "bist" | "us";
+
+const PORTFOLIO_LABELS: Record<PortfolioSlug, string> = {
+  bist: "BIST 100+",
+  us: "US (NASDAQ+DJIA)",
+};
 
 export default function PortfoyPage() {
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [form, setForm] = useState({ ticker: "", quantity: "", entry_price: "" });
-  const [closeInputs, setCloseInputs] = useState<Record<number, string>>({});
+  // ── Tab state ──
+  const [activeTab, setActiveTab] = useState<PortfolioSlug>("us");
+
+  // ── Her iki portföyün anlık durumu ──
+  const [bistPortfolio, setBistPortfolio] = useState<AgentPortfolio | null>(null);
+  const [usPortfolio, setUsPortfolio] = useState<AgentPortfolio | null>(null);
+
+  // ── Aktif tab'ın detayları ──
+  const [portfolio, setPortfolio] = useState<AgentPortfolio | null>(null);
+  const [decisions, setDecisions] = useState<AgentDecision[]>([]);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const load = async () => {
-    try {
-      setSummary(await api.getPortfolio());
-    } catch {
-      setError("Portföy yüklenemedi");
-    }
+  // ── Load all ──
+  const loadAll = useCallback(async () => {
+    // Anlık kart için iki portföy
+    try { setBistPortfolio(await api.getAgentPortfolio("bist")); } catch { /* */ }
+    try { setUsPortfolio(await api.getAgentPortfolio("us")); } catch { /* */ }
+    // Aktif tab için detay
+    try { setPortfolio(await api.getAgentPortfolio(activeTab)); } catch { /* */ }
+    try { setDecisions(await api.getAgentDecisions(activeTab, 10)); } catch { /* */ }
+  }, [activeTab]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { const i = setInterval(loadAll, 60_000); return () => clearInterval(i); }, [loadAll]);
+
+  // ── Ajan çalıştır ──
+  const handleRun = async (slug: PortfolioSlug) => {
+    setRunning(true); setError(null);
+    try { await api.runAgent(slug); setTimeout(loadAll, 3000); }
+    catch { setError(`${PORTFOLIO_LABELS[slug]} ajan çalıştırılamadı`); }
+    finally { setRunning(false); }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const handleAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    const qty = parseFloat(form.quantity);
-    const price = parseFloat(form.entry_price);
-    if (!form.ticker.trim() || !qty || !price) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await api.addPortfolioPosition({
-        ticker: form.ticker.trim().toUpperCase(),
-        quantity: qty,
-        entry_price: price,
-      });
-      setForm({ ticker: "", quantity: "", entry_price: "" });
-      await load();
-    } catch {
-      setError("Pozisyon eklenemedi");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClose = async (id: number) => {
-    const price = parseFloat(closeInputs[id] ?? "");
-    if (!price) return;
-    await api.closePortfolioPosition(id, price);
-    setCloseInputs((prev) => ({ ...prev, [id]: "" }));
-    await load();
-  };
-
-  const handleDelete = async (id: number) => {
-    await api.deletePortfolioPosition(id);
-    await load();
-  };
-
-  const openPositions = summary?.positions.filter((p) => p.status === "open") ?? [];
-  const closedPositions = summary?.positions.filter((p) => p.status === "closed") ?? [];
   const borderColor = "var(--term-border)";
 
+  // ── Anlık özet kart ──
+  const renderSummaryCard = (data: AgentPortfolio | null, slug: PortfolioSlug) => {
+    const p = data;
+    const bgColor = slug === "bist" ? "rgba(245,158,11,0.06)" : "rgba(59,130,246,0.06)";
+    const accent = slug === "bist" ? "var(--term-amber)" : "var(--term-blue)";
+
+    return (
+      <div className="rounded-sm px-4 py-3 flex-1" style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>
+            {slug === "bist" ? "🇹🇷 BIST" : "🇺🇸 US"}
+            <span className="text-xs ml-1" style={{ color: "var(--term-muted)" }}>{PORTFOLIO_LABELS[slug]}</span>
+          </div>
+          <button
+            onClick={() => handleRun(slug)}
+            disabled={running}
+            className="font-mono text-[10px] px-2 py-1 rounded-sm transition-none disabled:opacity-40"
+            style={{ border: `1px solid ${accent}`, color: accent }}
+          >
+            {running ? "…" : "▶ ÇALIŞTIR"}
+          </button>
+        </div>
+        {!p ? (
+          <div className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>Yükleniyor…</div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div>
+              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.cash.toFixed(0)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>POZİSYON</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{p.position_count}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.total_market_value.toFixed(0)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                {p.total_pl >= 0 ? "+" : ""}{p.total_pl.toFixed(0)}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const p = portfolio;
+
   return (
-    <main className="min-h-screen px-6 py-8 max-w-5xl mx-auto">
-      <div
-        className="rounded-sm px-6 py-4 mb-6"
-        style={{
-          backgroundColor: "var(--term-panel)",
-          border: `1px solid ${borderColor}`,
-        }}
-      >
-        <h1 className="font-mono text-xl font-semibold mb-1" style={{ color: "var(--term-text)" }}>
-          SANAL PORTFÖY
-        </h1>
+    <main className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="rounded-sm px-6 py-4 mb-6" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+        <h1 className="font-mono text-xl font-semibold mb-1" style={{ color: "var(--term-text)" }}>OTONOM PORTFÖY</h1>
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
-          Alım-satım pozisyonlarını takip et, kâr/zarar durumunu gör
+          İki ayrı otonom ajan: BIST (Türkiye) & US (NASDAQ+DowJones). Her biri $10.000 bakiye, 30dk'da bir tarama.
         </p>
       </div>
 
-      {/* Özet kartları */}
-      {summary && (
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div
-            className="rounded-sm p-4 text-center"
-            style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-          >
-            <div className="text-xs font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>
-              MALİYET
-            </div>
-            <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>
-              ${summary.total_cost_basis.toFixed(2)}
-            </div>
-          </div>
-          <div
-            className="rounded-sm p-4 text-center"
-            style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-          >
-            <div className="text-xs font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>
-              PİYASA DEĞERİ
-            </div>
-            <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>
-              ${summary.total_market_value.toFixed(2)}
-            </div>
-          </div>
-          <div
-            className="rounded-sm p-4 text-center"
-            style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-          >
-            <div className="text-xs font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>
-              TOPLAM P/L
-            </div>
-            <div
-              className="font-mono text-lg font-semibold"
-              style={{ color: summary.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}
-            >
-              {summary.total_pl >= 0 ? "+" : ""}${summary.total_pl.toFixed(2)} ({summary.total_pl_pct.toFixed(1)}%)
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Pozisyon ekle */}
-      <div
-        className="rounded-sm p-4 mb-6"
-        style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-      >
-        <div className="text-xs font-mono tracking-wider mb-3" style={{ color: "var(--term-muted)" }}>
-          YENİ POZİSYON AÇ
-        </div>
-        <form onSubmit={handleAdd} className="flex gap-2">
-          <input
-            value={form.ticker}
-            onChange={(e) => setForm({ ...form, ticker: e.target.value })}
-            placeholder="TICKER"
-            className="flex-1 min-w-0 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none"
-            style={{
-              backgroundColor: "var(--term-bg)",
-              border: `1px solid ${borderColor}`,
-              color: "var(--term-text)",
-            }}
-          />
-          <input
-            value={form.quantity}
-            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-            placeholder="Adet"
-            type="number"
-            step="any"
-            className="w-24 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none"
-            style={{
-              backgroundColor: "var(--term-bg)",
-              border: `1px solid ${borderColor}`,
-              color: "var(--term-text)",
-            }}
-          />
-          <input
-            value={form.entry_price}
-            onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
-            placeholder="Giriş $"
-            type="number"
-            step="any"
-            className="w-28 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none"
-            style={{
-              backgroundColor: "var(--term-bg)",
-              border: `1px solid ${borderColor}`,
-              color: "var(--term-text)",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40 whitespace-nowrap"
-            style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}
-          >
-            AÇ
-          </button>
-        </form>
-        {error && <div className="text-xs font-mono mt-2" style={{ color: "var(--term-red)" }}>{error}</div>}
+      {/* Anlık kartlar — BIST | US yan yana */}
+      <div className="flex gap-4 mb-6">
+        {renderSummaryCard(bistPortfolio, "bist")}
+        {renderSummaryCard(usPortfolio, "us")}
       </div>
 
-      {/* Açık pozisyonlar */}
-      <div
-        className="rounded-sm"
-        style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-      >
-        <div className="px-4 py-3 text-xs font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>
-          AÇIK POZİSYONLAR ({openPositions.length})
-        </div>
-        {openPositions.length === 0 && (
-          <div className="text-sm font-mono text-center py-8" style={{ color: "var(--term-muted)" }}>
-            Açık pozisyon yok
-          </div>
-        )}
-        {openPositions.map((p) => (
-          <div
-            key={p.id}
-            className="flex items-center justify-between px-4 py-3 gap-3"
-            style={{ borderTop: `1px solid ${borderColor}` }}
+      {error && (
+        <div className="rounded-sm px-4 py-2 font-mono text-xs mb-4" style={{ color: "var(--term-red)" }}>{error}</div>
+      )}
+
+      {/* Tab selector */}
+      <div className="flex gap-1 mb-4">
+        {(["bist", "us"] as PortfolioSlug[]).map((slug) => (
+          <button
+            key={slug}
+            onClick={() => setActiveTab(slug)}
+            className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none"
+            style={{
+              border: "1px solid var(--term-border)",
+              backgroundColor: activeTab === slug ? "var(--term-border)" : "var(--term-panel)",
+              color: activeTab === slug ? "var(--term-amber)" : "var(--term-muted)",
+            }}
           >
-            <div className="min-w-0">
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>
-                {p.ticker}{" "}
-                <span style={{ color: "var(--term-muted)" }}>x{p.quantity}</span>
-              </div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: "var(--term-muted)" }}>
-                Giriş ${p.entry_price.toFixed(2)} · {new Date(p.entry_date).toLocaleDateString("tr-TR")}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {p.unrealized_pl !== null ? (
-                <div className="text-right font-mono text-sm">
-                  <div style={{ color: "var(--term-text)" }}>${p.market_value?.toFixed(2)}</div>
-                  <div style={{ color: p.unrealized_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                    {p.unrealized_pl >= 0 ? "+" : ""}${p.unrealized_pl.toFixed(2)} ({p.unrealized_pl_pct?.toFixed(1)}%)
-                  </div>
-                </div>
-              ) : (
-                <span className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>veri yok</span>
-              )}
-              <input
-                placeholder="Çıkış $"
-                value={closeInputs[p.id] ?? ""}
-                onChange={(e) => setCloseInputs({ ...closeInputs, [p.id]: e.target.value })}
-                className="w-20 rounded-sm px-2 py-1.5 text-xs font-mono focus:outline-none"
-                style={{
-                  backgroundColor: "var(--term-bg)",
-                  border: `1px solid ${borderColor}`,
-                  color: "var(--term-text)",
-                }}
-              />
-              <button
-                onClick={() => handleClose(p.id)}
-                className="text-xs font-mono transition-none whitespace-nowrap"
-                style={{ color: "var(--term-amber)" }}
-              >
-                KAPAT
-              </button>
-              <button
-                onClick={() => handleDelete(p.id)}
-                className="text-xs font-mono transition-none"
-                style={{ color: "var(--term-muted)" }}
-                aria-label="Pozisyonu sil"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+            {slug === "bist" ? "🇹🇷 BIST DETAY" : "🇺🇸 US DETAY"}
+          </button>
         ))}
       </div>
 
-      {/* Kapanmış pozisyonlar */}
-      {closedPositions.length > 0 && (
-        <div
-          className="rounded-sm mt-6"
-          style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}
-        >
-          <div className="px-4 py-3 text-xs font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>
-            KAPANMIŞ POZİSYONLAR ({closedPositions.length})
-          </div>
-          {closedPositions.map((p) => {
-            const realized = p.exit_price !== null ? (p.exit_price - p.entry_price) * p.quantity : null;
-            return (
-              <div
-                key={p.id}
-                className="flex items-center justify-between px-4 py-2.5 font-mono text-sm"
-                style={{ borderTop: `1px solid ${borderColor}` }}
-              >
-                <span style={{ color: "var(--term-muted)" }}>
-                  {p.ticker} x{p.quantity} @ ${p.entry_price.toFixed(2)} → ${p.exit_price?.toFixed(2)}
-                </span>
-                <span style={{ color: realized !== null && realized >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  {realized !== null ? `${realized >= 0 ? "+" : ""}$${realized.toFixed(2)}` : "—"}
-                </span>
+      {/* Detay panel */}
+      {!p ? (
+        <div className="rounded-sm p-8 text-center font-mono text-xs" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)", color: "var(--term-muted)" }}>
+          {activeTab === "bist" ? "BIST" : "US"} portföyü yükleniyor… Çalıştır butonuna basarak ilk taramayı başlat.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* P/L özet bar */}
+          <div className="rounded-sm px-4 py-3" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+            <div className="grid grid-cols-5 gap-3 text-center">
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.cash.toFixed(2)}</div>
               </div>
-            );
-          })}
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>MALİYET</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.total_cost.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA DEĞERİ</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.total_market_value.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {p.total_pl >= 0 ? "+" : ""}${p.total_pl.toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L %</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {p.total_pl_pct >= 0 ? "+" : ""}{p.total_pl_pct.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pozisyonlar */}
+          <div className="rounded-sm" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+            <div className="px-4 py-3 text-xs font-mono tracking-wider" style={{ color: "var(--term-muted)", borderBottom: `1px solid ${borderColor}` }}>
+              AÇIK POZİSYONLAR ({p.position_count})
+            </div>
+            {p.positions.length === 0 ? (
+              <div className="text-sm font-mono text-center py-8" style={{ color: "var(--term-muted)" }}>Açık pozisyon yok</div>
+            ) : (
+              p.positions.map((pos) => (
+                <div key={pos.id} className="flex items-center justify-between px-4 py-3 font-mono text-xs" style={{ borderTop: `1px solid ${borderColor}` }}>
+                  <div>
+                    <span className="font-semibold" style={{ color: "var(--term-text)" }}>{pos.ticker}</span>
+                    <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ ${pos.entry_price.toFixed(2)}</span>
+                  </div>
+                  <div className="flex gap-4 items-center">
+                    {pos.current_price && <span style={{ color: "var(--term-muted)" }}>${pos.current_price.toFixed(2)}</span>}
+                    <span style={{ color: pos.unrealized_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                      {pos.unrealized_pl >= 0 ? "+" : ""}${pos.unrealized_pl.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Son kararlar */}
+          {decisions.length > 0 && (
+            <div className="rounded-sm" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+              <div className="px-4 py-3 text-xs font-mono tracking-wider" style={{ color: "var(--term-muted)", borderBottom: `1px solid ${borderColor}` }}>
+                SON KARARLAR
+              </div>
+              {decisions.slice(0, 8).map((d) => (
+                <div key={d.id} className="flex items-center justify-between px-4 py-2 font-mono text-[11px]" style={{ borderTop: `1px solid ${borderColor}` }}>
+                  <div>
+                    <span className="font-semibold" style={{ color: d.action === "buy" ? "var(--term-green)" : "var(--term-red)" }}>
+                      {d.action === "buy" ? "AL" : "SAT"} {d.ticker}
+                    </span>
+                    <span style={{ color: "var(--term-muted)" }}> x{d.quantity} @ ${d.price.toFixed(2)}</span>
+                  </div>
+                  <div className="text-right max-w-[250px] truncate" style={{ color: "var(--term-muted)" }}>
+                    {d.reasoning.slice(0, 50)}…
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Otonom Ajan */}
-      <AgentPortfolioCard />
+      {/* Ajan çalıştır butonları (alt) */}
+      <div className="flex gap-4 mt-6">
+        <button onClick={() => handleRun("bist")} disabled={running}
+          className="flex-1 font-mono text-xs tracking-wider px-4 py-3 rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}>
+          {running ? "ÇALIŞIYOR…" : "▶ BIST AJANI ÇALIŞTIR"}
+        </button>
+        <button onClick={() => handleRun("us")} disabled={running}
+          className="flex-1 font-mono text-xs tracking-wider px-4 py-3 rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid var(--term-blue)", color: "var(--term-blue)" }}>
+          {running ? "ÇALIŞIYOR…" : "▶ US AJANI ÇALIŞTIR"}
+        </button>
+      </div>
     </main>
   );
 }
