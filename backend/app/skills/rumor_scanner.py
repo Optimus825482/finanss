@@ -101,7 +101,38 @@ def dedup_signals(
     return list(seen.values())
 
 
-# --- LLM sınıflandırma ---
+def _classify_with_vader(title: str, text: str = "") -> tuple[str, str]:
+    """VADER sentiment + keyword-bazlı sinyal sınıflandırma (LLM fallback).
+
+    Returns: (signal_type, kısa Türkçe özet)
+    """
+    # Keyword matching — en yüksek öncelikli
+    t_lower = (title + " " + text).lower()
+    keyword_map: list[tuple[str, str, str]] = [
+        ("merger", "ma"), ("merger", "ma"), ("acquisition", "ma"), ("takeover", "ma"),
+        ("bid", "ma"), ("offer", "ma"), ("satın", "ma"), ("birleşme", "ma"),
+        ("ceo", "insider"), ("director", "insider"), ("insider", "insider"), ("board", "insider"),
+        ("buy shares", "insider"), ("sell shares", "insider"), ("yönetim kurulu", "insider"),
+        ("downgrade", "analyst"), ("upgrade", "analyst"), ("target price", "analyst"),
+        ("rating", "analyst"), ("analyst", "analyst"), ("hedef fiyat", "analyst"),
+        ("sec", "regulatory"), ("investigation", "regulatory"), ("fine", "regulatory"),
+        ("lawsuit", "regulatory"), ("regulatory", "regulatory"), ("soruşturma", "regulatory"),
+        ("earnings", "earnings"), ("revenue", "earnings"), ("profit", "earnings"),
+        ("guidance", "earnings"), ("quarterly", "earnings"), ("kar", "earnings"),
+        ("gelir", "earnings"), ("zarar", "earnings"),
+    ]
+    for kw, sig_type in keyword_map:
+        if kw in t_lower:
+            return sig_type, f"Keyword tabanlı sınıflandırma: '{kw}' algılandı"
+
+    # Keyword yok → VADER sentiment bazlı
+    scores = _VADER.polarity_scores(title)
+    compound = scores["compound"]
+    if compound > 0.3:
+        return "earnings", "Pozitif haber (VADER)"
+    elif compound < -0.3:
+        return "earnings", "Negatif haber (VADER)"
+    return "earnings", "Nötr haber (VADER)"
 
 async def _classify_headlines(
     headlines: list[dict],
@@ -156,20 +187,21 @@ Kurallar:
             max_tokens=2048,
         )
     except Exception as e:
-        logger.warning("rumor_scanner: LLM classify failed (%s) — fallback to neutral", e)
-        # Fallback: tüm haberleri earnings tipinde neutral işaretle — ana sinyal formatı ile uyumlu
-        return [
-            {
-                "signal_type": "earnings",
-                "impact_score": impact_for_type("earnings"),  # = 2
+        logger.warning("rumor_scanner: LLM classify failed (%s) — fallback to keyword+VADER", e)
+        # Fallback: keyword + VADER sentiment ile sınıflandır
+        fallback_signals = []
+        for h in headlines[:20]:
+            sig_type, summary = _classify_with_vader(h.get("title", ""), h.get("publisher", ""))
+            fallback_signals.append({
+                "signal_type": sig_type,
+                "impact_score": impact_for_type(sig_type),
                 "headline": h.get("title", ""),
                 "source": h.get("publisher"),
                 "url": h.get("link"),
                 "timestamp": _parse_ts(h.get("providerPublishTime")),
-                "summary": "LLM sınıflandırma başarısız — varsayılan tip",
-            }
-            for h in headlines[:20]
-        ]
+                "summary": summary,
+            })
+        return fallback_signals
 
     # JSON array parse — fenced önce
     m = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", response)
