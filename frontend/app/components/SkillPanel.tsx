@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, FormEvent, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import PriceChart from "./PriceChart";
 import {
   api,
@@ -377,56 +375,159 @@ export default function SkillPanel() {
             </div>
           )}
 
-          {/* Markdown — haber/özet — canlı renkli panel */}
-          <div className="rounded-xl border border-white/10 p-5" style={{ backgroundColor: "rgba(15,23,42,0.6)" }}>
-            <div className="flex items-center gap-2 mb-4">
+          {/* ═══════════════════════════════════════════════
+              DETAILED REPORT — FULL CARD DASHBOARD
+              ═══════════════════════════════════════════════ */}
+          <div className="rounded-2xl border border-white/10 p-5 space-y-5" style={{ backgroundColor: "rgba(15,23,42,0.6)" }}>
+            {/* ── Section header ── */}
+            <div className="flex items-center gap-2 pb-3 border-b border-white/5">
               <span className="text-base">📋</span>
               <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">Detaylı Rapor</span>
             </div>
 
-            {/* Hızlı bakış kartları — canlı renk */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {/* ── Row 1: Tavsiye + Fiyat + MA20 + Pozisyon (4 col) ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                ["Tavsiye", stockResult.conclusion.replace(/_/g, " ").toUpperCase(),
-                  stockResult.conclusion.startsWith("strong_buy") ? "#22c55e" : stockResult.conclusion === "buy" ? "#16a34a" : stockResult.conclusion === "hold" ? "#eab308" : "#ef4444"],
-                ["Fiyat", `$${stockResult.price_history[stockResult.price_history.length - 1]?.close?.toFixed(2) ?? "—"}`, "#06b6d4"],
-                ["MA20 Sapma", stockResult.bias_pct !== null ? `${stockResult.bias_pct > 0 ? "+" : ""}${stockResult.bias_pct}%` : "—", stockResult.bias_pct !== null ? (stockResult.bias_pct < -5 ? "#22c55e" : stockResult.bias_pct > 5 ? "#ef4444" : "#eab308") : "#64748b"],
-                ["Pozisyon", stockResult.position_pl ? `${stockResult.position_pl.pl >= 0 ? "+" : ""}$${stockResult.position_pl.pl.toFixed(0)}` : "Yok", stockResult.position_pl ? (stockResult.position_pl.pl >= 0 ? "#22c55e" : "#ef4444") : "#64748b"],
-              ].map(([label, value, color]) => (
-                <div key={label as string} className="rounded-lg p-2.5 text-center border border-white/5" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
-                  <div className="text-[10px] font-mono tracking-wider text-slate-500 mb-1">{label}</div>
-                  <div className="text-sm font-bold font-mono" style={{ color: color as string }}>{value}</div>
+                [
+                  "Tavsiye",
+                  stockResult.conclusion.replace(/_/g, " ").toUpperCase(),
+                  stockResult.conclusion.startsWith("strong_buy") ? "#10b981" : stockResult.conclusion === "buy" ? "#059669" : stockResult.conclusion === "hold" ? "#eab308" : "#ef4444",
+                  stockResult.conclusion.startsWith("strong_buy") ? "rgba(16,185,129,0.15)" : stockResult.conclusion === "buy" ? "rgba(5,150,105,0.12)" : stockResult.conclusion === "hold" ? "rgba(234,179,8,0.12)" : "rgba(239,68,68,0.12)",
+                ],
+                [
+                  "Güncünlük Fiyat",
+                  `$ ${stockResult.price_history[stockResult.price_history.length - 1]?.close?.toFixed(2) ?? "—"}`,
+                  "#22d3ee",
+                  "rgba(34,211,238,0.12)",
+                ],
+                [
+                  "MA20 Sapma",
+                  stockResult.bias_pct !== null ? `${stockResult.bias_pct > 0 ? "+" : ""}${stockResult.bias_pct}%` : "—",
+                  stockResult.bias_pct !== null ? (stockResult.bias_pct < -5 ? "#22c55e" : stockResult.bias_pct > 5 ? "#ef4444" : "#eab308") : "#64748b",
+                  stockResult.bias_pct !== null ? (stockResult.bias_pct < -5 ? "rgba(34,197,94,0.12)" : stockResult.bias_pct > 5 ? "rgba(239,68,68,0.12)" : "rgba(234,179,8,0.10)") : "rgba(100,116,139,0.08)",
+                ],
+                [
+                  "Pozisyon K/Z",
+                  stockResult.position_pl ? `${stockResult.position_pl.pl >= 0 ? "+" : ""}$${stockResult.position_pl.pl.toFixed(0)}` : "Pozisyon Yok",
+                  stockResult.position_pl ? (stockResult.position_pl.pl >= 0 ? "#22c55e" : "#ef4444") : "#64748b",
+                  stockResult.position_pl ? (stockResult.position_pl.pl >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)") : "rgba(100,116,139,0.08)",
+                ],
+              ].map(([label, value, color, bg]) => (
+                <div
+                  key={label as string}
+                  className="rounded-xl p-4 border border-white/5 text-center transition-all hover:border-white/10"
+                  style={{ backgroundColor: bg as string }}
+                >
+                  <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-2 uppercase">{label}</div>
+                  <div className="text-base sm:text-lg font-bold font-mono tracking-tight" style={{ color: color as string }}>
+                    {value}
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* Küresel Makro card grid — tablo yerine */}
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">🌍 Küresel Makro</span>
+            {/* ── Row 2: Veri Izgarası (4 score cards + 4 veri cards) ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Skor kartları — gradient bar */}
+              {([
+                ["📊 Fundamental", stockResult.scores.fundamental, "#06b6d4", "rgba(6,182,212,0.10)"],
+                ["💬 Sentiment", stockResult.scores.sentiment, "#a855f7", "rgba(168,85,247,0.10)"],
+                ["⚠️ Risk", stockResult.scores.risk, "#f97316", "rgba(249,115,22,0.10)"],
+                ["⭐ Composite", stockResult.scores.composite, "#22c55e", "rgba(34,197,94,0.10)"],
+              ] as const).map(([label, val, accent, bg]) => {
+                const v = val ?? null;
+                const hasVal = v !== null && v !== undefined;
+                const barColor = hasVal ? (v! >= 60 ? "#22c55e" : v! >= 40 ? "#eab308" : "#ef4444") : "#475569";
+                return (
+                  <div key={label} className="rounded-xl p-4 border border-white/5 transition-all hover:border-white/10" style={{ backgroundColor: bg }}>
+                    <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-2 uppercase">{label}</div>
+                    <div className="flex items-baseline gap-1 mb-3">
+                      <span className="text-2xl font-bold font-mono" style={{ color: hasVal ? barColor : "#64748b" }}>
+                        {hasVal ? v!.toFixed(0) : "—"}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">/100</span>
+                    </div>
+                    {hasVal ? (
+                      <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(Math.max(v!, 0), 100)}%`,
+                            background: `linear-gradient(90deg, ${barColor}88, ${barColor})`,
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-2 rounded-full bg-slate-800/50" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Row 3: PE / Volatilite / Max DD / Momentum ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                ["PE Oranı", stockResult.markdown.match(/PE oranı\s*\|?\s*([\d.]+)/)?.[1] || null, "#06b6d4", "rgba(6,182,212,0.10)", "📈"],
+                ["Volatilite (Yıllık)", stockResult.markdown.match(/Volatilite.*?\|?\s*([\d.]+)/)?.[1] || null, "#a855f7", "rgba(168,85,247,0.10)", "📊"],
+                ["Max Drawdown", stockResult.markdown.match(/Max drawdown.*?\|?\s*([\d.-]+)/)?.[1] || null, "#f97316", "rgba(249,115,22,0.10)", "📉"],
+                ["Momentum", stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1] || null,
+                  (() => { const m = stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1]; return m ? (parseFloat(m) > 0 ? "#22c55e" : "#ef4444") : "#64748b"; })(),
+                  (() => { const m = stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1]; return m ? (parseFloat(m) > 0 ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)") : "rgba(100,116,139,0.08)"; })(),
+                  "🚀"],
+              ].map(([label, val, color, bg, icon]) => (
+                <div
+                  key={label as string}
+                  className="rounded-xl p-4 border border-white/5 text-center transition-all hover:border-white/10"
+                  style={{ backgroundColor: bg as string }}
+                >
+                  <div className="text-lg mb-1">{icon}</div>
+                  <div className="text-[10px] font-mono tracking-wider text-slate-400 mb-1.5 uppercase">{label}</div>
+                  <div className="text-xl font-bold font-mono" style={{ color: color as string }}>
+                    {val ? (label === "PE Oranı" ? val : label === "Volatilite (Yıllık)" ? `%${val}` : label === "Max Drawdown" ? `%${val}` : `%${val}`) : "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Row 4: 🌍 Küresel Makro (8 göstergeli card grid) ── */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">🌍</span>
+                <span className="text-[11px] font-mono font-bold tracking-wider text-cyan-400 uppercase">Küresel Makro</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {stockResult.macro_indicators?.map((m) => {
                   const ch = m.change_pct;
                   const isUp = ch !== null && ch > 0;
                   const isDown = ch !== null && ch < 0;
                   const isVIX = m.ticker === "^VIX";
-                  // VIX: düşüş=iyi, yükseliş=kötü
                   const sentimentColor = m.sentiment === "bullish" ? "#22c55e" : m.sentiment === "bearish" ? "#ef4444" : "#64748b";
+                  const sentimentBg = m.sentiment === "bullish" ? "rgba(34,197,94,0.10)" : m.sentiment === "bearish" ? "rgba(239,68,68,0.10)" : "rgba(100,116,139,0.06)";
                   return (
-                    <div key={m.ticker} className="rounded-lg p-2.5 border border-white/5 flex flex-col justify-between" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-mono tracking-wider text-slate-500">{m.label}</span>
-                        <span className="text-[10px] font-mono font-bold" style={{ color: sentimentColor }}>
+                    <div
+                      key={m.ticker}
+                      className="rounded-xl p-3.5 border border-white/5 transition-all hover:border-white/10 flex flex-col gap-2"
+                      style={{ backgroundColor: sentimentBg }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono font-semibold text-white tracking-tight">{m.label}</span>
+                        <span className="text-[14px]" style={{ color: sentimentColor }}>
                           {m.sentiment === "bullish" ? "▲" : m.sentiment === "bearish" ? "▼" : "→"}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-sm font-bold font-mono text-white">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-lg font-bold font-mono text-white">
                           {m.price !== null ? `${m.price.toFixed(1)}` : "—"}
                         </span>
                         {ch !== null && (
-                          <span className={`ml-1.5 text-[10px] font-mono font-semibold ${(isVIX ? !isUp : isUp) ? "text-emerald-400" : "text-rose-400"}`}>
+                          <span
+                            className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded-md"
+                            style={{
+                              color: (isVIX ? !isUp : isUp) ? "#22c55e" : "#ef4444",
+                              backgroundColor: (isVIX ? !isUp : isUp) ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                            }}
+                          >
                             {isVIX && isDown ? "+" : isVIX && isUp ? "-" : isUp ? "+" : ""}{isVIX ? -ch.toFixed(1) : ch.toFixed(1)}%
                           </span>
                         )}
@@ -437,57 +538,79 @@ export default function SkillPanel() {
               </div>
             </div>
 
-            {/* Piyasa değerlendirmesi — makro veriden çıkar */}
-            {(() => {
-              const vix = stockResult.macro_indicators?.find(m => m.ticker === "^VIX");
-              const sp500 = stockResult.macro_indicators?.find(m => m.ticker === "^GSPC");
-              const vixVal = vix?.price;
-              const spCh = sp500?.change_pct;
-              let mode = "Belirsiz";
-              let modeColor = "#64748b";
-              if (vixVal !== null && vixVal !== undefined) {
-                if (vixVal < 15) { mode = "🟢 Risk-On (Sakin Piyasa)"; modeColor = "#22c55e"; }
-                else if (vixVal < 20) { mode = "🟡 Normal"; modeColor = "#eab308"; }
-                else if (vixVal < 30) { mode = "🟠 Temkinli"; modeColor = "#f97316"; }
-                else { mode = "🔴 Panik Modu"; modeColor = "#ef4444"; }
-              }
-              return (
-                <div className="rounded-lg px-3 py-2 border border-white/5 flex items-center justify-between" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
-                  <span className="text-[10px] font-mono tracking-wider text-slate-500">PİYASA MODU</span>
-                  <span className="text-xs font-bold font-mono" style={{ color: modeColor }}>{mode}</span>
-                </div>
-              );
-            })()}
-
-            {/* Sayısal veri ızgarası — PE/Volatilite/DD/Momentum */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5 mb-4">
-              {[
-                ["PE Oranı", stockResult.markdown.match(/PE oranı\s*\|?\s*([\d.]+)/)?.[1] || null, "#06b6d4"],
-                ["Volatilite (Yıllık)", stockResult.markdown.match(/Volatilite.*?\|?\s*([\d.]+)/)?.[1] || null, "#a855f7"],
-                ["Max DD %", stockResult.markdown.match(/Max drawdown.*?\|?\s*([\d.-]+)/)?.[1] || null, "#f97316"],
-                ["Momentum %", stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1] || null,
-                  (() => { const m = stockResult.markdown.match(/Momentum.*?\|?\s*([\d.-]+)/)?.[1]; return m ? (parseFloat(m) > 0 ? "#22c55e" : "#ef4444") : "#64748b"; })()],
-              ].map(([label, val, color]) => (
-                <div key={label as string} className="rounded-lg p-2 border border-white/5 text-center" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
-                  <div className="text-[10px] font-mono text-slate-500 mb-0.5">{label}</div>
-                  <div className="text-xs font-bold font-mono" style={{ color: color as string }}>
-                    {val || "—"}
+            {/* ── Row 5: Piyasa Modu + Kontrol Listesi ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Piyasa Modu — canlı renk bar */}
+              {(() => {
+                const vix = stockResult.macro_indicators?.find(m => m.ticker === "^VIX");
+                const vixVal = vix?.price;
+                let mode = "Belirsiz";
+                let modeColor = "#64748b";
+                let modeBg = "rgba(100,116,139,0.10)";
+                let modeGradient = "linear-gradient(135deg, rgba(100,116,139,0.15), rgba(100,116,139,0.05))";
+                if (vixVal !== null && vixVal !== undefined) {
+                  if (vixVal < 15) {
+                    mode = "Risk-On (Sakin Piyasa)";
+                    modeColor = "#22c55e";
+                    modeBg = "rgba(34,197,94,0.10)";
+                    modeGradient = "linear-gradient(135deg, rgba(34,197,94,0.18), rgba(16,185,129,0.05))";
+                  } else if (vixVal < 20) {
+                    mode = "Normal Piyasa";
+                    modeColor = "#eab308";
+                    modeBg = "rgba(234,179,8,0.10)";
+                    modeGradient = "linear-gradient(135deg, rgba(234,179,8,0.18), rgba(250,204,21,0.05))";
+                  } else if (vixVal < 30) {
+                    mode = "Temkinli";
+                    modeColor = "#f97316";
+                    modeBg = "rgba(249,115,22,0.10)";
+                    modeGradient = "linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,146,60,0.05))";
+                  } else {
+                    mode = "Panik Modu";
+                    modeColor = "#ef4444";
+                    modeBg = "rgba(239,68,68,0.10)";
+                    modeGradient = "linear-gradient(135deg, rgba(239,68,68,0.18), rgba(248,113,113,0.05))";
+                  }
+                }
+                return (
+                  <div className="rounded-xl p-4 border border-white/5 flex flex-col gap-3" style={{ background: modeGradient }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">
+                        {vixVal !== null && vixVal !== undefined ? (vixVal < 15 ? "🟢" : vixVal < 20 ? "🟡" : vixVal < 30 ? "🟠" : "🔴") : "⚪"}
+                      </span>
+                      <span className="text-[10px] font-mono tracking-wider text-slate-400 uppercase">Piyasa Değerlendirmesi</span>
+                    </div>
+                    <div className="text-xl font-bold font-mono tracking-tight" style={{ color: modeColor }}>
+                      {mode}
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-400">
+                      VIX: {vixVal !== null && vixVal !== undefined ? vixVal.toFixed(1) : "—"} puan
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                );
+              })()}
 
-            {/* Markdown — tablo ve liste halinde */}
-            <div className="prose prose-invert prose-sm max-w-none
-              prose-headings:text-cyan-300 prose-headings:font-mono prose-headings:tracking-wider prose-headings:text-xs prose-headings:uppercase prose-headings:mt-3 prose-headings:mb-1
-              prose-p:text-slate-300 prose-p:text-xs prose-p:font-mono
-              prose-table:text-[10px] prose-table:font-mono
-              prose-thead:text-slate-400 prose-tbody:text-slate-200
-              prose-strong:text-white
-              prose-li:text-slate-300 prose-li:text-[10px] prose-li:font-mono">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {stockResult.markdown}
-              </ReactMarkdown>
+              {/* Kontrol Listesi */}
+              <div className="rounded-xl p-4 border border-white/5 flex flex-col gap-3" style={{ backgroundColor: "rgba(168,85,247,0.06)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">✅</span>
+                  <span className="text-[10px] font-mono tracking-wider text-purple-400 uppercase">Kontrol Listesi</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    ["Bias Rule", stockResult.bias_pct !== null && stockResult.bias_pct > 5 ? "⚠ Buy Engellendi" : "✓ Geçti", stockResult.bias_pct !== null && stockResult.bias_pct > 5 ? "#ef4444" : "#22c55e"],
+                    ["MA20 Sapma", stockResult.bias_pct !== null ? `%${stockResult.bias_pct.toFixed(1)}` : "—", stockResult.bias_pct !== null ? (stockResult.bias_pct < -5 ? "#22c55e" : "#eab308") : "#64748b"],
+                    ["Pozisyon", stockResult.position_pl ? "Mevcut (P/L hesaplandı)" : "Boş — her iki öneri", "#06b6d4"],
+                    ["Eksik Veri", stockResult.data_missing.length > 0 ? `${stockResult.data_missing.length} eksik` : "Tam", stockResult.data_missing.length > 0 ? "#eab308" : "#22c55e"],
+                  ].map(([label, val, color]) => (
+                    <div key={label as string} className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono text-slate-400">{label}</span>
+                      <span className="text-[11px] font-mono font-semibold" style={{ color: color as string }}>
+                        {val}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
