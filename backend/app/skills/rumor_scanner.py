@@ -138,6 +138,8 @@ async def _classify_headlines(
     headlines: list[dict],
     ticker: Optional[str] = None,
     model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
 ) -> list[dict]:
     """LLM ile haber başlıklarını 5 tipe sınıflandır.
 
@@ -187,6 +189,8 @@ Kurallar:
             temperature=0.2,
             max_tokens=2048,
             model=model,
+            api_key=api_key,
+            api_base=api_base,
         )
     except Exception as e:
         logger.warning("rumor_scanner: LLM classify failed (%s) — fallback to keyword+VADER", e)
@@ -249,10 +253,17 @@ def _parse_ts(ts) -> Optional[datetime]:
 
 # --- Async run wrapper ---
 
-async def run(query: Optional[str] = None, db=None, model: Optional[str] = None) -> dict:
+async def run(
+    query: Optional[str] = None,
+    db=None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
+) -> dict:
     """Rumor taraması yürüt — yfinance news + web search + LLM/VADER sınıflandırma.
 
     model: Ayarlar'dan seçilen rumor_model. None → generate() kendi default'unu kullanır.
+    api_key/api_base: DB kayıtlı provider credentials (NVIDIA NIM vb).
     """
     ticker = query.upper().strip() if query else None
     if not ticker:
@@ -268,7 +279,7 @@ async def run(query: Optional[str] = None, db=None, model: Optional[str] = None)
     for t in targets:
         news = await asyncio.to_thread(safe_ticker_news, t)
         if news:
-            signals = await _classify_headlines(news, ticker=t, model=model)
+            signals = await _classify_headlines(news, ticker=t, model=model, api_key=api_key, api_base=api_base)
             all_signals.extend(signals)
 
         # --- Web search zenginleştirme (anahtarsız kaynaklar) ---
@@ -279,7 +290,7 @@ async def run(query: Optional[str] = None, db=None, model: Optional[str] = None)
                 limit_per_source=5,
             )
             if web_hits:
-                web_signals = await _classify_headlines(web_hits, ticker=t, model=model)
+                web_signals = await _classify_headlines(web_hits, ticker=t, model=model, api_key=api_key, api_base=api_base)
                 all_signals.extend(web_signals)
         except Exception as e:
             logger.debug("rumor_scanner web_search %s failed: %s", t, e)

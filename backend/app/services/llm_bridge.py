@@ -55,8 +55,14 @@ async def generate(
     model: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
 ) -> str:
-    """LiteLLM üzerinden tamamlama."""
+    """LiteLLM üzerinden tamamlama.
+
+    api_key / api_base: DB-kayıtlı provider için credentials (NVIDIA NIM vb).
+    Verilmezse litellm env var'lara bakar.
+    """
     model = model or get_default_model()
     if model is None:
         raise RuntimeError("No LLM configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, or OLLAMA_MODEL + run Ollama.")
@@ -76,12 +82,18 @@ async def generate(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    response = await litellm.acompletion(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    call_kwargs: dict = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if api_key:
+        call_kwargs["api_key"] = api_key
+    if api_base:
+        call_kwargs["api_base"] = api_base
+
+    response = await litellm.acompletion(**call_kwargs)
     return response.choices[0].message.content
 
 

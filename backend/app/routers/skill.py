@@ -39,8 +39,19 @@ async def scan_rumors(req: RumorScanRequest, db: Session = Depends(get_db)):
     """传闻扫描 — haber sinyal tarama. Ayarlar'daki rumor_model kullanılır."""
     from app.services.admin_service import get_setting
     from app.services.llm_bridge import get_default_model
+    from app.models.llm import LLMProvider
+
     rumor_model = get_setting(db, "rumor_model", "") or get_default_model()
-    return await rumor_scanner.run(req.query, db=db, model=rumor_model)
+    # Provider credentials — rumor_model'deki provider slug'dan DB kaydını bul
+    api_key = None
+    api_base = None
+    if rumor_model and "/" in rumor_model:
+        provider_slug = rumor_model.split("/")[0]
+        provider = db.query(LLMProvider).filter(LLMProvider.slug == provider_slug).first()
+        if provider:
+            api_key = provider.get_decrypted_api_key() or None
+            api_base = provider.base_url or None
+    return await rumor_scanner.run(req.query, db=db, model=rumor_model, api_key=api_key, api_base=api_base)
 
 
 @router.post("/analyze-kline", response_model=KlineResult)

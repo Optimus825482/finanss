@@ -15,13 +15,16 @@ class TestStockUniverse:
             assert t.endswith(".IS"), f"BIST ticker {t} .IS ile bitmiyor"
 
     def test_no_cross_exchange_duplicates(self):
-        """Aynı ticker iki borsada olmamalı (cross-list hariç)."""
+        """Aynı ticker iki borsada olmamalı (cross-list hariç).
+        DOWJONES index olduğu için NYSE ile çakışması normaldir."""
         seen = {}
         for slug, tickers in STOCK_UNIVERSE.items():
             for t in tickers:
-                if t in seen:
-                    # Sadece gerçekten farklı borsalardaysa raporla
-                    assert seen[t] == slug, f"{t} hem {seen[t]} hem {slug} içinde"
+                if t in seen and seen[t] != slug:
+                    # Allow DOWJONES overlap (index constituents trade on NYSE/NASDAQ)
+                    if slug == "DOWJONES" or seen[t] == "DOWJONES":
+                        continue
+                    assert False, f"{t} hem {seen[t]} hem {slug} içinde"
                 seen[t] = slug
 
     def test_bist_no_duplicates(self):

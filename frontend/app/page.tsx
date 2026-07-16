@@ -36,7 +36,6 @@ export default function Dashboard() {
       setError(null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
-      // Rapor yok olabilir (404) — kullanıcıya sadece bağlantı hatası göster
       if (!msg.includes("404")) setError(`Rapor alınamadı: ${msg}`);
     }
   }, []);
@@ -104,189 +103,146 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-    <main className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
-      {/* Hero */}
-	      <div
-	        className="scanline rounded-sm px-6 py-5 mb-6 flex items-center justify-between"
-	        style={{
-	          backgroundColor: "var(--term-panel)",
-	          border: "1px solid var(--term-border)",
-	        }}
-      >
-        <div>
-          <div
-            className="font-mono text-[11px] tracking-[0.25em] mb-1"
-            style={{ color: "var(--term-amber)" }}
-          >
-            ORBIS FINANCE ANALYZE TEAM · CANLI
-          </div>
-          <h1
-            className="font-mono text-2xl font-semibold"
-            style={{ color: "var(--term-text)" }}
-          >
-            ORBIS FINAI
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--term-muted)" }}>
-            AI-Powered Araştırma · 5 ajan · günlük otomatik tarama ·{" "}
-            {report
-              ? new Date(report.created_at).toLocaleString("tr-TR")
-              : "henüz rapor yok"}
-          </p>
-        </div>
-        <button
-          onClick={handleGenerate}
-          disabled={generating || status?.running}
-          className="font-mono text-xs tracking-wider px-5 py-3 rounded-sm transition-none disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            border: "1px solid var(--term-amber)",
-            color: "var(--term-amber)",
-          }}
+      <main className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
+        {/* Hero */}
+        <div
+          className="scanline rounded-sm px-6 py-5 mb-6 flex items-center justify-between"
+          style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}
         >
-          {status?.running ? "PIPELINE ÇALIŞIYOR…" : "▶ RAPORU ŞİMDİ ÜRET"}
-        </button>
-      </div>
-
-      {error && (
-		      <div
-		          className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
-		          style={{
-		            backgroundColor: "rgba(220, 38, 38, 0.1)",
-		            color: "var(--term-red)",
-		            border: "1px solid var(--term-red)",
-		          }}
-	        >
-	          {error}
-	        </div>
-	      )}
-
-	      {/* Initial loading */}
-	      {initialLoading && !error && (
-	        <div className="mb-6 rounded-sm p-8 text-center font-mono text-sm" style={{ color: "var(--term-muted)", border: "1px dashed var(--term-border)" }}>
-	          Veriler yükleniyor…
-	        </div>
-	      )}
-
-      {!initialLoading && (
-        <div>
-      {/* Sinyal zinciri */}
-      {status && (
-        <div className="mb-6">
-          <SignalChain agents={status.agents} />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Ana içerik */}
-        <div className="lg:col-span-3 space-y-6">
-	          {report && (
-	            <div
-	              className="rounded-sm p-4"
-	              style={{
-	                backgroundColor: "var(--term-panel)",
-	                border: "1px solid var(--term-border)",
-	              }}
-            >
-              <div
-                className="text-[11px] tracking-[0.2em] font-mono mb-2"
-                style={{ color: "var(--term-muted)" }}
-              >
-                GÜNLÜK ÖZET
-              </div>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--term-text)" }}
-              >
-                {report.summary}
-              </p>
-              <div
-                className="text-[10px] font-mono mt-2"
-                style={{ color: "var(--term-muted)" }}
-              >
-                {report.candidates_scanned} sembol tarandı · {report.picks.length} öneri
-              </div>
+          <div>
+            <div className="font-mono text-[11px] tracking-[0.25em] mb-1" style={{ color: "var(--term-amber)" }}>
+              ORBIS FINANCE ANALYZE TEAM · CANLI
             </div>
-          )}
-
-          {report && report.picks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {report.picks.map((pick, idx) => (
-                <StockCard key={pick.ticker} pick={pick} rank={idx + 1} showPredict={false} />
-              ))}
-            </div>
-          ) : (
-            !status?.running && (
-              <div
-                className="border border-dashed rounded-sm p-10 text-center font-mono text-sm"
-                style={{
-                  borderColor: "var(--term-border)",
-                  color: "var(--term-muted)",
-                }}
-              >
-                Henüz rapor üretilmedi. "RAPORU ŞİMDİ ÜRET" ile ilk taramayı başlat.
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Geçmiş */}
-        <div className="lg:col-span-1">
-	        <div
-	            className="rounded-sm p-4 sticky top-20"
-	            style={{
-	              backgroundColor: "var(--term-panel)",
-	              border: "1px solid var(--term-border)",
-	            }}
+            <h1 className="font-mono text-2xl font-semibold" style={{ color: "var(--term-text)" }}>
+              ORBIS FINAI
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "var(--term-muted)" }}>
+              AI-Powered Araştırma · 5 ajan · günlük otomatik tarama ·{" "}
+              {report ? new Date(report.created_at).toLocaleString("tr-TR") : "henüz rapor yok"}
+            </p>
+          </div>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || status?.running}
+            className="font-mono text-xs tracking-wider px-5 py-3 rounded-sm transition-none disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}
           >
-            <div
-              className="text-[11px] tracking-[0.2em] font-mono mb-3"
-              style={{ color: "var(--term-muted)" }}
-            >
-              RAPOR GEÇMİŞİ
-            </div>
-            <div className="space-y-1">
-              {history.length === 0 && (
+            {status?.running ? "PIPELINE ÇALIŞIYOR…" : "▶ RAPORU ŞİMDİ ÜRET"}
+          </button>
+        </div>
+
+        {error && (
+          <div
+            className="text-sm px-4 py-3 rounded-sm mb-6 font-mono"
+            style={{
+              backgroundColor: "rgba(220, 38, 38, 0.1)",
+              color: "var(--term-red)",
+              border: "1px solid var(--term-red)",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Initial loading */}
+        {initialLoading && !error && (
+          <div className="mb-6 rounded-sm p-8 text-center font-mono text-sm" style={{ color: "var(--term-muted)", border: "1px dashed var(--term-border)" }}>
+            Veriler yükleniyor…
+          </div>
+        )}
+
+        {/* Sinyal zinciri */}
+        {!initialLoading && status && (
+          <div className="mb-6">
+            <SignalChain agents={status.agents} />
+          </div>
+        )}
+
+        {!initialLoading && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Ana içerik */}
+            <div className="lg:col-span-3 space-y-6">
+              {report && (
                 <div
-                  className="text-xs font-mono"
-                  style={{ color: "var(--term-muted)" }}
+                  className="rounded-sm p-4"
+                  style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}
                 >
-                  Kayıt yok
+                  <div className="text-[11px] tracking-[0.2em] font-mono mb-2" style={{ color: "var(--term-muted)" }}>
+                    GÜNLÜK ÖZET
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--term-text)" }}>
+                    {report.summary}
+                  </p>
+                  <div className="text-[10px] font-mono mt-2" style={{ color: "var(--term-muted)" }}>
+                    {report.candidates_scanned} sembol tarandı · {report.picks.length} öneri
+                  </div>
                 </div>
               )}
-              {history.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => loadReport(h.id)}
-                  className="w-full text-left px-2 py-2 rounded-sm font-mono text-xs transition-none"
-                  style={{
-                    backgroundColor:
-                      report?.id === h.id ? "var(--term-border)" : "transparent",
-                    color:
-                      report?.id === h.id
-                        ? "var(--term-amber)"
-                        : "var(--term-text)",
-                  }}
-                >
-                  <div>
-                    {new Date(h.created_at).toLocaleDateString("tr-TR")}
+
+              {report && report.picks.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {report.picks.map((pick, idx) => (
+                    <StockCard key={pick.ticker} pick={pick} rank={idx + 1} showPredict={false} />
+                  ))}
+                </div>
+              ) : (
+                !status?.running && !initialLoading && (
+                  <div
+                    className="border border-dashed rounded-sm p-10 text-center font-mono text-sm"
+                    style={{ borderColor: "var(--term-border)", color: "var(--term-muted)" }}
+                  >
+                    Henüz rapor üretilmedi. "RAPORU ŞİMDİ ÜRET" ile ilk taramayı başlat.
                   </div>
-                  <div style={{ color: "var(--term-muted)" }}>
-                    {h.top_ticker || "—"} · {h.candidates_scanned} sembol
-                  </div>
-                </button>
-              ))}
+                )
+              )}
+            </div>
+
+            {/* Geçmiş */}
+            <div className="lg:col-span-1">
+              <div
+                className="rounded-sm p-4 sticky top-20"
+                style={{ backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}
+              >
+                <div className="text-[11px] tracking-[0.2em] font-mono mb-3" style={{ color: "var(--term-muted)" }}>
+                  RAPOR GEÇMİŞİ
+                </div>
+                <div className="space-y-1">
+                  {history.length === 0 && (
+                    <div className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
+                      Kayıt yok
+                    </div>
+                  )}
+                  {history.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => loadReport(h.id)}
+                      className="w-full text-left px-2 py-2 rounded-sm font-mono text-xs transition-none"
+                      style={{
+                        backgroundColor: report?.id === h.id ? "var(--term-border)" : "transparent",
+                        color: report?.id === h.id ? "var(--term-amber)" : "var(--term-text)",
+                      }}
+                    >
+                      <div>{new Date(h.created_at).toLocaleDateString("tr-TR")}</div>
+                      <div style={{ color: "var(--term-muted)" }}>
+                        {h.top_ticker || "—"} · {h.candidates_scanned} sembol
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      <WatchlistWidget watchlist={watchlist} />
-
-      {/* Otonom Ajan */}
-      <div className="mt-6">
-        <AgentPortfolioCard />
-      </div>
-    </main>
+        {!initialLoading && (
+          <>
+            <WatchlistWidget watchlist={watchlist} />
+            <div className="mt-6">
+              <AgentPortfolioCard />
+            </div>
+          </>
+        )}
+      </main>
     </ErrorBoundary>
-    </div>)}
   );
 }
