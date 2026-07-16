@@ -73,24 +73,24 @@ export default function PortfoyPage() {
           <div className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>Yükleniyor…</div>
         ) : (
           <div className="grid grid-cols-4 gap-2 text-center">
-            <div>
-              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.cash.toFixed(0)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>POZİSYON</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{p.position_count}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.total_market_value.toFixed(0)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                {p.total_pl >= 0 ? "+" : ""}{p.total_pl.toFixed(0)}
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${(p.cash ?? 0).toFixed(0)}</div>
               </div>
-            </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>POZİSYON</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{p.position_count ?? 0}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_market_value ?? 0).toFixed(0)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: (p.total_pl ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}${(p.total_pl ?? 0).toFixed(0)}
+                </div>
+              </div>
           </div>
         )}
       </div>
@@ -149,26 +149,26 @@ export default function PortfoyPage() {
             <div className="grid grid-cols-5 gap-3 text-center">
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.cash.toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.cash ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>MALİYET</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.total_cost.toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_cost ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA DEĞERİ</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${p.total_market_value.toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_market_value ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  {p.total_pl >= 0 ? "+" : ""}${p.total_pl.toFixed(2)}
+                <div className="font-mono text-lg font-semibold" style={{ color: (p.total_pl ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}${(p.total_pl ?? 0).toFixed(2)}
                 </div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L %</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  {p.total_pl_pct >= 0 ? "+" : ""}{p.total_pl_pct.toFixed(1)}%
+                <div className="font-mono text-lg font-semibold" style={{ color: (p.total_pl_pct ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {(p.total_pl_pct ?? 0) >= 0 ? "+" : ""}{(p.total_pl_pct ?? 0).toFixed(1)}%
                 </div>
               </div>
             </div>

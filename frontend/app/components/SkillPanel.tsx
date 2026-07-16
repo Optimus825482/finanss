@@ -312,7 +312,8 @@ export default function SkillPanel() {
             )}
 
             {stockResult.price_history.length > 0 && (() => {
-              const last = stockResult.price_history[stockResult.price_history.length - 1].close;
+              const last = stockResult.price_history[stockResult.price_history.length - 1]?.close;
+              if (last == null) return null;
               const stop = last * 0.92;
               const target = last * 1.10;
               const range = target - stop;

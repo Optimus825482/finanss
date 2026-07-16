@@ -226,13 +226,19 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         hist_tail = history.tail(60)
         for idx, row in hist_tail.iterrows():
             try:
+                o = row.get("Open"); h = row.get("High"); l = row.get("Low"); c = row.get("Close")
+                # NaN/None koruması — geçersiz satırı at
+                if o is None or pd.isna(o): o = None
+                if h is None or pd.isna(h): h = None
+                if l is None or pd.isna(l): l = None
+                if c is None or pd.isna(c): continue  # close yoksa tüm satır at
                 price_history.append({
                     "date": idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx),
-                    "open": round(float(row.get("Open", 0)), 2),
-                    "high": round(float(row.get("High", 0)), 2),
-                    "low": round(float(row.get("Low", 0)), 2),
-                    "close": round(float(row.get("Close", 0)), 2),
-                    "volume": int(row.get("Volume", 0)) if row.get("Volume") is not None else 0,
+                    "open": round(float(o) if o is not None else float(c), 2),
+                    "high": round(float(h) if h is not None else float(c), 2),
+                    "low": round(float(l) if l is not None else float(c), 2),
+                    "close": round(float(c), 2),
+                    "volume": int(row.get("Volume", 0)) if row.get("Volume") is not None and not pd.isna(row.get("Volume")) else 0,
                 })
             except (ValueError, TypeError):
                 continue
