@@ -168,11 +168,11 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     """
     ticker = ticker.upper().strip()
 
-    # 1. Pipeline: stage1 + stage2
-    stage1 = await asyncio.to_thread(stage1_prescreen, [ticker])
+    # 1. Pipeline: stage1 + stage2 (her ikisi async — to_thread değil direkt await)
+    stage1 = await stage1_prescreen([ticker])
     candidate: dict = {}
     if stage1:
-        stage2 = await asyncio.to_thread(stage2_deep_analysis, stage1)
+        stage2 = await stage2_deep_analysis(stage1)
         if stage2:
             candidate = stage2[0]
 

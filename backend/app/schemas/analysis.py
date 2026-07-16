@@ -47,7 +47,7 @@ class DividendResult(BaseModel):
     ticker: str
     safety_score: float = Field(..., ge=0, le=100)
     income_rating: Literal["excellent", "good", "moderate", "poor"]
-    payout_status: Literal["safe", "moderate", "high", "unsustainable"]
+    payout_status: Literal["safe", "moderate", "high", "unsustainable", "unknown"]
     payout_ratio: Optional[float] = None
     cagr_5y: Optional[float] = Field(None, description="5 yıllık temettü CAGR %")
     consecutive_growth_years: Optional[int] = None
