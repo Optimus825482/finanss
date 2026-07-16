@@ -267,7 +267,7 @@ export const api = {
   // ── Sistem Sıfırlama (admin) — portföy-bilinçli ──
   resetPortfolio: (portfolioSlug?: string) =>
     fetch(`${API_BASE}/api/admin/reset/portfolio${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, { method: "POST" })
-      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number; portfolio_slug?: string }>()),
+      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number; portfolio_slug?: string }>),
   resetReports: () =>
     fetch(`${API_BASE}/api/admin/reset/reports`, { method: "POST" })
       .then(j<{ deleted: Record<string, number> }>),
