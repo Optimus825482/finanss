@@ -137,6 +137,7 @@ def _classify_with_vader(title: str, text: str = "") -> tuple[str, str]:
 async def _classify_headlines(
     headlines: list[dict],
     ticker: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> list[dict]:
     """LLM ile haber başlıklarını 5 tipe sınıflandır.
 
@@ -185,6 +186,7 @@ Kurallar:
             system="Finansal haber sınıflandırma asistanısın. Sadece verilen veriyi kullan, uydurma.",
             temperature=0.2,
             max_tokens=2048,
+            model=model,
         )
     except Exception as e:
         logger.warning("rumor_scanner: LLM classify failed (%s) — fallback to keyword+VADER", e)
@@ -247,10 +249,10 @@ def _parse_ts(ts) -> Optional[datetime]:
 
 # --- Async run wrapper ---
 
-async def run(query: Optional[str] = None, db=None) -> dict:
-    """Rumor taraması yürüt — yfinance news + LLM sınıflandırma.
+async def run(query: Optional[str] = None, db=None, model: Optional[str] = None) -> dict:
+    """Rumor taraması yürüt — yfinance news + web search + LLM/VADER sınıflandırma.
 
-    query: ticker (örn "AAPL") veya None (piyasa geneli — sembol eşleşmeyenleri at).
+    model: Ayarlar'dan seçilen rumor_model. None → generate() kendi default'unu kullanır.
     """
     ticker = query.upper().strip() if query else None
     if not ticker:
@@ -266,7 +268,7 @@ async def run(query: Optional[str] = None, db=None) -> dict:
     for t in targets:
         news = await asyncio.to_thread(safe_ticker_news, t)
         if news:
-            signals = await _classify_headlines(news, ticker=t)
+            signals = await _classify_headlines(news, ticker=t, model=model)
             all_signals.extend(signals)
 
         # --- Web search zenginleştirme (anahtarsız kaynaklar) ---
@@ -277,7 +279,7 @@ async def run(query: Optional[str] = None, db=None) -> dict:
                 limit_per_source=5,
             )
             if web_hits:
-                web_signals = await _classify_headlines(web_hits, ticker=t)
+                web_signals = await _classify_headlines(web_hits, ticker=t, model=model)
                 all_signals.extend(web_signals)
         except Exception as e:
             logger.debug("rumor_scanner web_search %s failed: %s", t, e)

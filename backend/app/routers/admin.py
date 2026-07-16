@@ -182,6 +182,25 @@ def api_get_vlm_config(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/rumor-config")
+def api_get_rumor_config(db: Session = Depends(get_db)):
+    """Rumor scanner için yapılandırılmış LLM modeli döndür.
+
+    SystemSettings 'rumor_model' key'inde liteLLM formatında model adı saklanır.
+    Yoksa llm_bridge.get_default_model() ile env var tabanlı model döner.
+    """
+    from app.services.admin_service import get_setting
+    from app.services.llm_bridge import get_default_model
+    rumor_model = get_setting(db, "rumor_model", "")
+    default_model = get_default_model()
+    return {
+        "rumor_model": rumor_model if rumor_model else default_model,
+        "configured": bool(rumor_model),
+        "is_default": not bool(rumor_model),
+        "default_model": default_model,
+    }
+
+
 class VLMModelIn(BaseModel):
     model: str  # liteLLM formatı: openai/gpt-4o-mini
 

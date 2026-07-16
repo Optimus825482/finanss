@@ -36,8 +36,11 @@ async def analyze_dividend(req: DividendAnalysisRequest, db: Session = Depends(g
 
 @router.post("/scan-rumors", response_model=RumorScanResult)
 async def scan_rumors(req: RumorScanRequest, db: Session = Depends(get_db)):
-    """传闻扫描 — haber sinyal tarama."""
-    return await rumor_scanner.run(req.query, db=db)
+    """传闻扫描 — haber sinyal tarama. Ayarlar'daki rumor_model kullanılır."""
+    from app.services.admin_service import get_setting
+    from app.services.llm_bridge import get_default_model
+    rumor_model = get_setting(db, "rumor_model", "") or get_default_model()
+    return await rumor_scanner.run(req.query, db=db, model=rumor_model)
 
 
 @router.post("/analyze-kline", response_model=KlineResult)

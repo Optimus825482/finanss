@@ -7,6 +7,7 @@ import ProviderForm from "./ProviderForm";
 import TranslationTab from "./TranslationTab";
 import PredictionTab from "./PredictionTab";
 import VLMTab from "./VLMTab";
+import RumorModelTab from "./RumorModelTab";
 import { api } from "../lib/api";
 
 interface Provider {
@@ -25,7 +26,7 @@ interface Model {
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function AyarlarPage() {
-  const [tab, setTab] = useState<"providers" | "translation" | "prediction" | "vlm" | "system">("providers");
+  const [tab, setTab] = useState<"providers" | "translation" | "prediction" | "vlm" | "rumor" | "system">("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [showProviderForm, setShowProviderForm] = useState(false);
@@ -158,6 +159,7 @@ export default function AyarlarPage() {
           ["translation", "ÇEVİRİ"],
           ["prediction", "ÖNGÖRÜ"],
           ["vlm", "VLM"],
+          ["rumor", "RUMOR"],
           ["system", "SİSTEM SIFIRLAMA"],
         ].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as any)}
@@ -207,6 +209,7 @@ export default function AyarlarPage() {
       {tab === "translation" && <TranslationTab />}
       {tab === "prediction" && <PredictionTab />}
       {tab === "vlm" && <VLMTab />}
+      {tab === "rumor" && <RumorModelTab />}
 
       {tab === "system" && (
         <div className="space-y-4">
