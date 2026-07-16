@@ -199,17 +199,21 @@ def _reset_portfolio_internal(db: Session) -> dict:
 
 
 def _reset_reports_internal(db: Session) -> dict:
-    """Raporlar + stock_picks + predictions sil.
+    """Raporlar + stock_picks + predictions + rapor-bağlantılı notifications sil.
 
-    Sıralama: stock_picks → predictions → reports (her ikisi report_id FK).
+    Sıralama: notifications (report_id FK) → stock_picks → predictions → reports.
+    notifications tablosundaki tüm satırlar silinir (report_id FK güvenliği).
     """
-    from app.models import StockPick, Prediction, Report
+    from app.models import StockPick, Prediction, Report, Notification
 
     counts = {
+        "notifications": db.query(Notification).count(),
         "stock_picks": db.query(StockPick).count(),
         "predictions": db.query(Prediction).count(),
         "reports": db.query(Report).count(),
     }
+    # FK sıralamasıyla sil
+    db.query(Notification).delete(synchronize_session=False)
     db.query(StockPick).delete(synchronize_session=False)
     db.query(Prediction).delete(synchronize_session=False)
     db.query(Report).delete(synchronize_session=False)
