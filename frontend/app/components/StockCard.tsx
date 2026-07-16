@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StockPick } from "../lib/api";
+import { StockPick, API_BASE, apiHeaders, api } from "../lib/api";
 
 function ScoreBar({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
@@ -17,8 +17,6 @@ function ScoreBar({ label, value, tone }: { label: string; value: number; tone: 
   );
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL;
-
 export default function StockCard({ pick, rank, showPredict }: { pick: StockPick; rank: number; showPredict?: boolean }) {
   const momentumPositive = pick.momentum_pct >= 0;
   const [predLoading, setPredLoading] = useState(false);
@@ -29,9 +27,8 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
   const handlePredict = async () => {
     setPredLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/predictions/${pick.ticker}`, { method: "POST" });
-      if (res.ok) setPrediction(await res.json());
-	    } catch (e) { console.warn("Failed to get prediction", e); }
+      setPrediction(await api.createPrediction(pick.ticker));
+    } catch (e) { console.warn("Failed to get prediction", e); }
     setPredLoading(false);
   };
 
@@ -86,7 +83,7 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
                   Adil: ${fairValue.fair_value} ({fairValue.margin_pct > 0 ? "+" : ""}{fairValue.margin_pct}%)
                 </span>
               </div>
-            : <button onClick={()=>{setFvLoading(true);fetch(`${API}/api/screener/${pick.ticker}/fair-value`).then(r=>r.json()).then(v=>{setFairValue(v);setFvLoading(false)})}} disabled={fvLoading}
+            : <button onClick={()=>{setFvLoading(true);fetch(`${API_BASE}/api/screener/${pick.ticker}/fair-value`,{headers:apiHeaders()}).then(r=>r.json()).then(v=>{setFairValue(v);setFvLoading(false)}).catch(()=>setFvLoading(false))}} disabled={fvLoading}
                 className="font-mono text-[10px] px-2.5 py-1 rounded-sm transition-none disabled:opacity-40"
                 style={{ border: "1px solid var(--term-amber-dim)", color: "var(--term-amber-dim)" }}>
                 {fvLoading ? "…" : "⚖ ADİL DEĞER"}

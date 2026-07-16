@@ -1,4 +1,20 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+
+/** Shared headers: API key when configured. */
+export function apiHeaders(extra?: Record<string, string>): HeadersInit {
+  const h: Record<string, string> = { ...(extra || {}) };
+  if (API_KEY) h["X-API-Key"] = API_KEY;
+  return h;
+}
+
+export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...apiHeaders(),
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  return fetch(`${API_BASE}${path}`, { ...init, headers });
+}
 
 export type AgentStatus = {
   name: string;
@@ -165,9 +181,18 @@ export type KlineResult = {
   error: string | null;
 };
 
+export type TickerSuggestion = {
+  ticker: string;
+  name: string;
+  exchange: string;
+  exchange_name: string;
+  type: string;
+  sector?: string;
+  industry?: string;
+};
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    // Backend'ten detay mesajını çıkarmaya çalış
     let detail = "";
     try {
       const body = await res.text();
@@ -186,25 +211,30 @@ async function j<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  getStatus: () => fetch(`${API_BASE}/api/status`, { cache: "no-store" }).then(j<PipelineStatus>),
-  getLatestReport: () => fetch(`${API_BASE}/api/reports/latest`, { cache: "no-store" }).then(j<Report>),
-  getHistory: () => fetch(`${API_BASE}/api/reports/history`, { cache: "no-store" }).then(j<ReportListItem[]>),
-  getReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { cache: "no-store" }).then(j<Report>),
-  generate: (exchange?: string) => fetch(`${API_BASE}/api/generate${exchange ? `?exchange=${exchange}` : ""}`, { method: "POST" }).then(j<{ started: boolean; exchange: string }>),
-  deleteReport: (id: number) => fetch(`${API_BASE}/api/reports/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>).catch(() => ({ deleted: false })),
+  getStatus: () => apiFetch("/api/status", { cache: "no-store" }).then(j<PipelineStatus>),
+  getLatestReport: () => apiFetch("/api/reports/latest", { cache: "no-store" }).then(j<Report>),
+  getHistory: () => apiFetch("/api/reports/history", { cache: "no-store" }).then(j<ReportListItem[]>),
+  getReport: (id: number) => apiFetch(`/api/reports/${id}`, { cache: "no-store" }).then(j<Report>),
+  generate: (exchange?: string) =>
+    apiFetch(`/api/generate${exchange ? `?exchange=${exchange}` : ""}`, { method: "POST" }).then(
+      j<{ started: boolean; exchange: string }>
+    ),
+  deleteReport: (id: number) =>
+    apiFetch(`/api/reports/${id}`, { method: "DELETE" })
+      .then(j<{ deleted: boolean }>)
+      .catch(() => ({ deleted: false })),
 
-  getWatchlist: () =>
-    fetch(`${API_BASE}/api/watchlist/personal`, { cache: "no-store" }).then(j<WatchlistItem[]>),
+  getWatchlist: () => apiFetch("/api/watchlist/personal", { cache: "no-store" }).then(j<WatchlistItem[]>),
   addWatchlistItem: (ticker: string, notes?: string) =>
-    fetch(`${API_BASE}/api/watchlist/personal`, {
+    apiFetch("/api/watchlist/personal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker, notes }),
     }).then(j<WatchlistItem>),
   deleteWatchlistItem: (id: number) =>
-    fetch(`${API_BASE}/api/watchlist/personal/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
+    apiFetch(`/api/watchlist/personal/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
 
-  getPortfolio: () => fetch(`${API_BASE}/api/portfolio`, { cache: "no-store" }).then(j<PortfolioSummary>),
+  getPortfolio: () => apiFetch("/api/portfolio", { cache: "no-store" }).then(j<PortfolioSummary>),
   addPortfolioPosition: (payload: {
     ticker: string;
     quantity: number;
@@ -212,67 +242,124 @@ export const api = {
     entry_date?: string;
     notes?: string;
   }) =>
-    fetch(`${API_BASE}/api/portfolio`, {
+    apiFetch("/api/portfolio", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).then(j<PortfolioPosition>),
   closePortfolioPosition: (id: number, exit_price: number) =>
-    fetch(`${API_BASE}/api/portfolio/${id}/close`, {
+    apiFetch(`/api/portfolio/${id}/close`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ exit_price }),
     }).then(j<PortfolioPosition>),
   deletePortfolioPosition: (id: number) =>
-    fetch(`${API_BASE}/api/portfolio/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
+    apiFetch(`/api/portfolio/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
 
-  // ── Autonomous Agent (portföy-bilinçli) ──
   getAgentPortfolio: (portfolioSlug: string = "bist") =>
-    fetch(`${API_BASE}/api/autonomous/portfolio?portfolio_slug=${portfolioSlug}`).then(j<AgentPortfolio>),
+    apiFetch(`/api/autonomous/portfolio?portfolio_slug=${portfolioSlug}`).then(j<AgentPortfolio>),
   runAgent: (portfolioSlug: string = "bist") =>
-    fetch(`${API_BASE}/api/autonomous/run?portfolio_slug=${portfolioSlug}`, { method: "POST" }).then(j<{ started: boolean; portfolio_slug: string; mode: string }>),
+    apiFetch(`/api/autonomous/run?portfolio_slug=${portfolioSlug}`, { method: "POST" }).then(
+      j<{ started: boolean; portfolio_slug: string; mode: string }>
+    ),
   getAgentDecisions: (portfolioSlug: string = "bist", limit = 20) =>
-    fetch(`${API_BASE}/api/autonomous/decisions?portfolio_slug=${portfolioSlug}&limit=${limit}`).then(j<AgentDecision[]>),
+    apiFetch(`/api/autonomous/decisions?portfolio_slug=${portfolioSlug}&limit=${limit}`).then(
+      j<AgentDecision[]>
+    ),
 
-  // ── Skill (stock_analysis entegrasyonu) ──
-  analyzeStock: (ticker: string, position?: { status: "empty" | "holding"; cost?: number; shares?: number }) =>
-    fetch(`${API_BASE}/api/skill/analyze-stock`, {
+  analyzeStock: (
+    ticker: string,
+    position?: { status: "empty" | "holding"; cost?: number; shares?: number }
+  ) =>
+    apiFetch("/api/skill/analyze-stock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker, position }),
     }).then(j<StockAnalysisResult>),
   analyzeDividend: (ticker: string) =>
-    fetch(`${API_BASE}/api/skill/analyze-dividend`, {
+    apiFetch("/api/skill/analyze-dividend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker }),
     }).then(j<DividendResult>),
   scanRumors: (query?: string) =>
-    fetch(`${API_BASE}/api/skill/scan-rumors`, {
+    apiFetch("/api/skill/scan-rumors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
     }).then(j<RumorScanResult>),
   analyzeKline: (ticker: string, period = "6mo") =>
-    fetch(`${API_BASE}/api/skill/analyze-kline`, {
+    apiFetch("/api/skill/analyze-kline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker, period }),
     }).then(j<KlineResult>),
 
-  // ── Sembol arama (Yahoo Finance autocomplete) ──
   suggestTickers: (q: string) =>
-    fetch(`${API_BASE}/api/screener/suggest?q=${encodeURIComponent(q)}`, { cache: "no-store" })
-      .then(j<Array<{ ticker: string; name: string; exchange: string; exchange_name: string; type: string; sector?: string; industry?: string }>>),
+    apiFetch(`/api/screener/suggest?q=${encodeURIComponent(q)}`, { cache: "no-store" }).then(
+      j<TickerSuggestion[]>
+    ),
 
-  // ── Sistem Sıfırlama (admin) — portföy-bilinçli ──
+  getScreenerDetail: (ticker: string, period = "5d", interval = "1h") =>
+    apiFetch(`/api/screener/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`, {
+      cache: "no-store",
+    }).then(j<Record<string, unknown>>),
+
+  analyzeTicker: (ticker: string) =>
+    apiFetch(`/api/screener/${encodeURIComponent(ticker)}/analyze`, { method: "POST" }).then(
+      j<{ started?: boolean }>
+    ),
+
+  createPrediction: (ticker: string) =>
+    apiFetch(`/api/predictions/${encodeURIComponent(ticker)}`, { method: "POST" }).then(
+      j<Record<string, unknown>>
+    ),
+
+  getUnreadCount: () =>
+    apiFetch("/api/notifications/unread-count", { cache: "no-store" }).then(j<{ count: number }>),
+  markAllNotificationsRead: () =>
+    apiFetch("/api/notifications/read-all", { method: "POST" }).then(j<{ ok?: boolean }>),
+  markReportNotificationsRead: (id: number) =>
+    apiFetch(`/api/notifications/read-by-report/${id}`, { method: "POST" }).then(j<{ ok?: boolean }>),
+
+  // Admin
+  listProviders: () => apiFetch("/api/admin/providers").then(j<unknown[]>),
+  listModels: (providerId?: number) =>
+    apiFetch(`/api/admin/models${providerId != null ? `?provider_id=${providerId}` : ""}`).then(
+      j<unknown[]>
+    ),
+  testModel: (modelId: number) =>
+    apiFetch(`/api/admin/models/${modelId}/test`, { method: "POST" }).then(j<Record<string, unknown>>),
+
   resetPortfolio: (portfolioSlug?: string) =>
-    fetch(`${API_BASE}/api/admin/reset/portfolio${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, { method: "POST" })
-      .then(j<{ deleted: Record<string, number>; balance_cash: number; balance_starting: number; portfolio_slug?: string }>),
+    apiFetch(
+      `/api/admin/reset/portfolio${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`,
+      { method: "POST", headers: { "X-Confirm-Reset": "yes" } }
+    ).then(
+      j<{
+        deleted: Record<string, number>;
+        balance_cash: number;
+        balance_starting: number;
+        portfolio_slug?: string;
+      }>
+    ),
   resetReports: () =>
-    fetch(`${API_BASE}/api/admin/reset/reports`, { method: "POST" })
-      .then(j<{ deleted: Record<string, number> }>),
+    apiFetch("/api/admin/reset/reports", {
+      method: "POST",
+      headers: { "X-Confirm-Reset": "yes" },
+    }).then(j<{ deleted: Record<string, number> }>),
   resetAll: (portfolioSlug?: string) =>
-    fetch(`${API_BASE}/api/admin/reset/all${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, { method: "POST" })
-      .then(j<{ portfolio: { deleted: Record<string, number>; balance_cash: number; portfolio_slug?: string }; reports: { deleted: Record<string, number> } }>),
+    apiFetch(`/api/admin/reset/all${portfolioSlug ? `?portfolio_slug=${portfolioSlug}` : ""}`, {
+      method: "POST",
+      headers: { "X-Confirm-Reset": "yes" },
+    }).then(
+      j<{
+        portfolio: {
+          deleted: Record<string, number>;
+          balance_cash: number;
+          portfolio_slug?: string;
+        };
+        reports: { deleted: Record<string, number> };
+      }>
+    ),
 };

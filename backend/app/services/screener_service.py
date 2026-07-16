@@ -165,83 +165,99 @@ async def stage1_prescreen(
 
 
 async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
-    """Tek tek yf.Ticker ile indir — batch download calismayan ticker'lar icin (.IS vb)."""
+    """Tek tek yf.Ticker ile indir — batch download calismayan ticker'lar icin (.IS vb).
+    Concurrent with Semaphore(8).
+    """
 
     def _fetch(t: str) -> object:
         """Sync fetch helper for to_thread."""
         from app.services.yf_utils import safe_ticker_history
         return safe_ticker_history(t, period="1mo")
 
-    import numpy as np
-
-    results = []
+    results: list[dict] = []
     total = len(tickers)
-    logger.info("_prescreen_individual: %d ticker isleniyor...", total)
-    
-    for idx, ticker in enumerate(tickers):
-        if idx % 10 == 0:
-            logger.info("BIST prescreen ilerleme: %d/%d (%d aday)", idx, total, len(results))
-        try:
-            hist = await asyncio.to_thread(_fetch, ticker)
-            if hist is None or hist.empty or len(hist) < 5:
-                logger.debug("BIST %s: yetersiz veri (%s)", ticker, len(hist) if hist is not None else 0)
-                continue
-            hist.index = hist.index.tz_localize(None)
+    logger.info("_prescreen_individual: %d ticker isleniyor (sem=8)...", total)
+    sem = asyncio.Semaphore(8)
+    done_count = 0
+    cand_count = 0
+    lock = asyncio.Lock()
 
+    def _score_hist(ticker: str, hist) -> Optional[dict]:
+        if hist is None or hist.empty or len(hist) < 5:
+            return None
+        try:
+            hist = hist.copy()
+            hist.index = hist.index.tz_localize(None)
             closes = hist["Close"].values
             volumes = hist["Volume"].values
-
             if len(closes) < 5:
-                logger.debug("BIST %s: yetersiz kapanis (%d)", ticker, len(closes))
-                continue
+                return None
 
-            # Momentum
             momentum_5d = float((closes[-1] / closes[-6] - 1) * 100) if len(closes) >= 6 else 0.0
-
-            # RSI 14
             delta = np.diff(closes)
             gains = np.where(delta > 0, delta, 0)
             losses = np.where(delta < 0, -delta, 0)
             avg_gain = float(np.mean(gains[-14:])) if len(gains) >= 14 else 1.0
             avg_loss = float(np.mean(losses[-14:])) if len(losses) >= 14 else 1.0
             rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
-
-            # Volume ratio
             avg_vol_20 = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else 1.0
             volume_ratio = float(volumes[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
-
-            # Volatility
             rets = np.diff(closes) / closes[:-1]
             vol_20 = float(np.std(rets[-20:]) * np.sqrt(252) * 100) if len(rets) >= 20 else 50.0
+            window = closes[-min(20, len(closes)):]
+            peak = np.maximum.accumulate(window)
+            dd = float(np.min((window - peak) / peak) * 100) if len(peak) > 0 else 0.0
 
-            # Drawdown
-            peak = np.maximum.accumulate(closes[-min(20, len(closes)):])
-            dd = float(np.min((closes[-min(20, len(closes)):] - peak) / peak) * 100) if len(peak) > 0 else 0
+            if momentum_5d < -15:
+                return None
+            if rsi_val > 85:
+                return None
+            if vol_20 > 120:
+                return None
 
-            # Relaxed filters for emerging markets
-            if momentum_5d < -15: continue   # cok kotu momentumu el
-            if rsi_val > 85: continue        # cok asiri alim
-            if vol_20 > 120: continue        # cok yuksek volatilite
-
-            # Composite score
             mom_score = np.clip((momentum_5d + 15) * 1.5, 0, 100)
             rsi_score = 100 - abs(rsi_val - 50) * 2
             volume_score = min(volume_ratio * 40, 100)
-            technical_score = round(mom_score * 0.4 + rsi_score * 0.3 + volume_score * 0.15 + (100 - abs(dd * 2)) * 0.15, 1)
-
-            results.append({
+            technical_score = round(
+                mom_score * 0.4 + rsi_score * 0.3 + volume_score * 0.15 + (100 - abs(dd * 2)) * 0.15, 1
+            )
+            return {
                 "ticker": ticker,
                 "price": float(closes[-1]),
                 "momentum_5d": round(momentum_5d, 2),
-                "momentum_pct": round(momentum_5d, 2),  # alias — report_agent bekler
+                "momentum_pct": round(momentum_5d, 2),
                 "rsi_14": round(rsi_val, 1),
                 "volume_ratio": round(volume_ratio, 2),
                 "volatility_20d": round(vol_20, 1),
                 "max_drawdown_20d": round(dd, 1),
                 "technical_score": technical_score,
-            })
+            }
         except Exception:
-            continue
+            return None
+
+    async def _one(ticker: str) -> Optional[dict]:
+        nonlocal done_count, cand_count
+        async with sem:
+            try:
+                hist = await asyncio.to_thread(_fetch, ticker)
+                row = _score_hist(ticker, hist)
+            except Exception:
+                row = None
+        async with lock:
+            done_count += 1
+            if row is not None:
+                cand_count += 1
+            if done_count % 10 == 0 or done_count == total:
+                logger.info(
+                    "BIST prescreen ilerleme: %d/%d (%d aday)",
+                    done_count, total, cand_count,
+                )
+        return row
+
+    rows = await asyncio.gather(*[_one(t) for t in tickers])
+    for row in rows:
+        if row is not None:
+            results.append(row)
 
     results.sort(key=lambda r: r["technical_score"], reverse=True)
     return results[:cfg["max_stage1_candidates"]]
@@ -252,8 +268,14 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
 async def stage2_deep_analysis(
     stage1_candidates: list[dict],
     max_candidates: int = 8,
+    fundamental=None,
+    sentiment=None,
+    risk=None,
 ) -> list[dict]:
-    """Stage 1'den gelen en iyi adaylari full agent pipeline'dan gecir."""
+    """Stage 1'den gelen en iyi adaylari full agent pipeline'dan gecir.
+    Optional agent instances keep orchestrator status wiring consistent.
+    """
+    from app.agents.base import AgentStatus
     from app.agents.fundamental_agent import FundamentalAgent
     from app.agents.sentiment_agent import SentimentAgent
     from app.agents.risk_agent import RiskAgent
@@ -277,12 +299,22 @@ async def stage2_deep_analysis(
     if not enriched:
         return []
 
-    fundamental = FundamentalAgent()
-    sentiment = SentimentAgent()
-    risk = RiskAgent()
+    if fundamental is None:
+        fundamental = FundamentalAgent()
+    if sentiment is None:
+        sentiment = SentimentAgent()
+    if risk is None:
+        risk = RiskAgent()
 
-    enriched = await fundamental.run(enriched)
-    enriched = await sentiment.run(enriched)
-    enriched = await risk.run(enriched)
+    for agent, label in (
+        (fundamental, "fundamental"),
+        (sentiment, "sentiment"),
+        (risk, "risk"),
+    ):
+        if hasattr(agent, "_set"):
+            agent._set(AgentStatus.RUNNING, f"Stage 2 {label}: {len(enriched)} hisse")
+        enriched = await agent.run(enriched)
+        if hasattr(agent, "_set"):
+            agent._set(AgentStatus.DONE, f"Stage 2 {label}: {len(enriched)}")
 
     return enriched

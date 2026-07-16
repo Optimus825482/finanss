@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "ORBIS FINAI | AI-Powered Hisse Araştırma",
   description:
     "ORBIS Finance Analyze Team — 5 ajanlı AI araştırma ekibi tarafından üretilen günlük hisse senedi raporu",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

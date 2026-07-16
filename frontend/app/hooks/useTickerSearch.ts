@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { api } from "../lib/api";
 
 export interface TickerSuggestion {
   ticker: string;
@@ -60,16 +61,10 @@ export function useTickerSearch(onSelect?: (ticker: string) => void): UseTickerS
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/screener/suggest?q=${encodeURIComponent(ticker)}`,
-          { cache: "no-store" }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setSuggestions(data.slice(0, 8));
-          setShowSuggestions(data.length > 0);
-          setSelectedIdx(-1);
-        }
+        const data = await api.suggestTickers(ticker);
+        setSuggestions(data.slice(0, 8));
+        setShowSuggestions(data.length > 0);
+        setSelectedIdx(-1);
       } catch (e) { console.warn("Failed to fetch suggestions", e); }
     }, 200);
     return () => clearTimeout(timer);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ThemeToggle from "../components/ThemeToggle";
+import { API_BASE, apiHeaders } from "../lib/api";
 
 interface Provider {
   id: number; name: string; slug: string; base_url: string;
@@ -19,7 +20,7 @@ interface TranslationConfig {
   error?: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = API_BASE;
 
 export default function TranslationTab() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -31,9 +32,9 @@ export default function TranslationTab() {
   useEffect(() => {
     (async () => {
       const [pRes, mRes, cRes] = await Promise.all([
-        fetch(`${API}/api/admin/providers`),
-        fetch(`${API}/api/admin/models`),
-        fetch(`${API}/api/admin/translation-config`),
+        fetch(`${API}/api/admin/providers`, { headers: apiHeaders() }),
+        fetch(`${API}/api/admin/models`, { headers: apiHeaders() }),
+        fetch(`${API}/api/admin/translation-config`, { headers: apiHeaders() }),
       ]);
       if (pRes.ok) setProviders(await pRes.json());
       if (mRes.ok) setModels(await mRes.json());
@@ -44,20 +45,21 @@ export default function TranslationTab() {
   const saveTransConfig = async () => {
     const pid = transForm.provider_id;
     const mid = transForm.model_id;
+    const h = apiHeaders({ "Content-Type": "application/json" });
     if (pid) {
       await fetch(`${API}/api/admin/settings`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: h,
         body: JSON.stringify({ key: "translation_provider_id", value: pid, description: "Çeviri için LLM provider ID" }),
       });
     }
     if (mid) {
       await fetch(`${API}/api/admin/settings`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: h,
         body: JSON.stringify({ key: "translation_model_id", value: mid, description: "Çeviri için LLM model ID" }),
       });
     }
     setTransMsg("✅ Çeviri ayarları kaydedildi");
-    const cRes = await fetch(`${API}/api/admin/translation-config`);
+    const cRes = await fetch(`${API}/api/admin/translation-config`, { headers: apiHeaders() });
     if (cRes.ok) setTransConfig(await cRes.json());
     setTimeout(() => setTransMsg(null), 3000);
   };

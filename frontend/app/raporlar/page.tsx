@@ -17,8 +17,7 @@ export default function RaporlarPage() {
   }, []);
 
   useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
-    fetch(`${apiBase}/api/notifications/read-all`, { method: "POST" }).catch(() => {});
+    api.markAllNotificationsRead().catch(() => {});
   }, []);
 
   const handleGenerate = async (exchange?: string) => {
@@ -50,8 +49,7 @@ export default function RaporlarPage() {
     try {
       const r = await api.getReport(id);
       setReport(r);
-      //Mark notifications as read for this report
-      try{await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/read-by-report/${id}`,{method:"POST"})}catch{}
+      try { await api.markReportNotificationsRead(id); } catch {}
     } catch(e) {
       setError("Rapor yüklenemedi: " + (e instanceof Error ? e.message : "Beklenmeyen hata"));
     } finally {

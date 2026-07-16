@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ExchangeBadge, SectorBadge } from "./TickerBadge";
 import PriceChart from "./PriceChart";
+import { api } from "../lib/api";
 
 export interface TickerDetailData {
   ticker: string;
@@ -76,17 +77,10 @@ export default function TickerDetail({ detail, period, interval, onPeriodChange,
     setAnalyzing(true);
     setAnalysisMsg(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/screener/${detail.ticker}/analyze`,
-        { method: "POST" }
-      );
-      if (res.ok) {
-        setAnalysisMsg("Agent team analize başladı. Tamamlandığında raporlar sayfasında görüntüleyebilirsin.");
-      } else {
-        setAnalysisMsg("Analiz başlatılamadı, pipeline zaten çalışıyor olabilir.");
-      }
+      await api.analyzeTicker(detail.ticker);
+      setAnalysisMsg("Agent team analize başladı. Tamamlandığında raporlar sayfasında görüntüleyebilirsin.");
     } catch {
-      setAnalysisMsg("Backend'e bağlanılamadı.");
+      setAnalysisMsg("Analiz başlatılamadı, pipeline zaten çalışıyor olabilir.");
     } finally {
       setAnalyzing(false);
     }
@@ -118,11 +112,12 @@ export default function TickerDetail({ detail, period, interval, onPeriodChange,
             <button onClick={async()=>{
               setAddWatchlistLoading(true);
               try{
-                const r=await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/watchlist/personal`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticker:detail.ticker})});
-                if(r.ok)setAddWatchlistMsg("✓ Takibe eklendi");
-                else if(r.status===409)setAddWatchlistMsg("Zaten listede");
-                else setAddWatchlistMsg("Eklenemedi");
-              }catch{setAddWatchlistMsg("Hata")}
+                await api.addWatchlistItem(detail.ticker);
+                setAddWatchlistMsg("✓ Takibe eklendi");
+              }catch(e){
+                const msg=e instanceof Error?e.message:"";
+                setAddWatchlistMsg(msg.includes("409")?"Zaten listede":"Eklenemedi");
+              }
               setAddWatchlistLoading(false);
               setTimeout(()=>setAddWatchlistMsg(null),2000);
             }} disabled={addWatchlistLoading}

@@ -42,3 +42,8 @@ jobs:
       - name: Test
         working-directory: frontend
         run: npm test
+      - name: Build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8012
+        run: npm run build

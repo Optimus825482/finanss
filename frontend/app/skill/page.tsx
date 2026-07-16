@@ -18,9 +18,7 @@ export default function SkillPage() {
           STOCK ANALİZ SKILL'İ
         </h1>
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
-          5 komut: hisse analizi · temettü · rumor tarama · K-line grafik · watchlist
-          <br />
-          Behavior rules Python ile zorunlu (bias&gt;5% → buy engellenir, veri eksik → VERİ YOK)
+          4 komut: hisse analizi · temettü · rumor tarama · K-line grafik
         </p>
       </div>
 

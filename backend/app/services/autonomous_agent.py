@@ -427,28 +427,56 @@ class AutonomousAgent:
         max_per_pos = cash * self.max_per_position_pct
         current_count = portfolio.get("position_count", 0)
 
+        # Collect eligible buy candidates first, then allocate budgets
+        eligible: list[dict] = []
         for c in candidates[:top_n]:
+            if current_count + len(eligible) >= self.max_positions:
+                break
+            score = c.get("composite_score", c.get("technical_score", 0))
+            rsi = _get_rsi(c["ticker"])
+            mom = c.get("momentum_5d", 0)
+            if score >= 60 and rsi < 65 and mom > -5 and c.get("price", 0) > 0:
+                eligible.append({**c, "_score": score, "_rsi": rsi, "_mom": mom})
+
+        budgets: dict[str, float] = {}
+        if eligible and cash > 0:
+            try:
+                # ponytail: mean-variance uses random search not SLSQP; upgrade to scipy.optimize when scipy is a dep
+                from app.services.portfolio_optimizer import allocate_buy_budgets
+                budgets = allocate_buy_budgets(
+                    tickers=[e["ticker"] for e in eligible],
+                    prices=[float(e["price"]) for e in eligible],
+                    cash=float(cash),
+                    returns_matrix=None,
+                    max_weight=float(self.max_per_position_pct),
+                )
+            except Exception:
+                budgets = {}
+
+        for c in eligible:
             if current_count >= self.max_positions:
                 break
             if cash <= 0:
                 break
-
-            score = c.get("composite_score", c.get("technical_score", 0))
-            rsi = _get_rsi(c["ticker"])
-            mom = c.get("momentum_5d", 0)
-
-            if score >= 60 and rsi < 65 and mom > -5:
-                qty = max(1, int(max_per_pos / c["price"])) if c["price"] > 0 else 0
-                if qty > 0 and max_per_pos > 0:
-                    result = self.execute_buy(db, c["ticker"], qty, c["price"],
-                        f"Kural bazli alis: skor={score:.0f} RSI={rsi:.0f} momentum=%{mom:.1f}",
-                        portfolio, confidence=0.6)
-                    if result["success"]:
-                        actions.append({"action": "buy", "ticker": c["ticker"], "quantity": qty, "price": c["price"],
-                            "reasoning": f"skor={score:.0f} RSI={rsi:.0f}"})
-                        cash -= qty * c["price"]
-                        current_count += 1
-                        portfolio = self.get_portfolio(db)
+            price = float(c["price"])
+            budget = float(budgets.get(c["ticker"], max_per_pos)) if budgets else max_per_pos
+            budget = min(budget, cash, max_per_pos if max_per_pos > 0 else budget)
+            qty = max(1, int(budget / price)) if price > 0 and budget > 0 else 0
+            if qty > 0 and budget > 0:
+                score, rsi, mom = c["_score"], c["_rsi"], c["_mom"]
+                result = self.execute_buy(
+                    db, c["ticker"], qty, price,
+                    f"Kural bazli alis: skor={score:.0f} RSI={rsi:.0f} momentum=%{mom:.1f}",
+                    portfolio, confidence=0.6,
+                )
+                if result["success"]:
+                    actions.append({
+                        "action": "buy", "ticker": c["ticker"], "quantity": qty, "price": price,
+                        "reasoning": f"skor={score:.0f} RSI={rsi:.0f}",
+                    })
+                    cash -= qty * price
+                    current_count += 1
+                    portfolio = self.get_portfolio(db)
 
         return actions, decisions
 

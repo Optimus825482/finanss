@@ -68,6 +68,10 @@ class Orchestrator:
 
     async def _run_two_stage(self, exchanges: list[str] | None) -> int:
         """Iki asamali pipeline: on tarama → derin analiz."""
+        # Reset all agents to IDLE at start
+        for a in self.agents:
+            a._set(AgentStatus.IDLE)
+
         tickers = get_universe(exchanges)
         total_scanned = len(tickers)
         self._log(f"Pipeline basladi: {total_scanned} hisse, islem: {exchanges or 'tum evren'}")
@@ -84,13 +88,22 @@ class Orchestrator:
             return self._persist({"summary": "Stage 1: teknik taramayi gecen aday bulunamadi.",
                                    "candidates_scanned": total_scanned, "picks": []})
 
-        # Stage 2 — Deep analysis
+        # Stage 2 — Deep analysis (wire orchestrator agent instances for status)
         self.fundamental._set(AgentStatus.RUNNING, f"Stage 2: {len(stage1)} hisse derin analize giriyor")
+        self.sentiment._set(AgentStatus.RUNNING, f"Stage 2: sentiment hazir")
+        self.risk._set(AgentStatus.RUNNING, f"Stage 2: risk hazir")
         self._log(f"Stage 2 basliyor: {len(stage1)} hisse derin analiz...")
-        stage2 = await stage2_deep_analysis(stage1)
+        stage2 = await stage2_deep_analysis(
+            stage1,
+            fundamental=self.fundamental,
+            sentiment=self.sentiment,
+            risk=self.risk,
+        )
         self._log(f"Stage 2 sonuc: {len(stage2)} hisse analiz edildi")
-        self.fundamental._set(AgentStatus.DONE if stage2 else AgentStatus.ERROR,
-                              f"Derin analiz: {len(stage2)}")
+        done_or_err = AgentStatus.DONE if stage2 else AgentStatus.ERROR
+        self.fundamental._set(done_or_err, f"Derin analiz: {len(stage2)}")
+        self.sentiment._set(done_or_err, f"Sentiment: {len(stage2)}")
+        self.risk._set(done_or_err, f"Risk: {len(stage2)}")
 
         if not stage2:
             self._log("Stage 2: derin analiz tamamlanamadi, rapor kaydedilmiyor")
@@ -105,6 +118,15 @@ class Orchestrator:
         self._log(f"Rapor olusturuldu: {pick_count} pick kaydediliyor")
         rid = self._persist(result)
         self._log(f"Rapor #{rid} kaydedildi ({pick_count} pick)")
+        try:
+            from app.services.webhook_notify import notify_webhook
+            notify_webhook(
+                f"ORBIS rapor #{rid}",
+                f"{pick_count} pick kaydedildi ({total_scanned} tarandi)",
+                {"report_id": rid, "pick_count": pick_count},
+            )
+        except Exception:
+            pass
         return rid
 
     def _persist(self, result: dict) -> int:

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_BASE, apiHeaders } from "../lib/api";
 
 interface Provider { id: number; name: string; slug: string; base_url: string }
 interface Model { id: number; provider_id: number; model_id: string; display_name: string; supports_chat: boolean; supports_embedding: boolean; max_tokens: number }
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = API_BASE;
 
 export default function PredictionTab() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -17,9 +18,9 @@ export default function PredictionTab() {
   useEffect(() => {
     (async () => {
       const [pRes, mRes, cRes] = await Promise.all([
-        fetch(`${API}/api/admin/providers`),
-        fetch(`${API}/api/admin/models`),
-        fetch(`${API}/api/admin/prediction-config`),
+        fetch(`${API}/api/admin/providers`, { headers: apiHeaders() }),
+        fetch(`${API}/api/admin/models`, { headers: apiHeaders() }),
+        fetch(`${API}/api/admin/prediction-config`, { headers: apiHeaders() }),
       ]);
       if (pRes.ok) setProviders(await pRes.json());
       if (mRes.ok) setModels(await mRes.json());
@@ -29,10 +30,11 @@ export default function PredictionTab() {
 
   const save = async () => {
     const { provider_id, model_id } = form;
-    if (provider_id) await fetch(`${API}/api/admin/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "prediction_provider_id", value: provider_id, description: "Öngörü için LLM provider ID" }) });
-    if (model_id) await fetch(`${API}/api/admin/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "prediction_model_id", value: model_id, description: "Öngörü için LLM model ID" }) });
+    const h = apiHeaders({ "Content-Type": "application/json" });
+    if (provider_id) await fetch(`${API}/api/admin/settings`, { method: "POST", headers: h, body: JSON.stringify({ key: "prediction_provider_id", value: provider_id, description: "Öngörü için LLM provider ID" }) });
+    if (model_id) await fetch(`${API}/api/admin/settings`, { method: "POST", headers: h, body: JSON.stringify({ key: "prediction_model_id", value: model_id, description: "Öngörü için LLM model ID" }) });
     setMsg("✅ Öngörü ayarları kaydedildi");
-    const cRes = await fetch(`${API}/api/admin/prediction-config`);
+    const cRes = await fetch(`${API}/api/admin/prediction-config`, { headers: apiHeaders() });
     if (cRes.ok) setConfig(await cRes.json());
     setTimeout(() => setMsg(null), 3000);
   };

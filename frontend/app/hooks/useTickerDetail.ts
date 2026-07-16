@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { TickerDetailData } from "../components/TickerDetail";
+import { apiFetch } from "../lib/api";
 
 interface UseTickerDetailReturn {
   detail: TickerDetailData | null;
@@ -19,39 +20,63 @@ export function useTickerDetail(autoRefresh = true): UseTickerDetailReturn {
   const [period, setPeriod] = useState("5d");
   const [interval_, setInterval_] = useState("1h");
   const currentTicker = useRef<string | null>(null);
-  const autoInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const periodRef = useRef(period);
+  const intervalRef = useRef(interval_);
+  periodRef.current = period;
+  intervalRef.current = interval_;
 
   const fetchDetail = useCallback(async (t: string, p: string, i: string) => {
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/screener/${t}?period=${p}&interval=${i}`,
+      const res = await apiFetch(
+        `/api/screener/${encodeURIComponent(t)}?period=${p}&interval=${i}`,
         { cache: "no-store" }
       );
       if (res.ok) setDetail(await res.json());
-    } catch (e) { console.warn("Failed to fetch detail", e); }
+    } catch (e) {
+      console.warn("Failed to fetch detail", e);
+    }
   }, []);
 
-  const loadDetail = useCallback((t: string) => {
-    currentTicker.current = t;
-    setDetailLoading(true);
-    setDetail(null);
-    fetchDetail(t, period, interval_).finally(() => setDetailLoading(false));
-  }, [fetchDetail, period, interval_]);
+  const loadDetail = useCallback(
+    (t: string) => {
+      currentTicker.current = t;
+      setDetailLoading(true);
+      setDetail(null);
+      fetchDetail(t, periodRef.current, intervalRef.current).finally(() =>
+        setDetailLoading(false)
+      );
+    },
+    [fetchDetail]
+  );
 
   // Period/interval değişince yeniden fetch
   useEffect(() => {
     if (currentTicker.current) {
       setDetailLoading(true);
-      fetchDetail(currentTicker.current, period, interval_).finally(() => setDetailLoading(false));
+      fetchDetail(currentTicker.current, period, interval_).finally(() =>
+        setDetailLoading(false)
+      );
     }
   }, [period, interval_, fetchDetail]);
 
-  // Auto-refresh 30s
+  // Auto-refresh 30s — always rebind with current ticker via ref
   useEffect(() => {
-    if (!currentTicker.current) return;
-    const i = setInterval(loadDetail, 30_000);
-    return () => clearInterval(i);
-  }, [autoRefresh]);
+    if (!autoRefresh) return;
+    const id = setInterval(() => {
+      const t = currentTicker.current;
+      if (!t) return;
+      fetchDetail(t, periodRef.current, intervalRef.current);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [autoRefresh, fetchDetail]);
 
-  return { detail, detailLoading, loadDetail, period, interval: interval_, setPeriod, setInterval_ };
+  return {
+    detail,
+    detailLoading,
+    loadDetail,
+    period,
+    interval: interval_,
+    setPeriod,
+    setInterval_,
+  };
 }

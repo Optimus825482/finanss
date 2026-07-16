@@ -3,7 +3,6 @@
 import { useState, FormEvent, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import PriceChart from "./PriceChart";
 import {
   api,
@@ -297,36 +296,6 @@ export default function SkillPanel() {
             })}
           </div>
 
-          {/* Küresel Makro — canlı göstergeler */}
-          {stockResult.macro_indicators && stockResult.macro_indicators.length > 0 && (
-            <div className="rounded-xl border border-white/10 p-4" style={{ backgroundColor: "rgba(15,23,42,0.7)" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm">🌍</span>
-                <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">Küresel Makro</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
-                {stockResult.macro_indicators.map((m) => (
-                  <div key={m.ticker} className="rounded-lg p-2.5 border border-white/5" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
-                    <div className="text-[10px] font-mono tracking-wider text-slate-500 mb-1">{m.label}</div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-sm font-bold font-mono text-white">
-                        {m.price !== null ? `${m.price.toFixed(1)}` : "—"}
-                      </span>
-                      {m.change_pct !== null && (
-                        <span className={`text-[10px] font-mono font-semibold ${
-                          m.sentiment === "bullish" ? "text-emerald-400" : m.sentiment === "bearish" ? "text-rose-400" : "text-slate-400"
-                        }`}>
-                          {m.sentiment === "bullish" ? "▲" : m.sentiment === "bearish" ? "▼" : "→"}{" "}
-                          {Math.abs(m.change_pct).toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* P/L kartı + İşlem planı — canlı renk */}
           <div className="grid grid-cols-2 gap-3">
             {stockResult.position_pl ? (
@@ -516,7 +485,7 @@ export default function SkillPanel() {
               prose-thead:text-slate-400 prose-tbody:text-slate-200
               prose-strong:text-white
               prose-li:text-slate-300 prose-li:text-[10px] prose-li:font-mono">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {stockResult.markdown}
               </ReactMarkdown>
             </div>
@@ -531,7 +500,7 @@ export default function SkillPanel() {
             <span className="text-lg font-bold text-white">{dividendResult.ticker}</span>
             {dividendResult.dividend_aristocrat && (
               <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">
-                股息贵族 (Aristokrat)
+                Temettü Aristokratı
               </span>
             )}
           </div>

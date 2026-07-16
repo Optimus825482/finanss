@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import { useEffect, useState } from "react";
+import { api } from "../lib/api";
 
 const NAV_ITEMS = [
   { label: "ANA SAYFA", href: "/" },
+  { label: "BIST", href: "/bist" },
   { label: "İZLEME", href: "/izleme" },
   { label: "PORTFÖY", href: "/portfoy" },
   { label: "SEMBOL ANALİZ", href: "/skill" },
@@ -20,14 +22,12 @@ export default function Navbar() {
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
 
-	const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
-
-	const loadUnread = async () => {
-	    try {
-	      const r = await fetch(`${apiBase}/api/notifications/unread-count`);
-	      if (r.ok) setUnread((await r.json()).count ?? 0);
-	    } catch (e) { console.warn("Failed to load unread count", e); }
-	  };
+  const loadUnread = async () => {
+    try {
+      const r = await api.getUnreadCount();
+      setUnread(r.count ?? 0);
+    } catch (e) { console.warn("Failed to load unread count", e); }
+  };
 
   useEffect(() => { loadUnread(); const i = setInterval(loadUnread, 30_000); return () => clearInterval(i); }, []);
 
@@ -61,7 +61,8 @@ export default function Navbar() {
         </div>
 
         {/* Mobile hamburger */}
-        <button onClick={() => setMenuOpen(!menuOpen)} className="sm:hidden font-mono text-lg px-2 py-3 transition-none"
+        <button onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}
+          className="sm:hidden font-mono text-lg px-2 py-3 transition-none"
           style={{ color: "var(--term-amber)" }}>
           {menuOpen ? "✕" : "☰"}
         </button>
