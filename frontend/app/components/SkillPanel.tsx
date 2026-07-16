@@ -60,13 +60,14 @@ export default function SkillPanel() {
     setError(null);
     try {
       if (tab === "stock") {
-        const position = positionStatus === "holding" && positionCost && positionShares
-          ? {
-              status: "holding",
-              cost: parseFloat(positionCost),
-              shares: parseInt(positionShares),
-            }
-          : { status: positionStatus };
+        const position: { status: "empty" | "holding"; cost?: number; shares?: number } =
+          positionStatus === "holding" && positionCost && positionShares
+            ? {
+                status: "holding",
+                cost: parseFloat(positionCost),
+                shares: parseInt(positionShares),
+              }
+            : { status: positionStatus };
         setStockResult(await api.analyzeStock(t, position));
       } else if (tab === "dividend") {
         setDividendResult(await api.analyzeDividend(t));
