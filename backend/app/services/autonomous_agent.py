@@ -493,7 +493,7 @@ class AutonomousAgent:
                 logger.warning("skill analyze_stock %s başarısız: %s", c.get("ticker"), e)
 
         enhanced_text = "\n".join(
-            f"  {a['ticker']}: {a['conclusion']} (bias: {a.get('bias_pct', '暂缺')}%)"
+            f"  {a['ticker']}: {a['conclusion']} (bias: {a.get('bias_pct', 'veri yok')}%)"
             + (f" [eksik veri: {', '.join(a['data_missing'])}]" if a["data_missing"] else "")
             for a in enhanced_analyses
         ) if enhanced_analyses else "  (skill analizi başarısız — tarama verisiyle devam)"

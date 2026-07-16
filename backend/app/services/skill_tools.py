@@ -141,7 +141,7 @@ SKILL_TOOLS: list[ToolSpec] = [
         name="analyze_stock",
         description=(
             "Tek hisse için zengin Markdown analiz raporu üretir. "
-            "Behavior rules: bias>5% → buy engellenir, veri eksik → '暂缺'. "
+            "Behavior rules: bias>5% → buy engellenir, veri eksik → 'veri yok'. "
             "Pozisyon verildiyse P/L analizi içerir."
         ),
         args_schema=StockAnalysisRequest,

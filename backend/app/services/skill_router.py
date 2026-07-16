@@ -115,7 +115,7 @@ def _build_system_prompt(tools: list[ToolSpec], db_context: Optional[str] = None
         "## Kurallar",
         "- Şemada olmayan ekstra alan ekleme (reject edilir).",
         "- Argüman tiplerine uy (string için string, float için sayı).",
-        "- Hiçbir değeri uydurma; veri yoksa '暂缺' veya 'veri yok' işaretle.",
+        "- Hiçbir değeri uydurma; veri yoksa 'VERİ YOK' işaretle.",
         "- Final metin Türkçe olmalı.",
         "",
     ])

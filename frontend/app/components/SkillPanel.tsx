@@ -242,7 +242,7 @@ export default function SkillPanel() {
             </span>
             {stockResult.bias_pct !== null && (
               <span className={`text-xs ${stockResult.bias_pct > 5 ? "text-red-400 font-bold" : stockResult.bias_pct < -5 ? "text-green-400" : "text-gray-400"}`}>
-                乖离率 (MA20 sapma): {stockResult.bias_pct > 0 ? "+" : ""}{stockResult.bias_pct}%
+                MA20 Sapma: {stockResult.bias_pct > 0 ? "+" : ""}{stockResult.bias_pct}%
                 {stockResult.bias_pct > 5 && " ⚠ buy engellendi"}
               </span>
             )}
@@ -272,7 +272,7 @@ export default function SkillPanel() {
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-400">{label}</span>
                       <span className={`font-bold ${v >= 60 ? "text-green-300" : v >= 40 ? "text-yellow-300" : "text-red-300"}`}>
-                        {val !== null && val !== undefined ? v.toFixed(0) : "暂缺"}
+                        {val !== null && val !== undefined ? v.toFixed(0) : "VERİ YOK"}
                       </span>
                     </div>
                     {val !== null && val !== undefined ? (
@@ -307,7 +307,7 @@ export default function SkillPanel() {
             ) : (
               <div className="rounded-lg bg-white/5 px-3 py-2">
                 <div className="text-xs text-gray-400 mb-1">Pozisyon</div>
-                <div className="text-xs text-gray-500">暂缺 — pozisyon verilmemiş. Empty/holding iki öneri için markdown'a bak.</div>
+                <div className="text-xs text-gray-500">VERİ YOK — pozisyon verilmemiş. Empty/holding iki öneri için markdown'a bak.</div>
               </div>
             )}
 
@@ -374,13 +374,13 @@ export default function SkillPanel() {
               <div className="text-xs text-gray-400">
                 {dividendResult.payout_ratio !== null
                   ? `%${(dividendResult.payout_ratio * 100).toFixed(1)}`
-                  : "暂缺"}
+                  : "VERİ YOK"}
               </div>
             </div>
             <div className="rounded-lg bg-white/5 px-3 py-2">
               <div className="text-xs text-gray-400">5Y CAGR</div>
               <div className="text-lg font-bold text-white">
-                {dividendResult.cagr_5y !== null ? `%${dividendResult.cagr_5y}` : "暂缺"}
+                {dividendResult.cagr_5y !== null ? `%${dividendResult.cagr_5y}` : "VERİ YOK"}
               </div>
             </div>
             <div className="rounded-lg bg-white/5 px-3 py-2">
@@ -388,7 +388,7 @@ export default function SkillPanel() {
               <div className="text-lg font-bold text-white">
                 {dividendResult.consecutive_growth_years !== null
                   ? `${dividendResult.consecutive_growth_years} yıl`
-                  : "暂缺"}
+                  : "VERİ YOK"}
               </div>
             </div>
           </div>

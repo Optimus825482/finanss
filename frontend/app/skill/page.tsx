@@ -20,7 +20,7 @@ export default function SkillPage() {
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
           5 komut: hisse analizi · temettü · rumor tarama · K-line grafik · watchlist
           <br />
-          Behavior rules Python ile zorunlu (bias&gt;5% → buy engellenir, veri eksik → 暂缺)
+          Behavior rules Python ile zorunlu (bias&gt;5% → buy engellenir, veri eksik → VERİ YOK)
         </p>
       </div>
 

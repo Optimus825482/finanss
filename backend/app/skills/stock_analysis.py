@@ -5,7 +5,7 @@ Kaynak: stock_analysis skill'in analyzer.ts port. Mevcut proje pipeline'ını
 yeniden kullanır. Behavior rules Python ile zorunlu kılınır (LLM'e bırakılmaz):
 
 1. 乖离率 (bias) = (price - MA20) / MA20 * 100. >5 → "buy"/"strong_buy" engellenir.
-2. Veri eksik → "暂缺" işaretlenir, asla uydurma.
+2. Veri eksik → "VERİ YOK" işaretlenir, asla uydurma.
 3. Pozisyon verildiyse → P/L analizi zorunlu.
 4. Pozisyon yok → hem empty/holding önerisi.
 5. Analiz sonrası → watchlist last_signal sessiz güncelle.
@@ -72,7 +72,7 @@ def format_report(
     if bias is not None:
         md.append(f"- **乖离率 (MA20 sapma):** {bias:+.2f}%")
     else:
-        md.append("- **乖离率:** 暂缺 (veri yok)")
+        md.append("- **MA20 Sapma:** VERİ YOK")
     md.append("")
 
     # 📈 Güncünlük fiyat
@@ -80,7 +80,7 @@ def format_report(
     if price is not None:
         md.append(f"- **Anlık fiyat:** ${price:.2f}")
     else:
-        md.append("- 暂缺 (fiyat verisi yok)")
+        md.append("- VERİ YOK (fiyat verisi alınamadı)")
     md.append("")
 
     # 📊 Veri ızgarası
@@ -99,7 +99,7 @@ def format_report(
     md.append("|---|---|")
     for label, val in rows:
         if val is None:
-            md.append(f"| {label} | 暂缺 |")
+            md.append(f"| {label} | VERİ YOK |")
         else:
             md.append(f"| {label} | {val} |")
     md.append("")
@@ -114,7 +114,7 @@ def format_report(
         md.append("")
     elif data_missing:
         md.append("## 💰 Pozisyon P/L")
-        md.append("- 暂缺 (pozisyon bilgisi verilmemiş)")
+        md.append("- VERİ YOK (pozisyon bilgisi verilmemiş)")
         md.append("")
 
     # 🎯 İşlem planı
@@ -126,7 +126,7 @@ def format_report(
         md.append(f"- **Stop (-8%):** ${stop}")
         md.append(f"- **Hedef (+10%):** ${target}")
     else:
-        md.append("- 暂缺 (fiyat verisi yok)")
+        md.append("- VERİ YOK (fiyat verisi alınamadı)")
     md.append("")
 
     # ✅ Kontrol listesi
@@ -139,7 +139,7 @@ def format_report(
 
     # 🌍 Macro stub
     md.append("## 🌍 Küresel Makro (stub)")
-    md.append("- 暂缺 — harici makro veri gerektirir (gelecek: web search entegrasyonu)")
+    md.append("- VERİ YOK — harici makro veri gerektirir (gelecek: web search entegrasyonu)")
     md.append("")
 
     return "\n".join(md)

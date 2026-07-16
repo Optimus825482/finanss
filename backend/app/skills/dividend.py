@@ -33,7 +33,7 @@ def payout_ratio_from_cashflow(cashflow: pd.DataFrame) -> Optional[float]:
     """cashflow'dan payout ratio = dividendsPaid / netIncome.
 
     yfinance cashflow indeksi: 'Common Stock Dividend Paid' (negatif), 'Net Income'.
-    None dönerse veri yok demektir — '暂缺' işaretlenmeli.
+    None dönerse veri yok demektir — 'VERİ YOK' işaretlenmeli.
     """
     if cashflow is None or cashflow.empty:
         return None

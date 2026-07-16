@@ -33,7 +33,7 @@ class StockAnalysisResult(BaseModel):
         None, description="乖离率: (price - MA20) / MA20 * 100. >5 → buy engellenir"
     )
     data_missing: list[str] = Field(
-        default_factory=list, description="Eksik veri alanları — '暂缺' işaretlenmiş"
+        default_factory=list, description="Eksik veri alanları — 'veri yok' işaretlenmiş"
     )
     # Görsel dashboard için ham veriler
     price_history: list[dict] = Field(
