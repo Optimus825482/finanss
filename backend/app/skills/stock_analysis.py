@@ -26,6 +26,8 @@ import asyncio
 import logging
 from typing import Optional
 
+import pandas as pd
+
 from app.skills._rules import (
     bias_pct,
     compute_conclusion,
