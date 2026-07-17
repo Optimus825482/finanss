@@ -17,6 +17,7 @@ from app.models import Report, StockPick
 from app.services.screener_service import (
     stage1_prescreen, stage2_deep_analysis, get_universe,
 )
+from app.utils.sanitize import sanitize_dict, sanitize_float
 
 logger = logging.getLogger(__name__)
 
@@ -137,12 +138,14 @@ class Orchestrator:
             db.add(report)
             db.flush()
             for pick in result["picks"]:
+                # NaN/Inf guard: any agent can produce bad floats — strip them before DB insert
+                pick = sanitize_dict(pick)
                 db.add(StockPick(report_id=report.id, ticker=pick["ticker"],
-                    price=pick["price"], momentum_pct=pick["momentum_pct"],
-                    fundamental_score=pick["fundamental_score"],
-                    sentiment_score=pick["sentiment_score"],
-                    risk_score=pick["risk_score"],
-                    composite_score=pick["composite_score"],
+                    price=pick["price"], momentum_pct=sanitize_float(pick["momentum_pct"], 0.0),
+                    fundamental_score=sanitize_float(pick["fundamental_score"], 50.0),
+                    sentiment_score=sanitize_float(pick["sentiment_score"], 50.0),
+                    risk_score=sanitize_float(pick["risk_score"], 50.0),
+                    composite_score=sanitize_float(pick["composite_score"], 50.0),
                     pe_ratio=pick.get("pe_ratio"),
                     volatility_annualized=pick.get("volatility_annualized"),
                     max_drawdown_pct=pick.get("max_drawdown_pct"),

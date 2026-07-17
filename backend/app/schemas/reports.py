@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.utils.sanitize import sanitize_float
 
 
 class StockPickOut(BaseModel):
@@ -16,6 +18,25 @@ class StockPickOut(BaseModel):
     volatility_annualized: Optional[float] = None
     max_drawdown_pct: Optional[float] = None
     narrative: str
+
+    @field_validator(
+        "price", "momentum_pct", "fundamental_score", "sentiment_score",
+        "risk_score", "composite_score",
+        mode="before",
+    )
+    @classmethod
+    def _nan_to_zero(cls, v):
+        """Catch NaN/Inf floats from DB — required fields default to 0.0."""
+        return sanitize_float(v, 0.0)
+
+    @field_validator(
+        "pe_ratio", "volatility_annualized", "max_drawdown_pct",
+        mode="before",
+    )
+    @classmethod
+    def _nan_to_none(cls, v):
+        """Catch NaN/Inf floats from DB — optional fields default to None."""
+        return sanitize_float(v, None)
 
     class Config:
         from_attributes = True

@@ -5,11 +5,13 @@ volatilite, maksimum düşüş (drawdown) ve S&P 500'e göre beta hesaplar.
 risk_score: 0 = düşük risk, 100 = yüksek risk.
 """
 import asyncio
+import math
 import numpy as np
 import yfinance as yf
 
 from app.agents.base import BaseAgent, AgentStatus
 from app.config import BENCHMARK_TICKER
+from app.utils.sanitize import sanitize_float
 
 
 class RiskAgent(BaseAgent):
@@ -47,11 +49,15 @@ class RiskAgent(BaseAgent):
             closes = hist["Close"]
             returns = closes.pct_change(fill_method=None).dropna()
 
-            volatility_annualized = float(returns.std() * np.sqrt(252) * 100) if len(returns) > 1 else 0.0
+            volatility_annualized = (
+                float(returns.std() * np.sqrt(252) * 100)
+                if len(returns) > 1 and not math.isnan(returns.std())
+                else 0.0
+            )
 
             running_max = closes.cummax()
-            drawdown = (closes - running_max) / running_max
-            max_drawdown_pct = float(drawdown.min() * 100)
+            drawdown = np.divide(closes - running_max, running_max, where=running_max != 0)
+            max_drawdown_pct = float(np.nan_to_num(drawdown.min() * 100, nan=0.0))
 
             beta = None
             if benchmark_returns is not None and len(returns) > 5:
@@ -61,16 +67,18 @@ class RiskAgent(BaseAgent):
                     beta = float(np.cov(r, b)[0][1] / b.var())
 
             # Risk skoru: yüksek volatilite + derin drawdown + yüksek beta -> yüksek risk
-            vol_component = min(volatility_annualized / 60 * 100, 100)  # %60 yıllık vol = tavan
-            dd_component = min(abs(max_drawdown_pct) / 40 * 100, 100)  # %40 düşüş = tavan
-            beta_component = min(abs(beta) / 2 * 100, 100) if beta is not None else 50
+            vol_clean = sanitize_float(volatility_annualized, 0.0)
+            dd_clean = sanitize_float(abs(max_drawdown_pct), 0.0)
+            vol_component = min(vol_clean / 60 * 100, 100)  # %60 yıllık vol = tavan
+            dd_component = min(dd_clean / 40 * 100, 100)  # %40 düşüş = tavan
+            beta_component = min(abs(beta) / 2 * 100, 100) if beta is not None and not math.isnan(beta) else 50
 
             risk_score = round(vol_component * 0.45 + dd_component * 0.35 + beta_component * 0.20, 1)
 
-            c["risk_score"] = risk_score
-            c["volatility_annualized"] = round(volatility_annualized, 1)
-            c["max_drawdown_pct"] = round(max_drawdown_pct, 1)
-            c["beta"] = round(beta, 2) if beta is not None else None
+            c["risk_score"] = sanitize_float(risk_score, 50.0)
+            c["volatility_annualized"] = sanitize_float(round(volatility_annualized, 1))
+            c["max_drawdown_pct"] = sanitize_float(round(max_drawdown_pct, 1))
+            c["beta"] = round(beta, 2) if beta is not None and not math.isnan(beta) else None
 
             # Ham geçmiş veriyi rapora taşımıyoruz, DB'ye yazılmayacak
             c.pop("history", None)
