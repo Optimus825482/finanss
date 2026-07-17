@@ -86,7 +86,8 @@ class AutonomousAgent:
         from app.services.yf_utils import safe_ticker_info, safe_ticker_history
         info = safe_ticker_info(ticker)
         hist = safe_ticker_history(ticker, period="3mo")
-        hist.index = hist.index.tz_localize(None)
+        if hasattr(hist.index, 'tz_localize'):
+            hist.index = hist.index.tz_localize(None)
 
         price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
         prev_close = info.get("regularMarketPreviousClose", price)
