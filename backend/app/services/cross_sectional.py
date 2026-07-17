@@ -35,8 +35,7 @@ SECTOR_GROUPS = {
     "consumer": ["ARCLK.IS", "VESTL.IS", "AEFES.IS", "CCOLA.IS", "ULKER.IS",
                  "PG", "KO", "PEP", "KO"],
     "auto": ["FROTO.IS", "TOASO.IS", "DOAS.IS", "TSLA", "F", "GM"],
-    "tech": ["AAPL", "MSFT", "GOOGL", "NVDA", "META", "ADBE", "CRM", "INTC",
-             "ASELS.IS", "LINK.IS"],
+    "tech": ["AAPL", "MSFT", "GOOGL", "NVDA", "META", "ADBE", "CRM", "INTC", "LINK.IS"],
     "healthcare": ["JNJ", "PFE", "UNH", "MRK", "ABBV", "LLY", "GILD"],
     "reit": ["AKSGY.IS", "EKGYO.IS", "ISGYO.IS", "O", "SPG", "AMT"],
 }

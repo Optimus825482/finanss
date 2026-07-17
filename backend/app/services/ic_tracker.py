@@ -32,7 +32,8 @@ class ICTracker:
     def __init__(self):
         self._signals: dict[str, list[dict]] = {}  # {factor_name: [{date, signal, actual_return}, ...]}
 
-    def record(self, factor: str, ticker: str, signal: float, actual_return: float, db: Optional[Session] = None):
+    def record(self, factor: str, ticker: str, signal: float, actual_return: float,
+               db: Optional[Session] = None, date: Optional[datetime] = None):
         """Bir sinyal tahminini kaydet."""
         if factor not in self._signals:
             self._signals[factor] = []
@@ -40,7 +41,7 @@ class ICTracker:
             "ticker": ticker,
             "signal": signal,
             "actual_return": actual_return,
-            "date": datetime.now(),
+            "date": date or datetime.now(),
         })
         # En son 120 kaydı tut (bellek temiz)
         if len(self._signals[factor]) > 120:
