@@ -428,10 +428,10 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         logger.warning("LLM reasoning failed for %s: %s", ticker, e)
 
     # ── Fair Value (adil değer) ──
-    fair_value: float | None = None
-    margin_pct: float | None = None
-    valuation_assessment: str | None = None
-    fair_value_models: list[dict] = []
+    fair_value = None
+    margin_pct = None
+    valuation_assessment = None
+    fair_value_models = []
     try:
         from app.services.fair_value import calculate_fair_value as calc_fv
         fv_result = await asyncio.to_thread(calc_fv, ticker)
