@@ -315,9 +315,10 @@ class AutonomousAgent:
                 decisions = []
         except Exception as e:
             import traceback
-            logger.error("Karar hatası: %s\n%s", e, traceback.format_exc())
+            tb = traceback.format_exc()
+            logger.error("Karar hatası (%s): %s\n%s", exchange_label, e, tb)
             from app.services.agent_logs import log_if_active
-            log_if_active(self.portfolio_slug, "error", f"Karar hatası: {e}")
+            log_if_active(self.portfolio_slug, "error", f"Karar hatası ({exchange_label}): {e}\n{tb[-200:]}")
             actions, decisions = [], []
 
         return {"actions": actions, "decisions": decisions if market_open else [],
