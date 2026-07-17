@@ -28,39 +28,58 @@ MACRO_INDICATORS: list[dict] = [
 
 def get_live_prices(tickers: list[str]) -> dict[str, dict]:
     """Her ticker için {price, change_pct} döner. Veri çekilemeyen semboller
-    None olarak işaretlenir, hiçbir zaman exception fırlatmaz."""
+    None olarak işaretlenir, hiçbir zaman exception fırlatmaz.
+
+    BIST (.IS) hisseleri batch download'da çalışmadığı için tekil indirilir.
+    """
     result: dict[str, dict] = {}
     unique = list(dict.fromkeys(t for t in tickers if t))
     if not unique:
         return result
 
-    data = safe_download(unique, period="5d", interval="1d", progress=False)
-    if data is None:
-        data = pd.DataFrame()
+    # .IS ticker'lar batch download'da calismaz → bireysel indir
+    bist = [t for t in unique if t.endswith(".IS")]
+    non_bist = [t for t in unique if not t.endswith(".IS")]
 
-    for t in unique:
-        try:
-            if data is None or data.empty:
-                raise ValueError("veri yok")
-            closes = data.get("Close", pd.DataFrame())
-            if len(unique) == 1:
-                if isinstance(closes, pd.DataFrame) and closes.shape[1] == 1:
-                    closes = closes.iloc[:, 0]
-            else:
-                closes = closes[t] if t in closes.columns else None
-                if closes is None:
+    # Non-BIST: batch download
+    if non_bist:
+        data = safe_download(non_bist, period="5d", interval="1d", progress=False)
+        if data is not None and not data.empty:
+            for t in non_bist:
+                try:
+                    closes = data.get("Close", {})
+                    if isinstance(closes, pd.DataFrame):
+                        closes = closes[t] if t in closes.columns else None
+                    if closes is None or closes.dropna().empty:
+                        result[t] = {"price": None, "change_pct": None}
+                        continue
+                    closes = closes.dropna()
+                    last = float(closes.iloc[-1])
+                    prev = float(closes.iloc[-2]) if len(closes) > 1 else last
+                    result[t] = {"price": round(last, 2),
+                                 "change_pct": round((last - prev) / prev * 100, 2) if prev else 0.0}
+                except Exception:
                     result[t] = {"price": None, "change_pct": None}
-                    continue
-            closes = closes.dropna()
-            if closes.empty:
+        else:
+            for t in non_bist:
                 result[t] = {"price": None, "change_pct": None}
-                continue
-            last = float(closes.iloc[-1])
-            prev = float(closes.iloc[-2]) if len(closes) > 1 else last
-            change_pct = ((last - prev) / prev * 100) if prev else 0.0
-            result[t] = {"price": round(last, 2), "change_pct": round(change_pct, 2)}
-        except Exception:
-            result[t] = {"price": None, "change_pct": None}
+
+    # BIST: tekil download (safe_ticker_info ile)
+    if bist:
+        from app.services.yf_utils import safe_ticker_info
+        for t in bist:
+            try:
+                info = safe_ticker_info(t)
+                price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+                prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
+                if price and prev_close and prev_close != 0:
+                    change = round((float(price) - float(prev_close)) / float(prev_close) * 100, 2)
+                else:
+                    change = 0.0
+                result[t] = {"price": round(float(price), 2) if price else None,
+                             "change_pct": change if price else 0.0}
+            except Exception:
+                result[t] = {"price": None, "change_pct": None}
 
     return result
 

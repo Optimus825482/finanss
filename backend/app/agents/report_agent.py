@@ -13,10 +13,17 @@ from app.config import SCORING_WEIGHTS, TOP_N_PICKS
 logger = logging.getLogger(__name__)
 
 
+def _currency(c: dict) -> str:
+    """BIST hisseleri için ₺, diğerleri için $."""
+    return "₺" if c.get("ticker", "").endswith(".IS") else "$"
+
+
 def _narrative_for(c: dict) -> str:
     """Kisa ozet — LLM yoksa kullanilir. Fair value bilgisi varsa ekler."""
     ticker = c["ticker"]
-    parts = [f"{ticker} son hafta %{c['momentum_pct']:.1f} {'yukari' if c['momentum_pct'] > 0 else 'asagi'} hareket etti"]
+    mom = c.get("momentum_pct", 0) or 0
+    direction = "yukari" if mom > 0 else "asagi" if mom < 0 else "yatay"
+    parts = [f"{ticker} son hafta %{mom:.1f} {direction} hareket etti"]
 
     if c.get("pe_ratio"):
         pe = c["pe_ratio"]
@@ -42,7 +49,7 @@ def _narrative_for(c: dict) -> str:
     margin = c.get("margin_pct")
     if fv is not None and margin is not None:
         direction = "iskontolu" if margin > 0 else "primli"
-        parts.append(f"adil deger ${fv:.2f} (mevcut fiyata gore %{abs(margin):.1f} {direction})")
+        parts.append(f"adil deger {_currency(c)}{fv:.2f} (mevcut fiyata gore %{abs(margin):.1f} {direction})")
 
     return ". ".join(parts) + "."
 
@@ -94,7 +101,7 @@ def _build_rich_summary(candidates: list[dict], top_picks: list[dict],
 
     lines.append("")
     lines.append(f"En guclu aday: {best['ticker']} ({best['composite_score']:.0f}/100 compozit puan)")
-    lines.append(f"  • Guncel fiyat: ${best.get('price', 0):.2f}")
+    lines.append(f"  • Guncel fiyat: {_currency(best)}{best.get('price', 0):.2f}")
     lines.append(f"  • Son hafta degisim: %{best.get('momentum_pct', 0):.1f}")
     lines.append(f"  • Temel analiz puani: {best.get('fundamental_score', 0):.0f}/100")
     lines.append(f"  • Duygu/haber puani: {best.get('sentiment_score', 0):.0f}/100")
@@ -108,7 +115,7 @@ def _build_rich_summary(candidates: list[dict], top_picks: list[dict],
         lines.append(f"  • En buyuk dusus: %{best['max_drawdown_pct']:.1f}")
     if best.get("fair_value") and best.get("margin_pct") is not None:
         direction = "iskontolu" if best["margin_pct"] > 0 else "primli"
-        lines.append(f"  • Adil deger: ${best['fair_value']:.2f} (%{abs(best['margin_pct']):.1f} {direction})")
+        lines.append(f"  • Adil deger: {_currency(best)}{best['fair_value']:.2f} (%{abs(best['margin_pct']):.1f} {direction})")
 
     lines.extend([
         "",

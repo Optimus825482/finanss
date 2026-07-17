@@ -18,7 +18,9 @@ function ScoreBar({ label, value, tone }: { label: string; value: number; tone: 
 }
 
 export default function StockCard({ pick, rank, showPredict }: { pick: StockPick; rank: number; showPredict?: boolean }) {
-  const momentumPositive = pick.momentum_pct >= 0;
+  const momentumPositive = (pick.momentum_pct || 0) >= 0;
+  const isBist = pick.ticker.endsWith(".IS");
+  const currency = isBist ? "₺" : "$";
   const [predLoading, setPredLoading] = useState(false);
   const [prediction, setPrediction] = useState<any>(null);
   const [fairValue, setFairValue] = useState<any>(null);
@@ -41,9 +43,9 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
             <span className="font-mono text-lg font-semibold text-term-text">{pick.ticker}</span>
           </div>
           <div className="font-mono text-sm text-term-muted mt-0.5">
-            ${pick.price.toFixed(2)}{" "}
+            {currency}{pick.price.toFixed(2)}{" "}
             <span className={momentumPositive ? "text-term-green" : "text-term-red"}>
-              {momentumPositive ? "▲" : "▼"} {Math.abs(pick.momentum_pct)}%
+              {momentumPositive ? "▲" : "▼"} {Math.abs(pick.momentum_pct || 0)}%
             </span>
           </div>
         </div>
@@ -72,11 +74,11 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
           {pick.max_drawdown_pct && <span>Düşüş %{pick.max_drawdown_pct}</span>}
           {pick.fair_value && (
             <span style={{ color: (pick.margin_pct ?? 0) > 0 ? "var(--term-green)" : "var(--term-red)" }}>
-              Adil ${pick.fair_value.toFixed(1)} ({pick.margin_pct != null ? `${pick.margin_pct > 0 ? "+" : ""}${pick.margin_pct}%` : "—"})
+              Adil {currency}{pick.fair_value.toFixed(1)} ({pick.margin_pct != null ? `${pick.margin_pct > 0 ? "+" : ""}${pick.margin_pct}%` : "—"})
             </span>
           )}
           {pick.llm_target_price && (
-            <span style={{ color: "var(--term-amber)" }}>🎯 ${pick.llm_target_price.toFixed(1)}</span>
+            <span style={{ color: "var(--term-amber)" }}>🎯 {currency}{pick.llm_target_price.toFixed(1)}</span>
           )}
         </div>
       )}
