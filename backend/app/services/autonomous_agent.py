@@ -296,12 +296,20 @@ class AutonomousAgent:
                     "market_open": market_open, "exchange": exchange_label}
 
         # 4. Piyasa durumuna gore karar
-        if market_open:
-            # Piyasa acik → normal karar + islem
-            actions, decisions = await self._llm_decide(portfolio, candidates, db)
-        else:
-            # Piyasa kapali → derin analiz + bekleyen emir
-            actions = await self._deep_analyze_and_queue(db, candidates, portfolio, is_bist, exchange_label)
+        try:
+            if market_open:
+                # Piyasa acik → normal karar + islem
+                actions, decisions = await self._llm_decide(portfolio, candidates, db)
+            else:
+                # Piyasa kapali → derin analiz + bekleyen emir
+                actions = await self._deep_analyze_and_queue(db, candidates, portfolio, is_bist, exchange_label)
+                decisions = []
+        except Exception as e:
+            import traceback
+            logger.error("Karar hatası: %s\n%s", e, traceback.format_exc())
+            from app.services.agent_logs import log_if_active
+            log_if_active(self.portfolio_slug, "error", f"Karar hatası: {e}")
+            actions, decisions = [], []
 
         return {"actions": actions, "decisions": decisions if market_open else [],
                 "portfolio": self.get_portfolio(db),

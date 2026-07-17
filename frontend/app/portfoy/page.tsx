@@ -21,6 +21,7 @@ export default function PortfoyPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [logs, setLogs] = useState<Array<{step: string; msg: string; ts: number}>>([]);
   const [logStatus, setLogStatus] = useState<string>("");
+  const [showHistory, setShowHistory] = useState(false);
 
   const loadAll = useCallback(async () => {
     try { setBistPortfolio(await api.getAgentPortfolio("bist")); } catch { /* */ }
@@ -232,6 +233,69 @@ export default function PortfoyPage() {
                 {l.msg}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Trade History Button + Modal */}
+      <div className="mt-6">
+        <button onClick={() => setShowHistory(true)}
+          className="font-mono text-xs tracking-wider px-4 py-2 rounded-sm transition-none"
+          style={{ border: "1px solid var(--term-border)", color: "var(--term-muted)" }}>
+          📋 TRADE GEÇMİŞİ
+        </button>
+      </div>
+
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowHistory(false); }}>
+          <div className="rounded-sm w-full max-w-3xl max-h-[80vh] overflow-y-auto mx-4" 
+            style={{ backgroundColor: "var(--term-panel)", border: `1px solid ${borderColor}` }}>
+            <div className="sticky top-0 flex items-center justify-between px-4 py-3"
+              style={{ backgroundColor: "var(--term-panel)", borderBottom: `1px solid ${borderColor}` }}>
+              <div className="font-mono text-sm" style={{ color: "var(--term-amber)" }}>📋 TRADE GEÇMİŞİ</div>
+              <button onClick={() => setShowHistory(false)}
+                className="font-mono text-lg px-2" style={{ color: "var(--term-muted)" }}>✕</button>
+            </div>
+            <div className="p-2">
+              <table className="w-full font-mono text-[11px]">
+                <thead>
+                  <tr style={{ color: "var(--term-muted)", borderBottom: `1px solid ${borderColor}` }}>
+                    <th className="text-left px-2 py-2">Tarih</th>
+                    <th className="text-left px-2 py-2">Hisse</th>
+                    <th className="text-left px-2 py-2">İşlem</th>
+                    <th className="text-right px-2 py-2">Adet</th>
+                    <th className="text-right px-2 py-2">Fiyat</th>
+                    <th className="text-right px-2 py-2">Tutar</th>
+                    <th className="text-right px-2 py-2">K/Z</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisions.map((d, i) => {
+                    const isBuy = d.action === "buy";
+                    // K/Z: sell'lerde total_amount göster (proceeds), buy'larda -
+                    const pl = !isBuy ? (d.total_amount || 0) - (d.quantity * d.price) : null;
+                    return (
+                      <tr key={d.id || i} style={{ color: "var(--term-text)", borderTop: `1px solid ${borderColor}` }}>
+                        <td className="px-2 py-1.5" style={{ color: "var(--term-muted)" }}>
+                          {new Date(d.created_at).toLocaleDateString("tr-TR")} {new Date(d.created_at).toLocaleTimeString("tr-TR", {hour:"2-digit", minute:"2-digit"})}
+                        </td>
+                        <td className="px-2 py-1.5 font-semibold">{d.ticker}</td>
+                        <td className="px-2 py-1.5" style={{ color: isBuy ? "var(--term-green)" : "var(--term-red)" }}>
+                          {isBuy ? "ALIM" : "SATIM"}
+                        </td>
+                        <td className="px-2 py-1.5 text-right">{d.quantity}</td>
+                        <td className="px-2 py-1.5 text-right">{detSym}{d.price.toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-right">{detSym}{d.total_amount.toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-right" style={{ color: pl != null ? (pl >= 0 ? "var(--term-green)" : "var(--term-red)") : "var(--term-muted)" }}>
+                          {pl != null ? `${pl >= 0 ? "+" : ""}${detSym}${pl.toFixed(0)}` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
