@@ -314,15 +314,7 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     if position and position.get("status") == "holding" and position_pl is None:
         data_missing.append("position_pl")
 
-    # 7. Markdown rapor
-    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing,
-                             macro_indicators=macro_indicators or None,
-                             fair_value=fair_value, margin_pct=margin_pct,
-                             valuation_assessment=valuation_assessment,
-                             fair_value_models=fair_value_models,
-                             predictions=predictions)
-
-    # 8. Watchlist signal güncelle (sessiz)
+    # 7. Watchlist signal güncelle (sessiz)
     if db is not None:
         await asyncio.to_thread(_update_watchlist_signal, db, ticker, conclusion)
 
@@ -468,7 +460,15 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         except Exception as e:
             logger.warning("Prediction failed for %s: %s", ticker, e)
 
-    # ── NaN sanitize: tüm float değerleri temizle (yfinance/hesap hatası → JSON fail) ──
+    # ── Markdown rapor (tüm enrichment'ler sonrası) ──
+    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing,
+                             macro_indicators=macro_indicators or None,
+                             fair_value=fair_value, margin_pct=margin_pct,
+                             valuation_assessment=valuation_assessment,
+                             fair_value_models=fair_value_models,
+                             predictions=predictions)
+
+    # ── NaN sanitize: tüm float değerleri temizle ──
     def _sanitize_dict(d: dict) -> dict:
         for k, v in d.items():
             if isinstance(v, float) and _math.isnan(v):
