@@ -104,10 +104,12 @@ class AutonomousAgent:
         from app.agents.sentiment_agent import SentimentAgent
         from app.agents.risk_agent import RiskAgent
         from app.agents.report_agent import ReportAgent
+        from app.agents.news_analyst import NewsAnalyst
 
-        f = FundamentalAgent(); s = SentimentAgent(); r = RiskAgent(); rep = ReportAgent()
+        f = FundamentalAgent(); s = SentimentAgent(); r = RiskAgent(); rep = ReportAgent(); n = NewsAnalyst()
         c = await f.run([candidate])
         c = await s.run(c)
+        c = await n.run(c)
         c = await r.run(c)
         return c[0] if c else candidate
 
@@ -619,9 +621,16 @@ class AutonomousAgent:
         from app.agents.risk_manager import RiskManager
         risk_mgr = RiskManager()
 
+        # ── FAZ 2.2: Market Regime Detection ──
+        from app.services.regime_detector import RegimeDetector
+        regime = RegimeDetector().detect()
+        logger.info("[%s] Piyasa rejimi: %s (score=%.0f)",
+                    exchange_label, regime["regime"], regime.get("regime_score", 50))
+
         # ── FAZ 1.3: Kelly Position Sizing ──
-        from app.services.position_sizing import get_position_budget
-        kelly_budget = get_position_budget(db, portfolio_id, cash, default_pct=self.max_per_position_pct)
+        from app.services.position_sizing import get_position_budget, adjust_for_regime
+        kelly_budget_base = get_position_budget(db, portfolio_id, cash, default_pct=self.max_per_position_pct)
+        kelly_budget = adjust_for_regime(kelly_budget_base, regime.get("regime_score", 50))
 
         # Collect eligible buy candidates first, then allocate budgets (Kelly + Risk Manager)
         eligible: list[dict] = []

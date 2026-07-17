@@ -76,6 +76,7 @@ class FundamentalAgent(BaseAgent):
 
     def _analyze(self, candidates: list[dict]) -> list[dict]:
         from app.services.yf_utils import safe_ticker_info
+        from app.services.piotroski import compute_piotroski
         for c in candidates:
             info = safe_ticker_info(c["ticker"])
 
@@ -92,5 +93,20 @@ class FundamentalAgent(BaseAgent):
             ]
             c["fundamental_score"] = round(sum(scores) / len(scores), 1)
             c["pe_ratio"] = pe
+            c["roe"] = roe
+            c["debt_to_equity"] = debt_to_equity
+            c["revenue_growth"] = growth
+
+            # Piotroski F-Score (value quality check)
+            piotroski = compute_piotroski(info)
+            c["piotroski_score"] = piotroski["f_score"]
+            c["piotroski_grade"] = piotroski["grade"]
+
+            # Piotroski ≥ 7 → fundamental_score bonus +5 (değer tuzağı değilse)
+            if piotroski["f_score"] >= 7:
+                c["fundamental_score"] = min(100, c["fundamental_score"] + 5)
+            elif piotroski["f_score"] <= 3:
+                # Düşük Pio → penalty -5 (şişirilmiş temel skoru düzelt)
+                c["fundamental_score"] = max(0, c["fundamental_score"] - 5)
 
         return candidates
