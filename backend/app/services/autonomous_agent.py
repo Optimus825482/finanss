@@ -462,6 +462,7 @@ class AutonomousAgent:
         # ── ADVANCED 1: Cross-Sectional + Time-Series Dual Momentum ──
         if candidates:
             from app.services.cross_sectional import compute_dual_momentum
+            import time as _time
             for c in candidates:
                 try:
                     dual = compute_dual_momentum(c["ticker"])
@@ -469,28 +470,29 @@ class AutonomousAgent:
                     c["cross_momentum"] = dual.get("cross_momentum", 0)
                     c["cross_rank"] = dual.get("cross_details", {}).get("sector_rank", 0.5)
                     c["ts_momentum"] = dual.get("ts_momentum", 0)
-                    # Composite'ye ekle (bonus)
                     if abs(dual.get("dual_momentum", 0)) > 0.5:
                         bonus = min(5, abs(dual["dual_momentum"]) * 3)
                         c["composite_score"] = min(100, c["composite_score"] + bonus)
+                    _time.sleep(0.3)  # rate-limit koruması
                 except Exception as e:
                     logger.debug("Dual momentum fail %s: %s", c["ticker"], e)
 
         # ── ADVANCED 5: Volume Anomaly / Smart Money Detection ──
         if candidates:
             from app.services.alpha_generator import detect_volume_anomaly
+            import time as _time2
             for c in candidates:
                 try:
                     va = detect_volume_anomaly(c["ticker"])
                     c["smart_money"] = va.get("smart_money_signal", "none")
                     c["volume_ratio"] = va.get("volume_ratio", 1.0)
                     c["vpt_divergence"] = va.get("vpt_divergence", False)
-                    # Accumulation detection → bonus
                     if va.get("smart_money_signal") == "accumulation":
                         c["composite_score"] = min(100, c["composite_score"] + 3)
                         c["sentiment_score"] = min(100, c.get("sentiment_score", 50) + 5)
                     elif va.get("smart_money_signal") == "distribution":
                         c["composite_score"] = max(0, c["composite_score"] - 3)
+                    _time2.sleep(0.3)  # rate-limit koruması
                 except Exception as e:
                     logger.debug("Volume anomaly fail %s: %s", c["ticker"], e)
 
