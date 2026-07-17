@@ -8,14 +8,13 @@ interface PortfolioStatusBarProps {
   onToggle: (slug: "bist" | "us") => void;
 }
 
-const sym = "₺";
-
 export default function PortfolioStatusBar({
   portfolio,
   slug,
   onToggle,
 }: PortfolioStatusBarProps) {
   const borderColor = "var(--term-border)";
+  const sym = slug === "bist" ? "₺" : "$";
 
   return (
     <div
