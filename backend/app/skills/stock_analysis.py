@@ -385,13 +385,6 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     except Exception as e:
         logger.warning("LLM reasoning failed for %s: %s", ticker, e)
 
-    return {
-        "ticker": ticker,
-        "markdown": markdown,
-        "conclusion": conclusion,
-        "bias_pct": bias,
-        "data_missing": data_missing,
-        "price_history": price_history,
     # ── NaN sanitize: tüm float değerleri temizle (yfinance/hesap hatası → JSON fail) ──
     def _sanitize_dict(d: dict) -> dict:
         for k, v in d.items():
