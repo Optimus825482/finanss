@@ -181,9 +181,19 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
     """
 
     def _fetch(t: str) -> object:
-        """Sync fetch helper for to_thread."""
-        from app.services.yf_utils import safe_ticker_history
-        return safe_ticker_history(t, period="1mo")
+        """Sync fetch — BIST için tekil yf.download (batch değil, çalışan yöntem)."""
+        from app.services.yf_utils import safe_download
+        import pandas as pd
+        data = safe_download([t], period="1mo", interval="1d", progress=False)
+        if data is None or data.empty:
+            return pd.DataFrame()
+        # Single-ticker download: sütunları düzle
+        if isinstance(data.columns, pd.MultiIndex):
+            try:
+                data = data.xs(t, axis=1, level=1)
+            except KeyError:
+                return pd.DataFrame()
+        return data
 
     results: list[dict] = []
     total = len(tickers)
@@ -199,10 +209,14 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
         try:
             hist = hist.copy()
             hist.index = hist.index.tz_localize(None)
-            closes = hist["Close"].values
-            volumes = hist["Volume"].values
+            closes = hist["Close"].dropna().values
+            volumes_raw = hist["Volume"].dropna().values if "Volume" in hist.columns else np.ones(len(closes))
             if len(closes) < 5:
                 return None
+
+            last_close = float(closes[-1])
+            if last_close <= 0:
+                return None  # gerçek fiyat yok
 
             momentum_5d = (
                 float((closes[-1] / closes[-6] - 1) * 100)
@@ -215,8 +229,8 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             avg_gain = float(np.mean(gains[-14:])) if len(gains) >= 14 else 1.0
             avg_loss = float(np.mean(losses[-14:])) if len(losses) >= 14 else 1.0
             rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
-            avg_vol_20 = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else 1.0
-            volume_ratio = float(volumes[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
+            avg_vol_20 = float(np.mean(volumes_raw[-20:])) if len(volumes_raw) >= 20 else 1.0
+            volume_ratio = float(volumes_raw[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
             rets = np.divide(np.diff(closes), np.where(closes[:-1] != 0, closes[:-1], np.nan))
             vol_20 = float(np.nan_to_num(np.std(rets[-20:]) * np.sqrt(252) * 100, nan=50.0)) if len(rets) >= 20 else 50.0
             window = closes[-min(20, len(closes)):]
@@ -245,7 +259,7 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             )
             return {
                 "ticker": ticker,
-                "price": float(closes[-1]),
+                "price": last_close,
                 "momentum_5d": round(momentum_5d, 2),
                 "momentum_pct": round(momentum_5d, 2),
                 "rsi_14": round(rsi_val, 1),
