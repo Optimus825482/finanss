@@ -1,13 +1,12 @@
 """Unusual Options — opsiyon hacmi anomali tespiti.
 
-Yahoo Finance options chain verisini çeker,
+Yahoo Finance options chain verisini safe wrapper'larla çeker,
 volume/Open Interest oranı anormalliklerini ve put/call dengesini analiz eder.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -20,35 +19,47 @@ async def run(ticker: str, db=None) -> dict:
     """
     ticker = ticker.upper().strip()
 
-    try:
-        import yfinance as yf
-        yt = yf.Ticker(ticker)
-    except Exception:
-        return {"ticker": ticker, "options_activity": [], "put_call_ratio": None,
-                "unusual_count": 0, "sentiment": "neutral",
-                "data_missing": ["options_data"]}
-
     data_missing = []
     options_activity = []
     total_call_vol = 0
     total_put_vol = 0
 
+    # Expirations
+    expirations = []
     try:
-        expirations = await asyncio.to_thread(lambda: yt.options)
-        if not expirations:
-            data_missing.append("expirations")
-            expirations = []
-    except Exception:
-        data_missing.append("expirations")
-        expirations = []
+        from app.services.yf_utils import with_retry
+
+        def _fetch_options():
+            import yfinance as yf
+            return yf.Ticker(ticker).options or []
+
+        expirations = await asyncio.to_thread(lambda: with_retry(_fetch_options, retries=2))
+    except Exception as e:
+        logger.warning("options fetch failed for %s: %s", ticker, e)
+        data_missing.append("options_data")
+
+    if not expirations:
+        return {
+            "ticker": ticker, "options_activity": [], "put_call_ratio": None,
+            "unusual_count": 0, "sentiment": "neutral",
+            "data_missing": data_missing,
+        }
 
     # En yakın 4 expiration için options chain çek
     for exp in expirations[:4]:
         try:
-            chain = await asyncio.to_thread(lambda e=exp: yt.option_chain(e))
+            from app.services.yf_utils import with_retry
+
+            def _fetch_chain(e=exp):
+                import yfinance as yf
+                return yf.Ticker(ticker).option_chain(e)
+
+            chain = await asyncio.to_thread(lambda: with_retry(_fetch_chain, retries=2))
+            if chain is None:
+                continue
+
             calls = chain.calls
             puts = chain.puts
-
             if calls is None or puts is None or calls.empty:
                 continue
 
@@ -57,7 +68,6 @@ async def run(ticker: str, db=None) -> dict:
                     vol = float(row.get("volume", 0) or 0)
                     oi = float(row.get("openInterest", 0) or 1)
                     total_call_vol += vol
-                    # Unusual: volume > 3x open interest
                     if oi > 0 and vol > oi * 3:
                         options_activity.append({
                             "strike": float(row.get("strike", 0)),
@@ -88,7 +98,8 @@ async def run(ticker: str, db=None) -> dict:
                         })
                 except Exception:
                     continue
-        except Exception:
+        except Exception as e:
+            logger.debug("option chain failed for %s exp=%s: %s", ticker, exp, e)
             continue
 
     # Put/Call ratio

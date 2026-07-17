@@ -1,15 +1,13 @@
 """Insider Activity — içeriden işlem analizi.
 
-Yahoo Finance insider_transactions verisini çeker,
-alım/satım dengesi ve net sentiment üretir.
+Yahoo Finance insider_transactions property'sini kullanır
+(.info dict'inde gelmez — ayrı property).
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
-
-from app.services.yf_utils import safe_ticker_info
 
 logger = logging.getLogger(__name__)
 
@@ -23,57 +21,60 @@ async def run(ticker: str, db=None) -> dict:
     """
     ticker = ticker.upper().strip()
 
+    insider_txns = []
     try:
-        t = await asyncio.to_thread(safe_ticker_info, ticker)
-    except Exception:
-        t = {}
+        import yfinance as yf
+        from app.services.yf_utils import with_retry
 
-    insider_txns = t.get("insiderTransactions") if isinstance(t, dict) else []
-    if not insider_txns:
-        # yfinance 1.x — insider_transactions farklı yapıda olabilir
-        try:
-            import yfinance as yf
+        def _fetch():
             yt = yf.Ticker(ticker)
-            insider_txns = getattr(yt, "insider_transactions", None)
-            if insider_txns is None:
-                insider_txns = getattr(yt, "insider_transactions", None) or []
-        except Exception:
-            insider_txns = []
+            # insider_transactions yfinance'de ayrı bir property
+            txns = getattr(yt, "insider_transactions", None)
+            if txns is None:
+                txns = getattr(yt, "insider_transactions", None)
+            return txns or []
+
+        insider_txns = await asyncio.to_thread(lambda: with_retry(_fetch, retries=2))
+    except Exception as e:
+        logger.warning("insider fetch failed for %s: %s", ticker, e)
+
+    if not isinstance(insider_txns, (list, dict)):
+        insider_txns = []
 
     transactions = []
     buy_count = 0
     sell_count = 0
     buy_value = 0.0
     sell_value = 0.0
-    cutoff = datetime.now() - timedelta(days=180)
 
-    for tx in (insider_txns or []):
+    # yfinance insider_transactions farklı formatlarda gelebilir
+    items = insider_txns if isinstance(insider_txns, list) else insider_txns.get("transactions", [])
+
+    for tx in items:
         if not isinstance(tx, dict):
             continue
         try:
-            # Farklı yfinance versiyonları farklı key kullanır
             shares = tx.get("shares") or tx.get("transactionShares") or 0
             value = tx.get("value") or tx.get("transactionValue") or 0
-            tx_type = str(tx.get("transactionType") or tx.get("transactionText") or "").lower()
+            tx_type = str(tx.get("transactionType") or tx.get("transactionText") or tx.get("filingType") or "").lower()
 
-            if "buy" in tx_type or "purchase" in tx_type:
+            if "buy" in tx_type or "purchase" in tx_type or "acquisition" in tx_type:
                 action = "buy"
                 buy_count += 1
                 buy_value += float(value) if value else float(shares) * 100
-            elif "sell" in tx_type or "sale" in tx_type:
+            elif "sell" in tx_type or "sale" in tx_type or "disposition" in tx_type:
                 action = "sell"
                 sell_count += 1
                 sell_value += float(value) if value else float(shares) * 100
             else:
-                action = "other"
-                continue
+                continue  # award/option exercise etc -> skip
 
             transactions.append({
                 "type": action,
-                "shares": int(shares) if shares else 0,
+                "shares": int(float(shares)) if shares else 0,
                 "value": round(float(value), 2) if value else None,
-                "insider_name": str(tx.get("insiderName") or tx.get("officerName") or "Bilinmiyor"),
-                "date": str(tx.get("startDate") or tx.get("filingDate") or ""),
+                "insider_name": str(tx.get("insiderName") or tx.get("officerName") or tx.get("reportingPerson", {}).get("name", "") or "Bilinmiyor"),
+                "date": str(tx.get("startDate") or tx.get("filingDate") or tx.get("transactionDate") or ""),
             })
         except Exception:
             continue
@@ -86,11 +87,9 @@ async def run(ticker: str, db=None) -> dict:
     else:
         net_sentiment = "neutral"
 
-    total_txns = min(len(transactions), 20)
-
     return {
         "ticker": ticker,
-        "transactions": transactions[:total_txns],
+        "transactions": transactions[:20],
         "net_sentiment": net_sentiment,
         "buy_count": buy_count,
         "sell_count": sell_count,
