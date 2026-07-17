@@ -76,6 +76,9 @@ def get_pending_orders(
         }
         for o in orders
     ]
+
+
+@router.post("/run")
 async def run_agent(
     background_tasks: BackgroundTasks,
     portfolio_slug: str = Query("bist"),
