@@ -45,15 +45,6 @@ def ensure_portfolio(db: Session, slug: str) -> Portfolio:
 
     p = get_portfolio_by_slug(db, slug)
     if p is not None:
-        # Mevcut portföyün cash'ini config'deki değerle senkronize et
-        # (yeni bakiye ayarları için — pozisyonları etkilemez)
-        cfg = PORTFOLIOS.get(slug, {})
-        if cfg:
-            configured_cash = cfg.get("cash", 10_000.0)
-            # Sadece cash config'den düşükse güncelle (manual artışları ezme)
-            if p.cash < configured_cash:
-                p.cash = configured_cash
-                db.flush()
         return p
     # Config'den oluştur
     cfg = PORTFOLIOS.get(slug)
