@@ -301,8 +301,10 @@ async function j<T>(res: Response): Promise<T> {
 
 export const api = {
   getStatus: () => apiFetch("/api/status", { cache: "no-store" }).then(j<PipelineStatus>),
-  getLatestReport: () => apiFetch("/api/reports/latest", { cache: "no-store" }).then(j<Report>),
-  getHistory: () => apiFetch("/api/reports/history", { cache: "no-store" }).then(j<ReportListItem[]>),
+  getLatestReport: (exchange?: string) =>
+    apiFetch(`/api/reports/latest${exchange ? `?exchange=${exchange}` : ""}`, { cache: "no-store" }).then(j<Report>),
+  getHistory: (exchange?: string) =>
+    apiFetch(`/api/reports/history${exchange ? `?exchange=${exchange}` : ""}`, { cache: "no-store" }).then(j<ReportListItem[]>),
   getReport: (id: number) => apiFetch(`/api/reports/${id}`, { cache: "no-store" }).then(j<Report>),
   generate: (exchange?: string) =>
     apiFetch(`/api/generate${exchange ? `?exchange=${exchange}` : ""}`, { method: "POST" }).then(

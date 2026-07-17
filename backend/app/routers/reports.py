@@ -45,7 +45,7 @@ async def generate_deep_report(background_tasks: BackgroundTasks, exchange: str 
 
 
 @router.get("/reports/latest", response_model=ReportOut)
-def get_latest_report(db: Session = Depends(get_db)):
+def get_latest_report(exchange: str | None = None, db: Session = Depends(get_db)):
     report = (
         db.query(Report)
         .options(joinedload(Report.picks))
@@ -54,20 +54,33 @@ def get_latest_report(db: Session = Depends(get_db)):
     )
     if not report:
         raise HTTPException(status_code=404, detail="Henuz rapor uretilmedi")
+    # Exchange filter: sadece ilgili borsanın pick'lerini göster
+    if exchange and report.picks:
+        is_bist = exchange == "BIST"
+        report.picks = [p for p in report.picks if p.ticker.endswith(".IS") == is_bist]
+    if not report.picks and exchange:
+        raise HTTPException(status_code=404, detail=f"{exchange} icin henuz rapor uretilmedi")
     return report
 
 
 @router.get("/reports/history", response_model=list[ReportListItem])
-def get_report_history(limit: int = 30, db: Session = Depends(get_db)):
+def get_report_history(limit: int = 30, exchange: str | None = None, db: Session = Depends(get_db)):
     reports = (
         db.query(Report)
         .options(joinedload(Report.picks))
         .order_by(Report.created_at.desc())
-        .limit(limit)
-        .all()
+        .all()  # load all for filtering
     )
     items = []
+    is_bist = exchange == "BIST" if exchange else None
     for r in reports:
+        if len(items) >= limit:
+            break
+        # Exchange filter: sadece ilgili borsanın pick'lerini içeren raporları göster
+        if exchange and r.picks:
+            has_match = any(p.ticker.endswith(".IS") if is_bist else not p.ticker.endswith(".IS") for p in r.picks)
+            if not has_match:
+                continue
         top_ticker = r.picks[0].ticker if r.picks else None
         items.append(ReportListItem(
             id=r.id,

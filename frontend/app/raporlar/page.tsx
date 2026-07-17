@@ -11,11 +11,12 @@ export default function RaporlarPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exchangeFilter, setExchangeFilter] = useState<string | null>(null); // null=tum, "BIST", "US"
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    api.getHistory().then(setHistory).catch(() => {});
-  }, []);
+    api.getHistory(exchangeFilter || undefined).then(setHistory).catch(() => {});
+  }, [exchangeFilter]);
 
   useEffect(() => {
     api.markAllNotificationsRead().catch(() => {});
@@ -99,14 +100,14 @@ export default function RaporlarPage() {
       </div>
 
       {/* Üret butonları */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => handleGenerate()}
           disabled={generating !== null}
           className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
           style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}
         >
-          {generating === "TÜM" ? "ÜRETİLİYOR…" : "📊 TÜM EVREN RAPORU"}
+          {generating === "TÜM" ? "ÜRETİLİYOR…" : "📊 TÜM EVREN"}
         </button>
         <button
           onClick={() => handleGenerate("BIST")}
@@ -114,7 +115,15 @@ export default function RaporlarPage() {
           className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
           style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}
         >
-          {generating === "BIST" ? "ÜRETİLİYOR…" : "🇹🇷 BİST RAPORU"}
+          {generating === "BIST" ? "ÜRETİLİYOR…" : "🇹🇷 BIST"}
+        </button>
+        <button
+          onClick={() => handleGenerate("NASDAQ")}
+          disabled={generating !== null}
+          className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid #3b82f6", color: "#3b82f6" }}
+        >
+          {generating === "NASDAQ" ? "ÜRETİLİYOR…" : "🇺🇸 NASDAQ"}
         </button>
         <button
           onClick={() => handleGenerateDeep()}
@@ -122,8 +131,29 @@ export default function RaporlarPage() {
           className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
           style={{ border: "1px solid #a855f7", color: "#a855f7" }}
         >
-          {generating === "TÜM (DERIN)" ? "ÜRETİLİYOR…" : "🔬 DERİN ANALİZ"}
+          {generating === "TÜM (DERIN)" ? "ÜRETİLİYOR…" : "🔬 DERİN"}
         </button>
+      </div>
+
+      {/* Exchange filtresi */}
+      <div className="flex gap-2 mb-4">
+        {[
+          { label: "TÜMÜ", value: null },
+          { label: "🇹🇷 BIST", value: "BIST" },
+          { label: "🇺🇸 US", value: "US" },
+        ].map((f) => (
+          <button key={f.label}
+            onClick={() => setExchangeFilter(f.value)}
+            className="font-mono text-[10px] px-3 py-1 rounded-sm transition-none"
+            style={{
+              border: "1px solid var(--term-border)",
+              backgroundColor: exchangeFilter === f.value ? "rgba(230,160,0,0.15)" : "transparent",
+              color: exchangeFilter === f.value ? "var(--term-amber)" : "var(--term-muted)",
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

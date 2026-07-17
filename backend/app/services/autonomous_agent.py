@@ -281,8 +281,13 @@ class AutonomousAgent:
         candidates = []
 
         if latest and latest.picks:
-            # Rapor var — pick'leri kullan
+            # Rapor var — sadece bu portföyün borsasına ait pick'leri kullan
+            is_bist_agent = "BIST" in (exchanges or self.portfolio_exchanges)
             for p in latest.picks:
+                is_bist_ticker = p.ticker.endswith(".IS")
+                # BIST agent sadece .IS, US agent sadece .IS olmayanları alır
+                if is_bist_agent != is_bist_ticker:
+                    continue
                 candidates.append({
                     "ticker": p.ticker,
                     "price": p.price,
