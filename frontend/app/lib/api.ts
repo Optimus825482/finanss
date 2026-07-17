@@ -280,6 +280,40 @@ export type TickerSuggestion = {
   industry?: string;
 };
 
+// ── SSE Live Prices ──
+
+export type LiveWatchlistItem = {
+  id: number;
+  ticker: string;
+  price: number | null;
+  change_pct: number | null;
+  notes: string | null;
+};
+
+export type LivePortfolioPosition = {
+  id: number;
+  ticker: string;
+  quantity: number;
+  entry_price: number;
+  current_price: number | null;
+  unrealized_pl: number;
+};
+
+export type LivePortfolio = {
+  cash: number;
+  position_count: number;
+  total_cost: number;
+  total_market_value: number;
+  total_pl: number;
+  total_pl_pct: number;
+  positions: LivePortfolioPosition[];
+};
+
+export type LivePricesEvent = {
+  watchlist: LiveWatchlistItem[];
+  portfolio: LivePortfolio | null;
+};
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = "";
