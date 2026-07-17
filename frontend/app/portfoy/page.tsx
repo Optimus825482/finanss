@@ -46,6 +46,7 @@ export default function PortfoyPage() {
   };
 
   const borderColor = "var(--term-border)";
+  const sym = activeTab === "bist" ? "₺" : "$";
 
   // ── Anlık özet kart ──
   const renderSummaryCard = (data: AgentPortfolio | null, slug: PortfolioSlug) => {
@@ -75,7 +76,7 @@ export default function PortfoyPage() {
           <div className="grid grid-cols-4 gap-2 text-center">
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
-                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${(p.cash ?? 0).toFixed(0)}</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{sym}{(p.cash ?? 0).toFixed(0)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>POZİSYON</div>
@@ -83,12 +84,12 @@ export default function PortfoyPage() {
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA</div>
-                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_market_value ?? 0).toFixed(0)}</div>
+                <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{sym}{(p.total_market_value ?? 0).toFixed(0)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
                 <div className="font-mono text-sm font-semibold" style={{ color: (p.total_pl ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}${(p.total_pl ?? 0).toFixed(0)}
+                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}{sym}{(p.total_pl ?? 0).toFixed(0)}
                 </div>
               </div>
           </div>
@@ -105,7 +106,7 @@ export default function PortfoyPage() {
       <div className="rounded-sm px-6 py-4 mb-6" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
         <h1 className="font-mono text-xl font-semibold mb-1" style={{ color: "var(--term-text)" }}>OTONOM PORTFÖY</h1>
         <p className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
-          İki ayrı otonom ajan: BIST (Türkiye) & US (NASDAQ+DowJones). Her biri $10.000 bakiye, 30dk'da bir tarama.
+          İki ayrı otonom ajan: BIST (Türkiye) & US (NASDAQ+DowJones). Her biri 30dk'da bir tarama.
         </p>
       </div>
 
@@ -149,20 +150,20 @@ export default function PortfoyPage() {
             <div className="grid grid-cols-5 gap-3 text-center">
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.cash ?? 0).toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>{sym}{(p.cash ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>MALİYET</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_cost ?? 0).toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>{sym}{(p.total_cost ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA DEĞERİ</div>
-                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>${(p.total_market_value ?? 0).toFixed(2)}</div>
+                <div className="font-mono text-lg font-semibold" style={{ color: "var(--term-text)" }}>{sym}{(p.total_market_value ?? 0).toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
                 <div className="font-mono text-lg font-semibold" style={{ color: (p.total_pl ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}${(p.total_pl ?? 0).toFixed(2)}
+                  {(p.total_pl ?? 0) >= 0 ? "+" : ""}{sym}{(p.total_pl ?? 0).toFixed(2)}
                 </div>
               </div>
               <div>
@@ -186,12 +187,12 @@ export default function PortfoyPage() {
                 <div key={pos.id} className="flex items-center justify-between px-4 py-3 font-mono text-xs" style={{ borderTop: `1px solid ${borderColor}` }}>
                   <div>
                     <span className="font-semibold" style={{ color: "var(--term-text)" }}>{pos.ticker}</span>
-                    <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ ${pos.entry_price.toFixed(2)}</span>
+                    <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ {sym}{pos.entry_price.toFixed(2)}</span>
                   </div>
                   <div className="flex gap-4 items-center">
-                    {pos.current_price && <span style={{ color: "var(--term-muted)" }}>${pos.current_price.toFixed(2)}</span>}
+                    {pos.current_price && <span style={{ color: "var(--term-muted)" }}>{sym}{pos.current_price.toFixed(2)}</span>}
                     <span style={{ color: pos.unrealized_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                      {pos.unrealized_pl >= 0 ? "+" : ""}${pos.unrealized_pl.toFixed(2)}
+                      {pos.unrealized_pl >= 0 ? "+" : ""}{sym}{pos.unrealized_pl.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -211,7 +212,7 @@ export default function PortfoyPage() {
                     <span className="font-semibold" style={{ color: d.action === "buy" ? "var(--term-green)" : "var(--term-red)" }}>
                       {d.action === "buy" ? "AL" : "SAT"} {d.ticker}
                     </span>
-                    <span style={{ color: "var(--term-muted)" }}> x{d.quantity} @ ${d.price.toFixed(2)}</span>
+                    <span style={{ color: "var(--term-muted)" }}> x{d.quantity} @ {sym}{d.price.toFixed(2)}</span>
                   </div>
                   <div className="text-right max-w-[250px] truncate" style={{ color: "var(--term-muted)" }}>
                     {d.reasoning.slice(0, 50)}…
