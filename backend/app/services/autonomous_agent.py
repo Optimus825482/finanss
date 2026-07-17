@@ -259,13 +259,7 @@ class AutonomousAgent:
     # ── Main Decision Loop (LLM-powered) ──
 
     async def think_and_act(self, db: Session, exchanges: list[str] | None = None) -> dict:
-        """Ana dusunme dongusu:
-        1. Bekleyen emirleri kontrol et (piyasa acildiysa gerceklestir)
-        2. Takili pozisyonlari temizle
-        3. Piyasa aciksa → normal karar + islem
-           Piyasa kapaliysa → derin analiz + bekleyen emir olustur
-        4. LLM/kural-bazli karar ver + uygula
-        """
+        """Ana dusunme dongusu + advanced alpha signals."""
         if exchanges is None:
             exchanges = self.portfolio_exchanges
         portfolio = self.get_portfolio(db)
@@ -274,6 +268,20 @@ class AutonomousAgent:
         is_bist = "BIST" in (exchanges or [])
         exchange_label = "BIST" if is_bist else "US"
         market_open = market_is_open(exchange_label)
+
+        # -- HMM regime update (daily) --
+        from app.services.hmm_regime import update_hmm_from_market, hmm_detector
+        try:
+            update_hmm_from_market()
+        except Exception:
+            pass
+
+        # -- IC tracking from past trades --
+        from app.services.ic_tracker import track_signals_from_trades, ic_tracker
+        try:
+            track_signals_from_trades(db)
+        except Exception:
+            pass
 
         # 1. Bekleyen emirleri gerceklestir (piyasa acildiysa)
         if market_open:
@@ -449,6 +457,41 @@ class AutonomousAgent:
             except Exception as e:
                 logger.warning("[%s] Arastirma ekibi basarisiz, orijinal adaylarla devam: %s",
                                "BIST" if is_bist else "US", e)
+
+        # ── ADVANCED 1: Cross-Sectional + Time-Series Dual Momentum ──
+        if candidates:
+            from app.services.cross_sectional import compute_dual_momentum
+            for c in candidates:
+                try:
+                    dual = compute_dual_momentum(c["ticker"])
+                    c["dual_momentum"] = dual.get("dual_momentum", 0)
+                    c["cross_momentum"] = dual.get("cross_momentum", 0)
+                    c["cross_rank"] = dual.get("cross_details", {}).get("sector_rank", 0.5)
+                    c["ts_momentum"] = dual.get("ts_momentum", 0)
+                    # Composite'ye ekle (bonus)
+                    if abs(dual.get("dual_momentum", 0)) > 0.5:
+                        bonus = min(5, abs(dual["dual_momentum"]) * 3)
+                        c["composite_score"] = min(100, c["composite_score"] + bonus)
+                except Exception as e:
+                    logger.debug("Dual momentum fail %s: %s", c["ticker"], e)
+
+        # ── ADVANCED 5: Volume Anomaly / Smart Money Detection ──
+        if candidates:
+            from app.services.alpha_generator import detect_volume_anomaly
+            for c in candidates:
+                try:
+                    va = detect_volume_anomaly(c["ticker"])
+                    c["smart_money"] = va.get("smart_money_signal", "none")
+                    c["volume_ratio"] = va.get("volume_ratio", 1.0)
+                    c["vpt_divergence"] = va.get("vpt_divergence", False)
+                    # Accumulation detection → bonus
+                    if va.get("smart_money_signal") == "accumulation":
+                        c["composite_score"] = min(100, c["composite_score"] + 3)
+                        c["sentiment_score"] = min(100, c.get("sentiment_score", 50) + 5)
+                    elif va.get("smart_money_signal") == "distribution":
+                        c["composite_score"] = max(0, c["composite_score"] - 3)
+                except Exception as e:
+                    logger.debug("Volume anomaly fail %s: %s", c["ticker"], e)
 
         return candidates
 
