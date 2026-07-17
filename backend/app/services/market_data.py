@@ -1,9 +1,11 @@
 """
 Watchlist ve portföy için ortak canlı fiyat servisi.
 Hafif ve tek amaçlı — pipeline'dan bağımsız çalışır.
+30sn in-memory cache — polling kaynaklı rate-limit'i önler.
 """
 import asyncio
 import logging
+import time
 from typing import Optional
 
 import pandas as pd
@@ -11,6 +13,10 @@ import pandas as pd
 from app.services.yf_utils import safe_download
 
 logger = logging.getLogger(__name__)
+
+# In-memory price cache (30sn TTL — polling 3sn = 10 kullanım)
+_price_cache: dict[str, tuple[float, dict]] = {}
+_CACHE_TTL = 60  # saniye — polling 3sn = 20 kullanım, yfinance rate-limit koruması
 
 # Küresel makro göstergeler — batch download ile tek seferde çekilir.
 # Her gösterge: display_name, ticker, description, unit
@@ -27,19 +33,29 @@ MACRO_INDICATORS: list[dict] = [
 
 
 def get_live_prices(tickers: list[str]) -> dict[str, dict]:
-    """Her ticker için {price, change_pct} döner. Veri çekilemeyen semboller
-    None olarak işaretlenir, hiçbir zaman exception fırlatmaz.
-
-    BIST (.IS) hisseleri batch download'da çalışmadığı için tekil indirilir.
-    """
+    """Her ticker için {price, change_pct} döner. 30sn cache."""
     result: dict[str, dict] = {}
     unique = list(dict.fromkeys(t for t in tickers if t))
     if not unique:
         return result
 
+    now = time.time()
+    # Cache hit check
+    need_fetch = []
+    for t in unique:
+        if t in _price_cache:
+            ts, data = _price_cache[t]
+            if now - ts < _CACHE_TTL:
+                result[t] = data
+                continue
+        need_fetch.append(t)
+
+    if not need_fetch:
+        return result
+
     # .IS ticker'lar batch download'da calismaz → bireysel indir
-    bist = [t for t in unique if t.endswith(".IS")]
-    non_bist = [t for t in unique if not t.endswith(".IS")]
+    bist = [t for t in need_fetch if t.endswith(".IS")]
+    non_bist = [t for t in need_fetch if not t.endswith(".IS")]
 
     # Non-BIST: batch download
     if non_bist:
@@ -80,6 +96,11 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
                              "change_pct": change if price else 0.0}
             except Exception:
                 result[t] = {"price": None, "change_pct": None}
+
+    # Cache yaz
+    for t, data in result.items():
+        if data.get("price") is not None or data.get("change_pct") is not None:
+            _price_cache[t] = (now, data)
 
     return result
 
