@@ -305,7 +305,7 @@ class AutonomousAgent:
                 "market_open": market_open, "exchange": exchange_label}
 
     async def _gather_candidates(self, db: Session, exchanges: list[str], is_bist: bool) -> list[dict]:
-        """Aday hisseleri topla — rapordan veya piyasadan."""
+        """Aday hisseleri topla — rapordan veya piyasadan, ardindan Bull/Bear arastirma ekibine gonder."""
         from app.models.core import Report
 
         latest = db.query(Report).options(
@@ -322,6 +322,7 @@ class AutonomousAgent:
                     "ticker": p.ticker,
                     "price": p.price,
                     "momentum_5d": p.momentum_pct or 0,
+                    "momentum_pct": p.momentum_pct or 0,
                     "rsi_14": p.rsi_14 if p.rsi_14 is not None else 50,
                     "technical_score": p.composite_score or 50,
                     "composite_score": p.composite_score or 50,
@@ -330,6 +331,7 @@ class AutonomousAgent:
                     "risk_score": p.risk_score or 50,
                     "pe_ratio": p.pe_ratio,
                     "volatility": p.volatility_annualized,
+                    "volatility_annualized": p.volatility_annualized,
                     "narrative": p.narrative or "",
                     "fair_value": p.fair_value,
                     "margin_pct": p.margin_pct,
@@ -351,10 +353,23 @@ class AutonomousAgent:
                         "risk_score": a.get("risk_score", 50),
                         "pe_ratio": a.get("pe_ratio"),
                         "volatility": a.get("volatility_annualized"),
+                        "volatility_annualized": a.get("volatility_annualized"),
                         "narrative": a.get("narrative", ""),
                     })
                 except Exception:
                     pass
+
+        # ── FAZ 1.1: Bull/Bear Research Team ──
+        if candidates:
+            from app.agents.research_team import BullBearResearcher
+            researcher = BullBearResearcher()
+            try:
+                candidates = await researcher.run(candidates)
+                logger.info("[%s] Bull/Bear arastirma tamamlandi: %d aday",
+                            "BIST" if is_bist else "US", len(candidates))
+            except Exception as e:
+                logger.warning("[%s] Arastirma ekibi basarisiz, orijinal adaylarla devam: %s",
+                               "BIST" if is_bist else "US", e)
 
         return candidates
 
@@ -595,12 +610,20 @@ class AutonomousAgent:
                         actions.append({"action": "sell", "ticker": ticker, "reasoning": result.get("error", "")})
                         portfolio = self.get_portfolio(db)
 
-        # 2. Buy top candidates if cash available
+        # 2. Buy top candidates if cash available — Kelly + Risk Manager
         cash = portfolio.get("cash", 0)
-        max_per_pos = cash * self.max_per_position_pct
         current_count = portfolio.get("position_count", 0)
+        portfolio_id = self._ensure_portfolio_id(db)
 
-        # Collect eligible buy candidates first, then allocate budgets
+        # ── FAZ 1.2: Risk Manager ──
+        from app.agents.risk_manager import RiskManager
+        risk_mgr = RiskManager()
+
+        # ── FAZ 1.3: Kelly Position Sizing ──
+        from app.services.position_sizing import get_position_budget
+        kelly_budget = get_position_budget(db, portfolio_id, cash, default_pct=self.max_per_position_pct)
+
+        # Collect eligible buy candidates first, then allocate budgets (Kelly + Risk Manager)
         eligible: list[dict] = []
         for c in candidates[:top_n]:
             if current_count + len(eligible) >= self.max_positions:
@@ -609,7 +632,26 @@ class AutonomousAgent:
             rsi = _get_rsi(c["ticker"])
             mom = c.get("momentum_5d", 0)
             if score >= 60 and rsi < 65 and mom > -5 and c.get("price", 0) > 0:
-                eligible.append({**c, "_score": score, "_rsi": rsi, "_mom": mom})
+                # ── Risk Manager check ──
+                risk_eval = risk_mgr.evaluate(
+                    ticker=c["ticker"],
+                    candidates=candidates,
+                    positions=portfolio.get("positions", []),
+                    volatility=c.get("volatility", c.get("volatility_annualized")),
+                    cash=cash,
+                )
+                if risk_eval["approved"]:
+                    budget_adj = risk_eval.get("adjusted_budget_pct", 1.0)
+                    eligible.append({**c, "_score": score, "_rsi": rsi, "_mom": mom,
+                                    "_risk_eval": risk_eval, "_budget_adj": budget_adj})
+                elif risk_eval.get("warnings"):
+                    # Approved değilse bile sadece warning varsa half budget ile dene
+                    if not risk_eval["veto_reasons"]:
+                        eligible.append({**c, "_score": score, "_rsi": rsi, "_mom": mom,
+                                        "_risk_eval": risk_eval, "_budget_adj": 0.5})
+                else:
+                    logger.info("[RiskManager] %s veto edildi: %s", c["ticker"],
+                                "; ".join(risk_eval["veto_reasons"]))
 
         budgets: dict[str, float] = {}
         if eligible and cash > 0:
@@ -632,8 +674,10 @@ class AutonomousAgent:
             if cash <= 0:
                 break
             price = float(c["price"])
-            budget = float(budgets.get(c["ticker"], max_per_pos)) if budgets else max_per_pos
-            budget = min(budget, cash, max_per_pos if max_per_pos > 0 else budget)
+            budget_adj = c.get("_budget_adj", 1.0)
+            max_per_pos = cash * self.max_per_position_pct
+            # Kelly budget × Risk Manager adjustment
+            budget = min(kelly_budget * budget_adj, max_per_pos, cash)
             qty = max(1, int(budget / price)) if price > 0 and budget > 0 else 0
             if qty > 0 and budget > 0:
                 score, rsi, mom = c["_score"], c["_rsi"], c["_mom"]
