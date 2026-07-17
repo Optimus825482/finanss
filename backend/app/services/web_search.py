@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 _UA = (
     "Mozilla/5.0 (compatible; OrbisFinaiSkill/1.0; +https://github.com/orbis-finai)"
 )
-# Reddit generic bot UA'yı bloklar — platform:app:version format ister
-_REDDIT_UA = "linux:orbis-finai:1.0.0 (by /u/orbis_finai)"
+# Reddit kaldırıldı — 403 bot block, alternatif: Yahoo Finance + Google News
 _DEFAULT_TIMEOUT = 20.0
 
 
@@ -40,7 +39,7 @@ class SearchHit:
     publisher: Optional[str]
     link: str
     timestamp: Optional[int]  # unix epoch saniye
-    source_provider: str  # "ddg" | "google_news" | "reddit" | "hn"
+    source_provider: str  # "ddg" | "google_news" | "yfinance_news" | "hn"
 
     def to_rumor_format(self) -> dict:
         """rumor_scanner'ın beklediği yfinance news formatına map."""
@@ -187,55 +186,6 @@ async def _fetch_google_news(query: str, limit: int = 10) -> list[SearchHit]:
         return []
 
 
-# --- Reddit JSON ---
-
-def _parse_reddit_json(data: dict) -> list[SearchHit]:
-    """Reddit search.json çıktısını parse. Test edilebilir pure fonksiyon."""
-    hits: list[SearchHit] = []
-    try:
-        children = data.get("data", {}).get("children", [])
-        for child in children[:20]:
-            cdata = child.get("data", {})
-            title = cdata.get("title")
-            permalink = cdata.get("permalink")
-            subreddit = cdata.get("subreddit")
-            created = cdata.get("created_utc")
-            if not title or not permalink:
-                continue
-            hits.append(SearchHit(
-                title=title,
-                publisher=f"r/{subreddit}" if subreddit else "reddit",
-                link=f"https://www.reddit.com{permalink}",
-                timestamp=int(created) if created else None,
-                source_provider="reddit",
-            ))
-    except Exception as e:
-        logger.warning("web_search Reddit parse failed: %s", e)
-    return hits
-
-
-async def _fetch_reddit(query: str, limit: int = 10) -> list[SearchHit]:
-    """Reddit search.json'dan arama (anahtarsız)."""
-    if not query:
-        return []
-    try:
-        async with httpx.AsyncClient(
-            timeout=_DEFAULT_TIMEOUT,
-            headers={
-                "User-Agent": _REDDIT_UA,
-                "Accept": "application/json",
-            },
-        ) as client:
-            from urllib.parse import quote
-            url = f"https://www.reddit.com/search.json?q={quote(query)}&limit={limit}&sort=relevance&t=week"
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return _parse_reddit_json(resp.json())
-    except Exception as e:
-        logger.warning("web_search Reddit failed (%s): %s", query, e)
-        return []
-
-
 # --- Hacker News Algolia ---
 
 def _parse_hn_json(data: dict) -> list[SearchHit]:
@@ -281,12 +231,59 @@ async def _fetch_hn(query: str, limit: int = 10) -> list[SearchHit]:
 
 # --- Birleştirilmiş fetch ---
 
-DEFAULT_SOURCES = ("ddg", "google_news", "reddit", "hn")
+# --- Yahoo Finance News (via yfinance, anahtarsız) ---
+
+def _parse_yf_news_json(data: list[dict]) -> list[SearchHit]:
+    """yfinance news çıktısını parse."""
+    hits: list[SearchHit] = []
+    try:
+        for item in data:
+            title = item.get("title") or item.get("content", {}).get("title")
+            if not title:
+                continue
+            link = item.get("link") or item.get("content", {}).get("canonicalUrl", {}).get("url")
+            if not link:
+                continue
+            provider = item.get("provider") or item.get("content", {}).get("provider", {}).get("displayName")
+            ts = item.get("pubDate") or item.get("content", {}).get("pubDate")
+            if ts:
+                try:
+                    from dateutil.parser import parse as _dtparse
+                    ts = int(_dtparse(ts).timestamp())
+                except Exception:
+                    ts = None
+            hits.append(SearchHit(
+                title=title[:300],
+                publisher=str(provider) if provider else "Yahoo Finance",
+                link=link,
+                timestamp=ts,
+                source_provider="yfinance_news",
+            ))
+    except Exception as e:
+        logger.warning("web_search YF news parse failed: %s", e)
+    return hits
+
+
+async def _fetch_yf_news(query: str, limit: int = 10) -> list[SearchHit]:
+    """yfinance üzerinden haber arama — API anahtarsız."""
+    if not query:
+        return []
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(query.strip().upper())
+        news = await asyncio.to_thread(lambda: getattr(ticker, "news", []) or [])
+        return _parse_yf_news_json(news)[:limit]
+    except Exception as e:
+        logger.warning("web_search YF news failed (%s): %s", query, e)
+        return []
+
+
+DEFAULT_SOURCES = ("ddg", "google_news", "yfinance_news", "hn")
 
 _PROVIDERS = {
     "ddg": _fetch_ddg,
     "google_news": _fetch_google_news,
-    "reddit": _fetch_reddit,
+    "yfinance_news": _fetch_yf_news,
     "hn": _fetch_hn,
 }
 

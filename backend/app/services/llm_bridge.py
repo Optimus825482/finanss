@@ -34,7 +34,31 @@ def _has_ollama() -> bool:
 
 
 def get_default_model() -> str:
-    """Ortam değişkenlerine göre varsayılan modeli belirle."""
+    """Ortam değişkenlerine ve DB-kayıtlı provider'lara göre varsayılan modeli belirle."""
+    # 1. DB-kayıtlı provider'ları kontrol et (Ayarlar'dan eklenen)
+    try:
+        from app.database import SessionLocal
+        from app.models import LLMProvider, LLMModel
+        db = SessionLocal()
+        try:
+            db_provider = db.query(LLMProvider).filter(
+                LLMProvider.is_active == True
+            ).order_by(LLMProvider.id).first()
+            if db_provider:
+                db_model = db.query(LLMModel).filter(
+                    LLMModel.provider_id == db_provider.id,
+                    LLMModel.is_active == True,
+                    LLMModel.supports_chat == True,
+                ).first()
+                if db_model:
+                    slug = db_provider.slug.replace("-", "_")
+                    return f"{slug}/{db_model.model_id}"
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    # 2. Env var fallback
     if os.getenv("OLLAMA_MODEL") and _has_ollama():
         return f"ollama/{os.environ['OLLAMA_MODEL']}"
     if os.getenv("GROQ_API_KEY"):
@@ -45,8 +69,26 @@ def get_default_model() -> str:
         return "openai/gpt-4o-mini"
     if os.getenv("ANTHROPIC_API_KEY"):
         return "claude-3-haiku-20240307"
-    # Hiçbiri yoksa None — caller handles missing LLM gracefully
     return None
+
+
+def _get_db_credentials() -> tuple[str | None, str | None]:
+    """DB'den aktif provider'ın api_key ve api_base bilgilerini al."""
+    try:
+        from app.database import SessionLocal
+        from app.models import LLMProvider
+        db = SessionLocal()
+        try:
+            provider = db.query(LLMProvider).filter(
+                LLMProvider.is_active == True
+            ).order_by(LLMProvider.id).first()
+            if provider and provider.get_decrypted_api_key():
+                return provider.get_decrypted_api_key(), provider.base_url or None
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return None, None
 
 
 async def generate(
@@ -61,11 +103,20 @@ async def generate(
     """LiteLLM üzerinden tamamlama.
 
     api_key / api_base: DB-kayıtlı provider için credentials (NVIDIA NIM vb).
-    Verilmezse litellm env var'lara bakar.
+    Verilmezse, DB-kayıtlı aktif provider'ın credentials'ları kullanılır.
+    O da yoksa litellm env var'lara bakar.
     """
     model = model or get_default_model()
     if model is None:
         raise RuntimeError("No LLM configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, or OLLAMA_MODEL + run Ollama.")
+
+    # Auto-detect DB credentials if not explicitly provided
+    if not api_key or not api_base:
+        db_key, db_base = _get_db_credentials()
+        if not api_key and db_key:
+            api_key = db_key
+        if not api_base and db_base:
+            api_base = db_base
 
     # LiteLLM provider slug normalizasyonu: nvidia-nim → nvidia_nim
     if "/" in model:
