@@ -41,6 +41,7 @@ export default function AgentPortfolioCard() {
   };
 
   const borderColor = "var(--term-border)";
+  const sym = selectedPortfolio === "bist" ? "₺" : "$";
   const p = portfolio;
 
   return (
@@ -102,7 +103,7 @@ export default function AgentPortfolioCard() {
           <div className="grid grid-cols-4 gap-3 px-4 py-3">
             <div className="text-center">
               <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>NAKİT</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.cash.toFixed(2)}</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{sym}{p.cash.toFixed(2)}</div>
             </div>
             <div className="text-center">
               <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>POZİSYON</div>
@@ -110,12 +111,12 @@ export default function AgentPortfolioCard() {
             </div>
             <div className="text-center">
               <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>PİYASA D.</div>
-              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>${p.total_market_value.toFixed(2)}</div>
+              <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>{sym}{p.total_market_value.toFixed(2)}</div>
             </div>
             <div className="text-center">
               <div className="text-[10px] font-mono tracking-wider" style={{ color: "var(--term-muted)" }}>P/L</div>
               <div className="font-mono text-sm font-semibold" style={{ color: p.total_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                {p.total_pl >= 0 ? "+" : ""}${p.total_pl.toFixed(2)}
+                {p.total_pl >= 0 ? "+" : ""}{sym}{p.total_pl.toFixed(2)}
               </div>
             </div>
           </div>
@@ -134,10 +135,10 @@ export default function AgentPortfolioCard() {
                 >
                   <div>
                     <span className="font-semibold" style={{ color: "var(--term-text)" }}>{pos.ticker}</span>
-                    <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ ${pos.entry_price.toFixed(2)}</span>
+                    <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ {sym}{pos.entry_price.toFixed(2)}</span>
                   </div>
                   <div style={{ color: pos.unrealized_pl >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                    {pos.unrealized_pl >= 0 ? "+" : ""}${pos.unrealized_pl.toFixed(2)}
+                    {pos.unrealized_pl >= 0 ? "+" : ""}{sym}{pos.unrealized_pl.toFixed(2)}
                   </div>
                 </div>
               ))}
@@ -166,7 +167,7 @@ export default function AgentPortfolioCard() {
                   {d.action === "buy" ? "AL" : "SAT"} {d.ticker}
                 </span>
                 <span style={{ color: "var(--term-muted)" }}>
-                  {" "}x{d.quantity} @ ${d.price.toFixed(2)}
+                  {" "}x{d.quantity} @ {sym}{d.price.toFixed(2)}
                 </span>
               </div>
               <div className="text-right max-w-[200px] truncate" style={{ color: "var(--term-muted)" }}>
