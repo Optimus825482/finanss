@@ -100,7 +100,15 @@ export default function AyarlarPage() {
 
   const handleResetPortfolio = async () => {
     const label = resetPortfolioSlug === "all" ? "TÜM PORTFÖYLERİ" : `${resetPortfolioSlug.toUpperCase()} PORTFÖYÜNÜ`;
-    if (!confirm(`${label} SIFIRLA\n\nTüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`)) return;
+    const msg = resetPortfolioSlug === "all"
+      ? `⚠⚠⚠  TÜM PORTFÖYLER SIFIRLANACAK  ⚠⚠⚠\n\nBIST + US tüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nBU İŞLEM GERİ ALINAMAZ!\n\nDevam etmek için "EVET" yazın:`
+      : `${label} SIFIRLA\n\nTüm pozisyonlar, kararlar ve balance transactions silinecek.\nBakiye $10.000'a ayarlanacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`;
+    if (resetPortfolioSlug === "all") {
+      const typed = prompt(msg);
+      if (typed?.toUpperCase() !== "EVET") return;
+    } else {
+      if (!confirm(msg)) return;
+    }
     setResetLoading("portfolio");
     setResetResult(null);
     try {
@@ -130,7 +138,16 @@ export default function AyarlarPage() {
 
   const handleResetAll = async () => {
     const label = resetPortfolioSlug === "all" ? "TÜM SİSTEMİ (BIST + US)" : `${resetPortfolioSlug.toUpperCase()} + RAPORLAR`;
-    if (!confirm(`${label} SIFIRLA\n\nSeçili portföy + raporlar tamamen sıfırlanacak.\nBakiye $10.000'dan başlatılacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`)) return;
+    const msg = resetPortfolioSlug === "all"
+      ? `⚠⚠⚠  TÜM SİSTEM SIFIRLANACAK  ⚠⚠⚠\n\nBIST + US portföyleri + tüm raporlar + tüm otonom kararlar silinecek.\nBakiye $10.000'dan başlatılacak.\n\nBU İŞLEM GERİ ALINAMAZ!\n\nDevam etmek için "EVET" yazın:`
+      : `${label} SIFIRLA\n\nSeçili portföy + raporlar tamamen sıfırlanacak.\nBakiye $10.000'dan başlatılacak.\n\nGERİ ALINAMAZ. Onaylıyor musun?`;
+    
+    if (resetPortfolioSlug === "all") {
+      const typed = prompt(msg);
+      if (typed?.toUpperCase() !== "EVET") return;
+    } else {
+      if (!confirm(msg)) return;
+    }
     setResetLoading("all");
     setResetResult(null);
     try {

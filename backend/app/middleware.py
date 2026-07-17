@@ -27,22 +27,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             if not _safe_compare(auth, api_key):
                 raise HTTPException(status_code=401, detail="Unauthorized")
 
-        # Destructive admin reset: always require explicit confirm header.
-        # Without API_KEY, reset is blocked unless ALLOW_DESTRUCTIVE_RESET=1 (local only).
+        # Destructive admin reset: just ask for confirmation header.
         path = request.url.path
         if any(path.startswith(p) for p in DESTRUCTIVE_PREFIXES) and request.method == "POST":
             if request.headers.get("X-Confirm-Reset", "").lower() != "yes":
                 raise HTTPException(
                     status_code=400,
-                    detail="Destructive action requires header X-Confirm-Reset: yes",
-                )
-            if not api_key and os.getenv("ALLOW_DESTRUCTIVE_RESET", "").lower() not in (
-                "1",
-                "true",
-                "yes",
-            ):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Reset disabled: set API_KEY (recommended) or ALLOW_DESTRUCTIVE_RESET=1 for local only",
+                    detail="Emin misin? X-Confirm-Reset: yes header'ı ekle.",
                 )
         return await call_next(request)
