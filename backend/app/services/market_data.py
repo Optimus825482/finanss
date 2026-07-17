@@ -80,20 +80,30 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
             for t in non_bist:
                 result[t] = {"price": None, "change_pct": None}
 
-    # BIST: tekil download (safe_ticker_info ile)
+    # BIST: batch download (5d/1d periyot, daha az request)
     if bist:
-        from app.services.yf_utils import safe_ticker_info
+        import time as _t
         for t in bist:
             try:
-                info = safe_ticker_info(t)
-                price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
-                prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
-                if price and prev_close and prev_close != 0:
-                    change = round((float(price) - float(prev_close)) / float(prev_close) * 100, 2)
+                data = safe_download([t], period="5d", interval="1d", progress=False)
+                if data is not None and not data.empty:
+                    closes = data.get("Close")
+                    if hasattr(closes, "iloc") and len(closes) >= 2:
+                        if hasattr(closes, "columns"):
+                            closes = closes[t] if t in closes.columns else closes.iloc[:, 0]
+                        closes = closes.dropna()
+                        if len(closes) >= 2:
+                            last = float(closes.iloc[-1])
+                            prev = float(closes.iloc[-2])
+                            change = round((last - prev) / prev * 100, 2) if prev > 0 else 0.0
+                            result[t] = {"price": round(last, 2), "change_pct": change}
+                        else:
+                            result[t] = {"price": None, "change_pct": None}
+                    else:
+                        result[t] = {"price": None, "change_pct": None}
                 else:
-                    change = 0.0
-                result[t] = {"price": round(float(price), 2) if price else None,
-                             "change_pct": change if price else 0.0}
+                    result[t] = {"price": None, "change_pct": None}
+                _t.sleep(0.15)  # rate-limit koruması
             except Exception:
                 result[t] = {"price": None, "change_pct": None}
 
