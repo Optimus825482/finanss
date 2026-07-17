@@ -152,7 +152,7 @@ async def stage1_prescreen(
             mom_score = np.clip((momentum_5d + 15) * 1.5, 0, 100)
             rsi_score = 100 - abs(rsi_val - 50) * 2  # RSI 50 idealdir
             volume_score = min(volume_ratio * 40, 100)
-            technical_score = round(mom_score * 0.4 + rsi_score * 0.3 + volume_score * 0.15 + (100 - abs(dd * 2)) * 0.15, 1)
+            technical_score = round(float(mom_score * 0.4 + rsi_score * 0.3 + volume_score * 0.15 + (100 - abs(dd * 2)) * 0.15), 1)
 
             results.append({
                 "ticker": ticker,
