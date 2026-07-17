@@ -56,7 +56,8 @@ class RiskAgent(BaseAgent):
             )
 
             running_max = closes.cummax()
-            drawdown = np.divide(closes - running_max, running_max, where=running_max != 0)
+            with np.errstate(invalid="ignore"):
+                drawdown = np.divide(closes - running_max, running_max, where=running_max != 0)
             max_drawdown_pct = float(np.nan_to_num(drawdown.min() * 100, nan=0.0))
 
             beta = None

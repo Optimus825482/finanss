@@ -126,12 +126,14 @@ async def stage1_prescreen(
             volume_ratio = float(vol_arr[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
 
             # Volatility (guard: arr[:-1] == 0 → NaN/Inf)
-            rets = np.divide(np.diff(arr), arr[:-1], where=arr[:-1] != 0)
+            with np.errstate(invalid="ignore"):
+                rets = np.divide(np.diff(arr), arr[:-1], where=arr[:-1] != 0)
             vol_20 = float(np.nan_to_num(np.std(rets[-20:]) * np.sqrt(252) * 100, nan=50.0)) if len(rets) >= 20 else 50.0
 
             # Drawdown (guard: peak == 0 → NaN)
             peak = np.maximum.accumulate(arr[-20:])
-            dd = float(np.min(np.divide(arr[-20:] - peak, peak, where=peak != 0)) * 100)
+            with np.errstate(invalid="ignore"):
+                dd = float(np.min(np.divide(arr[-20:] - peak, peak, where=peak != 0)) * 100)
             if math.isnan(dd):
                 dd = 0.0
 
@@ -216,11 +218,13 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
             avg_vol_20 = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else 1.0
             volume_ratio = float(volumes[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
-            rets = np.divide(np.diff(closes), closes[:-1], where=closes[:-1] != 0)
+            with np.errstate(invalid="ignore"):
+                rets = np.divide(np.diff(closes), closes[:-1], where=closes[:-1] != 0)
             vol_20 = float(np.nan_to_num(np.std(rets[-20:]) * np.sqrt(252) * 100, nan=50.0)) if len(rets) >= 20 else 50.0
             window = closes[-min(20, len(closes)):]
             peak = np.maximum.accumulate(window)
-            dd = float(np.min(np.divide(window - peak, peak, where=peak != 0)) * 100) if len(peak) > 0 else 0.0
+            with np.errstate(invalid="ignore"):
+                dd = float(np.min(np.divide(window - peak, peak, where=peak != 0)) * 100) if len(peak) > 0 else 0.0
             if math.isnan(dd):
                 dd = 0.0
 
