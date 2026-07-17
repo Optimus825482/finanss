@@ -314,6 +314,12 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "composite": candidate.get("composite_score"),
     }
 
+    # NaN sanitize — yfinance/hesap hatalarında NaN gelebilir, JSON serialization fail
+    import math as _math
+    def _ok(v):
+        return v if v is not None and not (_math.isnan(v) if isinstance(v, float) else False) else None
+    scores = {k: _ok(v) for k, v in scores.items()}
+
     # Composite fallback: ReportAgent formülüyle hesapla (skill pipeline'da yok)
     if scores["composite"] is None and scores["fundamental"] is not None:
         from app.config import SCORING_WEIGHTS
@@ -321,14 +327,14 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         f = scores["fundamental"] or 50
         s = scores["sentiment"] or 50
         r = scores["risk"] or 50
-        scores["composite"] = round(f * w["fundamental"] + s * w["sentiment"] + (100 - r) * w["risk"], 1)
+        scores["composite"] = _ok(round(f * w["fundamental"] + s * w["sentiment"] + (100 - r) * w["risk"], 1))
         candidate["composite_score"] = scores["composite"]
         logger.debug("composite fallback computed: %.1f", scores["composite"])
 
     # Momentum fallback: fiyat geçmişinden son 5 günlük momentum
-    momentum_pct = candidate.get("momentum_pct")
-    if momentum_pct is None and closes and len(closes) >= 6:
-        momentum_pct = round((closes[-1] / closes[-6] - 1) * 100, 2)
+    momentum_pct = _ok(candidate.get("momentum_pct"))
+    if momentum_pct is None and closes and len(closes) >= 6 and closes[-6] and closes[-6] != 0:
+        momentum_pct = _ok(round((closes[-1] / closes[-6] - 1) * 100, 2))
         candidate["momentum_pct"] = momentum_pct
         logger.debug("momentum fallback computed: %.2f%%", momentum_pct)
 
@@ -386,11 +392,32 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "bias_pct": bias,
         "data_missing": data_missing,
         "price_history": price_history,
+    # ── NaN sanitize: tüm float değerleri temizle (yfinance/hesap hatası → JSON fail) ──
+    def _sanitize_dict(d: dict) -> dict:
+        for k, v in d.items():
+            if isinstance(v, float) and _math.isnan(v):
+                d[k] = None
+            elif isinstance(v, dict):
+                _sanitize_dict(v)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        _sanitize_dict(item)
+        return d
+
+    result = {
+        "ticker": ticker,
+        "markdown": markdown,
+        "conclusion": conclusion,
+        "bias_pct": _ok(bias),
+        "data_missing": data_missing,
+        "price_history": price_history,
         "scores": scores,
         "position_pl": position_pl,
         "macro_indicators": macro_indicators,
         "llm_reasoning": llm_reasoning,
-        "llm_target_price": llm_target_price,
-        "llm_expected_return_pct": llm_expected_return,
-        "momentum_pct": momentum_pct,
+        "llm_target_price": _ok(llm_target_price),
+        "llm_expected_return_pct": _ok(llm_expected_return),
+        "momentum_pct": _ok(momentum_pct),
     }
+    return _sanitize_dict(result)
