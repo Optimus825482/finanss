@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.config import now_istanbul
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -71,7 +72,7 @@ def add_portfolio_position(pos: PortfolioPositionIn, db: Session = Depends(get_d
 
     p = PortfolioPosition(
         ticker=ticker, quantity=pos.quantity, entry_price=pos.entry_price,
-        entry_date=pos.entry_date or datetime.utcnow(), notes=pos.notes, status="open",
+        entry_date=pos.entry_date or now_istanbul(), notes=pos.notes, status="open",
     )
     db.add(p)
     db.flush()
@@ -95,7 +96,7 @@ def close_portfolio_position(position_id: int, body: PortfolioCloseIn, db: Sessi
 
     p.status = "closed"
     p.exit_price = body.exit_price
-    p.exit_date = body.exit_date or datetime.utcnow()
+    p.exit_date = body.exit_date or now_istanbul()
 
     record_position_closed(db, p.id, proceeds, p.ticker)
 

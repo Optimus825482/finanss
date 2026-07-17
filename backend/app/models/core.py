@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.config import now_istanbul
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
@@ -10,7 +11,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
     summary = Column(Text)
     candidates_scanned = Column(Integer, default=0)
 
@@ -27,7 +28,7 @@ class Notification(Base):
     message = Column(Text, nullable=True)
     report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
 
 
 class Prediction(Base):
@@ -49,7 +50,7 @@ class Prediction(Base):
     error_analysis = Column(Text, nullable=True)
     lessons_learned = Column(Text, nullable=True)
     evaluated = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
     evaluated_at = Column(DateTime, nullable=True)
 
 
@@ -99,7 +100,7 @@ class WatchlistItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     ticker = Column(String, unique=True, index=True)
     notes = Column(String, nullable=True)
-    added_at = Column(DateTime, default=datetime.utcnow)
+    added_at = Column(DateTime, default=now_istanbul)
     # stock_analysis skill entegrasyonu: alert/stop/signal takibi
     target_price = Column(Float, nullable=True)        # hedef fiyat (sell tetikleyici)
     stop_price = Column(Float, nullable=True)          # stop-loss fiyatı (exit tetikleyici)
@@ -114,7 +115,7 @@ class PortfolioPosition(Base):
     ticker = Column(String, index=True)
     quantity = Column(Float)
     entry_price = Column(Float)
-    entry_date = Column(DateTime, default=datetime.utcnow)
+    entry_date = Column(DateTime, default=now_istanbul)
     notes = Column(String, nullable=True)
     # Çoklu portföy: nullable — null = legacy (portföy-bağımsız)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
@@ -123,7 +124,7 @@ class PortfolioPosition(Base):
     exit_price = Column(Float, nullable=True)
     exit_date = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
 
     __table_args__ = (
         Index("ix_portfolio_positions_portfolio_id", "portfolio_id"),
@@ -147,7 +148,7 @@ class TradingDecision(Base):
     portfolio_value_after = Column(Float, nullable=True)
     # Çoklu portföy: nullable — null = legacy
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
 
     __table_args__ = (
         Index("ix_trading_decisions_portfolio_id", "portfolio_id"),

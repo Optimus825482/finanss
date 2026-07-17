@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -349,7 +350,7 @@ def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None)
     portfolios = db.query(Portfolio).all()
     for p in portfolios:
         p.cash = round(10_000.0, 2)
-        p.updated_at = datetime.utcnow()
+        p.updated_at = now_istanbul()
     # Legacy VirtualBalance da sıfırla
     legacy = db.query(VirtualBalance).first()
     if legacy is None:

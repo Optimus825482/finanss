@@ -5,6 +5,7 @@ Orchestrator — Two-stage pipeline:
 """
 import logging
 from datetime import datetime
+from app.config import now_istanbul
 
 from app.agents.scanner_agent import ScannerAgent
 from app.agents.base import AgentStatus
@@ -248,7 +249,7 @@ class Orchestrator:
     def _persist(self, result: dict) -> int:
         db = SessionLocal()
         try:
-            report = Report(created_at=datetime.utcnow(), summary=result["summary"],
+            report = Report(created_at=now_istanbul(), summary=result["summary"],
                             candidates_scanned=result["candidates_scanned"])
             db.add(report)
             db.flush()

@@ -63,7 +63,7 @@ async def trigger_deep_analysis(ticker: str, background_tasks: BackgroundTasks):
             db = SessionLocal()
             try:
                 report = Report(
-                    created_at=datetime.utcnow(),
+                    created_at=now_istanbul(),
                     summary=result.get("summary", ""),
                     candidates_scanned=len(candidates),
                 )

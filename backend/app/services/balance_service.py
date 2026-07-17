@@ -5,6 +5,7 @@ Sanal bakiye yönetimi. Portföy işlemleriyle entegre.
 hala çalışır ama yeni kod Portfolio kullanır.
 """
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -88,12 +89,12 @@ def record_position_opened(
         if p is None:
             raise ValueError(f"Portföy bulunamadı: id={portfolio_id}")
         p.cash = round(p.cash - cost, 2)
-        p.updated_at = datetime.utcnow()
+        p.updated_at = now_istanbul()
     else:
         # Legacy fallback
         balance = get_balance(db)
         balance.cash = round(balance.cash - cost, 2)
-        balance.updated_at = datetime.utcnow()
+        balance.updated_at = now_istanbul()
 
     tx = BalanceTransaction(
         type="transfer_out",
@@ -120,11 +121,11 @@ def record_position_closed(
         if p is None:
             raise ValueError(f"Portföy bulunamadı: id={portfolio_id}")
         p.cash = round(p.cash + proceeds, 2)
-        p.updated_at = datetime.utcnow()
+        p.updated_at = now_istanbul()
     else:
         balance = get_balance(db)
         balance.cash = round(balance.cash + proceeds, 2)
-        balance.updated_at = datetime.utcnow()
+        balance.updated_at = now_istanbul()
 
     tx = BalanceTransaction(
         type="transfer_in",
@@ -156,7 +157,7 @@ def reset_balance(db: Session, portfolio_id: int, starting_cash: float = 10_000.
         BalanceTransaction.portfolio_id == portfolio_id
     ).delete(synchronize_session=False)
     p.cash = round(float(starting_cash), 2)
-    p.updated_at = datetime.utcnow()
+    p.updated_at = now_istanbul()
     db.flush()
     db.refresh(p)
     return p
@@ -168,7 +169,7 @@ def deposit(db: Session, amount: float, note: str = "Para yatırma") -> VirtualB
     """[LEGACY] Nakit ekle. Yeni kod Portfolio.cash direkt güncelle."""
     balance = get_balance(db)
     balance.cash = round(balance.cash + amount, 2)
-    balance.updated_at = datetime.utcnow()
+    balance.updated_at = now_istanbul()
     tx = BalanceTransaction(type="deposit", amount=amount, note=note)
     db.add(tx)
     db.flush()
@@ -182,7 +183,7 @@ def withdraw(db: Session, amount: float, note: str = "Para çekme") -> VirtualBa
     if balance.cash < amount:
         raise ValueError(f"Yetersiz bakiye. Mevcut: ${balance.cash:,.2f}")
     balance.cash = round(balance.cash - amount, 2)
-    balance.updated_at = datetime.utcnow()
+    balance.updated_at = now_istanbul()
     tx = BalanceTransaction(type="withdraw", amount=amount, note=note)
     db.add(tx)
     db.flush()

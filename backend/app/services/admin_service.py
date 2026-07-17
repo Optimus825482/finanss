@@ -4,6 +4,7 @@ LLM Provider yönetimi ve sistem ayarları servisi.
 import json
 import base64
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -58,7 +59,7 @@ def update_provider(db: Session, provider_id: int, **kwargs) -> Optional[LLMProv
             setattr(p, key, value)
     if raw_key is not None:
         p.set_encrypted_api_key(raw_key)
-    p.updated_at = datetime.utcnow()
+    p.updated_at = now_istanbul()
     db.commit()
     db.refresh(p)
     return p
@@ -172,7 +173,7 @@ def set_setting(db: Session, key: str, value: str, description: Optional[str] = 
         s.value = value
         if description:
             s.description = description
-        s.updated_at = datetime.utcnow()
+        s.updated_at = now_istanbul()
     else:
         s = SystemSettings(key=key, value=value, description=description)
         db.add(s)

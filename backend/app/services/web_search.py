@@ -292,7 +292,7 @@ def _dedupe_hits(hits: list[SearchHit], now: Optional[datetime] = None) -> list[
     """Aynı başlık + url + 7gün pencere dedup. Test edilebilir pure fonksiyon."""
     if not hits:
         return []
-    now = now or datetime.now(timezone.utc)
+    now = now or now_istanbul()
     seen: dict[str, SearchHit] = {}
     for h in hits:
         key = re.sub(r"\s+", " ", h.title.lower()).strip()

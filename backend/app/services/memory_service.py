@@ -12,6 +12,7 @@ confidence güncellenir.
 """
 import logging
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 import numpy as np
@@ -54,7 +55,7 @@ def update_profile(db: Session, **kwargs) -> UserProfile:
     for key, value in kwargs.items():
         if hasattr(profile, key):
             setattr(profile, key, value)
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = now_istanbul()
     db.commit()
     db.refresh(profile)
     return profile
@@ -89,7 +90,7 @@ def add_chat_message(
     # Oturumun updated_at'ini güncelle
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if session:
-        session.updated_at = datetime.utcnow()
+        session.updated_at = now_istanbul()
     db.commit()
     db.refresh(msg)
     return msg
@@ -134,11 +135,11 @@ async def store_research_memory(
         data_snapshot=data_snapshot,
         source_report_id=source_report_id,
         confidence=confidence,
-        expires_at=datetime.utcnow() if ttl_days <= 0 else None,
+        expires_at=now_istanbul() if ttl_days <= 0 else None,
     )
     if ttl_days > 0:
         from datetime import timedelta
-        memory.expires_at = datetime.utcnow() + timedelta(days=ttl_days)
+        memory.expires_at = now_istanbul() + timedelta(days=ttl_days)
 
     db.add(memory)
     db.flush()
@@ -191,7 +192,7 @@ async def search_similar_memories(
 
     # Süresi dolmamış anılar
     results = results.filter(
-        (ResearchMemory.expires_at.is_(None)) | (ResearchMemory.expires_at > datetime.utcnow())
+        (ResearchMemory.expires_at.is_(None)) | (ResearchMemory.expires_at > now_istanbul())
     )
 
     # Cosine similarity: 1 - cosine_distance
@@ -246,7 +247,7 @@ def self_evaluate_memory(
     else:
         memory.confidence = max(0.1, old_conf * 0.7)
 
-    memory.validated_at = datetime.utcnow()
+    memory.validated_at = now_istanbul()
     db.commit()
     db.refresh(memory)
     return memory

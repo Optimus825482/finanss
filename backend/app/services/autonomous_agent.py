@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 import yfinance as yf
@@ -159,7 +160,7 @@ class AutonomousAgent:
 
         pos = PortfolioPosition(
             ticker=ticker.upper(), quantity=quantity, entry_price=price,
-            entry_date=datetime.utcnow(), status="open",
+            entry_date=now_istanbul(), status="open",
             portfolio_id=portfolio_id,
         )
         db.add(pos)
@@ -185,7 +186,7 @@ class AutonomousAgent:
         proceeds = round(pos.quantity * price, 2)
         pos.status = "closed"
         pos.exit_price = price
-        pos.exit_date = datetime.utcnow()
+        pos.exit_date = now_istanbul()
         record_position_closed(db, pos.id, proceeds, pos.ticker, portfolio_id=portfolio_id)
 
         self._log_decision(db, pos.ticker, "sell", pos.quantity, price, proceeds, reasoning, confidence,
@@ -237,7 +238,7 @@ class AutonomousAgent:
 
             pos.status = "closed"
             pos.exit_price = entry_price
-            pos.exit_date = datetime.utcnow()
+            pos.exit_date = now_istanbul()
             pos.notes = "Auto-closed: price unavailable (delisted/yfinance error)"
             proceeds = round(quantity * entry_price, 2)
             record_position_closed(db, pos_id, proceeds, ticker)
@@ -330,12 +331,12 @@ class AutonomousAgent:
         if not candidates:
             logger.info("Hiç aday bulunamadi, islem yapilmadi")
             return {"actions": [], "decisions": [], "portfolio": self.get_portfolio(db),
-                    "timestamp": datetime.utcnow().isoformat(), "note": "aday yok"}
+                    "timestamp": now_istanbul().isoformat(), "note": "aday yok"}
 
         # 3. LLM/kural-bazli karar
         actions, decisions = await self._llm_decide(portfolio, candidates, db)
         return {"actions": actions, "decisions": decisions, "portfolio": self.get_portfolio(db),
-                "timestamp": datetime.utcnow().isoformat()}
+                "timestamp": now_istanbul().isoformat()}
 
     async def _llm_decide(self, portfolio: dict, candidates: list[dict], db: Session) -> tuple:
         """LLM portfoy + adaylari degerlendirip dinamik al/sat kararlari verir.

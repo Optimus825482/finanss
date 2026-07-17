@@ -1,5 +1,6 @@
-import os
 from datetime import datetime
+import os
+from app.config import now_istanbul
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -36,8 +37,8 @@ class LLMProvider(Base):
     base_url = Column(String)
     api_key = Column(Text)  # encrypted with Fernet when FERNET_KEY env var is set
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)
 
     def get_decrypted_api_key(self) -> str:
         """Return decrypted API key. Falls back to raw value if no encryption configured."""
@@ -77,7 +78,7 @@ class LLMModel(Base):
     supports_embedding = Column(Boolean, default=False)
     max_tokens = Column(Integer, default=4096)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
 
     __table_args__ = (
         UniqueConstraint("provider_id", "model_id", name="uq_provider_model"),
@@ -94,7 +95,7 @@ class SystemSettings(Base):
     key = Column(String, unique=True, index=True)
     value = Column(Text)
     description = Column(String, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)
 
 
 class TranslationCache(Base):
@@ -106,5 +107,5 @@ class TranslationCache(Base):
     source_text = Column(Text)
     target_lang = Column(String, default="tr")
     translated_text = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
     hit_count = Column(Integer, default=1)

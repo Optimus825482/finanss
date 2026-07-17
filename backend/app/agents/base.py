@@ -3,6 +3,7 @@ BaseAgent: her ajanın uyduğu ortak sözleşme.
 Durum (status) burada tutulur ki orchestrator ve API aynı kaynaktan okusun.
 """
 from datetime import datetime
+from app.config import now_istanbul
 from enum import Enum
 from typing import Optional
 
@@ -26,7 +27,7 @@ class BaseAgent:
     def _set(self, status: AgentStatus, detail: Optional[str] = None):
         self.status = status
         self.detail = detail
-        self.updated_at = datetime.utcnow()
+        self.updated_at = now_istanbul()
 
     def as_dict(self):
         return {

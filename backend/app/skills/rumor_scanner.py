@@ -73,7 +73,7 @@ def dedup_signals(
     """
     if not signals:
         return []
-    now = now or datetime.now(timezone.utc)
+    now = now or now_istanbul()
     window_start = now - timedelta(hours=window_hours)
     seen: dict[str, dict] = {}
     for s in signals:

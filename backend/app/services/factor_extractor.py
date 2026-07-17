@@ -6,6 +6,7 @@ RD-Agent pattern: Research (veri topla) -> Development (faktor cikar -> modelle)
 """
 import hashlib
 from datetime import datetime
+from app.config import now_istanbul
 from typing import Optional
 
 from app.database import SessionLocal
@@ -80,7 +81,7 @@ def extract_and_store_factors(
                 data_snapshot=factors,
                 source_report_id=source_report_id,
                 confidence=0.65,
-                created_at=datetime.utcnow(),
+                created_at=now_istanbul(),
             )
             db.add(memory)
             db.flush()

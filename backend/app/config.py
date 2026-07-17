@@ -2,9 +2,18 @@
 Merkezi konfigurasyon: izlenecek hisse evreni, esik degerler, zamanlama.
 """
 import os
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ── Zaman Dilimi: Europe/Istanbul (UTC+3, yaz saati sabit) ──
+ISTANBUL_TZ = timezone(timedelta(hours=3))
+
+
+def now_istanbul() -> datetime:
+    """Tüm uygulamada kullanılacak ortak zaman dilimi yardımcısı."""
+    return datetime.now(ISTANBUL_TZ)
 
 # PostgreSQL (primary) — Docker'da 'db' hostname, lokal'de 'localhost'
 DATABASE_URL = os.getenv("DATABASE_URL")

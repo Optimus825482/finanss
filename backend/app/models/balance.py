@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.config import now_istanbul
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 
@@ -10,7 +11,7 @@ class VirtualBalance(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     cash = Column(Float, default=100000.0)  # baslangic 100k USD
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)
 
 
 class BalanceTransaction(Base):
@@ -24,4 +25,4 @@ class BalanceTransaction(Base):
     position_id = Column(Integer, ForeignKey("portfolio_positions.id"), nullable=True)
     # Çoklu portföy: nullable — null = legacy
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)

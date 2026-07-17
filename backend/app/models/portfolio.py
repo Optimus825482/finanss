@@ -1,9 +1,10 @@
+from datetime import datetime
 """Portfolio modeli — çoklu portföy yönetimi (BIST + US).
 
 Her portföyün ayrı bakiyesi (cash), universe'i (exchanges), risk parametreleri.
 VirtualBalance deprecate — yeni kod Portfolio.cash kullanır.
 """
-from datetime import datetime
+from app.config import now_istanbul
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, JSON
 
@@ -22,5 +23,5 @@ class Portfolio(Base):
     max_positions = Column(Integer, default=8)
     max_per_position_pct = Column(Float, default=0.25)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)

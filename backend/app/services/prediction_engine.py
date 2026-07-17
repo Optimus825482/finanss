@@ -15,6 +15,7 @@ import math
 import hashlib
 import json
 from datetime import datetime, date, timedelta
+from app.config import now_istanbul
 from typing import Optional
 
 import numpy as np
@@ -548,7 +549,7 @@ async def _evaluate_one(db: Session, pred: Prediction) -> dict:
 
     pred.actual_price = actual; pred.error_pct = error_pct
     pred.error_analysis = analysis
-    pred.evaluated = True; pred.evaluated_at = datetime.utcnow()
+    pred.evaluated = True; pred.evaluated_at = now_istanbul()
     db.commit()
 
     await store_research_memory(db=db, ticker=pred.ticker, topic="prediction_eval",

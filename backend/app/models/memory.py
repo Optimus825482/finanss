@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.config import now_istanbul
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON
@@ -18,8 +19,8 @@ class UserProfile(Base):
     preferred_markets = Column(JSON, default=list)        # ["US", "EU", "ASIA", "TR"]
     preferred_sectors = Column(JSON, default=list)        # ["Tech", "Finance", "Energy"]
     language = Column(String, default="tr")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)
 
 
 class ChatSession(Base):
@@ -29,8 +30,8 @@ class ChatSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, default="Yeni Sohbet")
     model = Column(String, nullable=True)  # kullanilan LLM modeli
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
+    updated_at = Column(DateTime, default=now_istanbul, onupdate=now_istanbul)
 
     messages = relationship(
         "ChatMessage", back_populates="session",
@@ -48,7 +49,7 @@ class ChatMessage(Base):
     content = Column(Text)
     agent_name = Column(String, nullable=True)
     metadata_ = Column("metadata", JSON, default=dict)  # ticker, skor, kaynak
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
 
     session = relationship("ChatSession", back_populates="messages")
 
@@ -65,7 +66,7 @@ class ResearchMemory(Base):
     data_snapshot = Column(JSON, default=dict)
     confidence = Column(Float, default=0.5)
     validated_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=now_istanbul, index=True)
     expires_at = Column(DateTime, nullable=True)
 
 
@@ -77,6 +78,6 @@ class MemoryEmbedding(Base):
     memory_id = Column(Integer, ForeignKey("research_memories.id"))
     embedding = Column(Vector(1536))  # OpenAI ada-002 boyutu
     model_name = Column(String, default="text-embedding-3-small")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_istanbul)
 
     memory = relationship("ResearchMemory")
