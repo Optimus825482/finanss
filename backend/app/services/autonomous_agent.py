@@ -289,6 +289,8 @@ class AutonomousAgent:
 
         if not candidates:
             logger.info("[%s] Hic aday bulunamadi", exchange_label)
+            from app.services.agent_logs import log_if_active
+            log_if_active(self.portfolio_slug, "result", f"Hic aday bulunamadı — rapor pick yok, screener da sonuç döndürmedi")
             return {"actions": [], "decisions": [], "portfolio": self.get_portfolio(db),
                     "timestamp": now_istanbul().isoformat(), "note": "aday yok",
                     "market_open": market_open, "exchange": exchange_label}
@@ -309,6 +311,7 @@ class AutonomousAgent:
     async def _gather_candidates(self, db: Session, exchanges: list[str], is_bist: bool) -> list[dict]:
         """Aday hisseleri topla — rapordan veya piyasadan, ardindan Bull/Bear arastirma ekibine gonder."""
         from app.models.core import Report
+        from app.services.agent_logs import log_if_active
 
         latest = db.query(Report).options(
             joinedload(Report.picks)
@@ -316,6 +319,7 @@ class AutonomousAgent:
 
         candidates = []
         if latest and latest.picks:
+            log_if_active(self.portfolio_slug, "market", f"Son rapor bulundu (ID={latest.id}), {len(latest.picks)} pick")
             for p in latest.picks:
                 is_bist_ticker = p.ticker.endswith(".IS")
                 if is_bist != is_bist_ticker:
@@ -340,11 +344,17 @@ class AutonomousAgent:
                     "llm_reasoning": p.llm_reasoning,
                 })
             candidates.sort(key=lambda c: c["composite_score"], reverse=True)
+            filtered = len(latest.picks) - len(candidates)
+            if filtered > 0:
+                log_if_active(self.portfolio_slug, "market", f"{filtered} pick exchange filtresine takıldı (BIST/US)")
+            log_if_active(self.portfolio_slug, "market", f"Rapordan {len(candidates)} aday alındı")
             logger.info("[%s] Rapor pick'leri: %d aday", "BIST" if is_bist else "US", len(candidates))
         else:
+            log_if_active(self.portfolio_slug, "market", "Rapor bulunamadı — screener ile canlı tarama yapılıyor")
             from app.services.screener_service import stage1_prescreen, get_universe
             tickers = get_universe(exchanges) if exchanges else get_universe(["NASDAQ", "NYSE"])
             scanned = await stage1_prescreen(tickers)
+            log_if_active(self.portfolio_slug, "market", f"Screener: {len(scanned)} sembol tarandı, ilk {min(8, len(scanned))} analiz ediliyor")
             for c in scanned[:8]:
                 try:
                     a = await self.analyze_single(c["ticker"])
@@ -358,8 +368,8 @@ class AutonomousAgent:
                         "volatility_annualized": a.get("volatility_annualized"),
                         "narrative": a.get("narrative", ""),
                     })
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_if_active(self.portfolio_slug, "market", f"Screener analizi başarısız: {c.get('ticker', '?')} — {e}")
 
         # ── FAZ 1.1: Bull/Bear Research Team ──
         if candidates:
@@ -442,6 +452,7 @@ class AutonomousAgent:
                                       portfolio: dict, is_bist: bool, exchange_label: str) -> list[dict]:
         """Piyasa kapaliyken derin analiz + bekleyen emir olustur."""
         from app.skills import stock_analysis as _stock_skill
+        from app.services.agent_logs import log_if_active
 
         actions = []
         cash = portfolio.get("cash", 0)
@@ -450,10 +461,13 @@ class AutonomousAgent:
 
         # Sadece en guclu 5 adaya derin analiz yap
         deep_candidates = candidates[:5]
+        log_if_active(self.portfolio_slug, "market", f"Piyasa KAPALI — {len(deep_candidates)} aday derin analiz ediliyor")
         logger.info("[%s] Piyasa KAPALI — %d aday derin analiz ediliyor...", exchange_label, len(deep_candidates))
 
         for c in deep_candidates:
             if current_count + len(actions) >= max_positions or cash <= 0:
+                if cash <= 0:
+                    log_if_active(self.portfolio_slug, "result", "Nakit bitti — yeni alım yapılamaz")
                 break
 
             try:
@@ -465,6 +479,8 @@ class AutonomousAgent:
 
                 # Sadece buy/strong_buy ve composite >= 60
                 if conclusion not in ("buy", "strong_buy") or composite < 60:
+                    reason = f"conclusion={conclusion}" if conclusion not in ("buy", "strong_buy") else f"composite={composite:.0f}"
+                    log_if_active(self.portfolio_slug, "result", f"{c['ticker']} elendi: {reason}")
                     logger.debug("[%s] %s elendi: conclusion=%s composite=%.0f",
                                  exchange_label, c["ticker"], conclusion, composite)
                     continue
