@@ -119,6 +119,7 @@ export type AgentPortfolio = {
     quantity: number;
     entry_price: number;
     current_price: number | null;
+    change_pct: number | null;
     unrealized_pl: number;
   }[];
 };
@@ -296,6 +297,7 @@ export type LivePortfolioPosition = {
   quantity: number;
   entry_price: number;
   current_price: number | null;
+  change_pct: number | null;
   unrealized_pl: number;
 };
 

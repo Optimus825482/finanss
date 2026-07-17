@@ -57,6 +57,7 @@ def _fetch_prices_sync(db: Session, portfolio_slug: str) -> dict:
                     "quantity": pos.get("quantity"),
                     "entry_price": pos.get("entry_price"),
                     "current_price": pos.get("current_price"),
+                    "change_pct": pos.get("change_pct"),
                     "unrealized_pl": pos.get("unrealized_pl", 0),
                 }
                 for pos in p.get("positions", [])

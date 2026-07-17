@@ -146,6 +146,7 @@ class AutonomousAgent:
                 "id": p.id, "ticker": p.ticker, "quantity": p.quantity,
                 "entry_price": p.entry_price,
                 "current_price": prices.get(p.ticker, {}).get("price"),
+                "change_pct": prices.get(p.ticker, {}).get("change_pct"),
                 "unrealized_pl": round(p.quantity * ((prices.get(p.ticker, {}).get("price") or p.entry_price) - p.entry_price), 2),
             } for p in positions],
         }

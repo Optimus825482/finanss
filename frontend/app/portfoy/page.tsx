@@ -166,9 +166,17 @@ export default function PortfoyPage() {
               <div className="px-4 py-3 text-xs font-mono tracking-wider" style={{ color: "var(--term-muted)", borderBottom: `1px solid ${borderColor}` }}>
                 AÇIK POZİSYONLAR ({portfolio.positions.length})
               </div>
-              {portfolio.positions.map((pos) => (
+              {portfolio.positions.map((pos) => {
+                const chg = pos.change_pct ?? 0;
+                const chgColor = chg > 0 ? "var(--term-green)" : chg < 0 ? "var(--term-red)" : "var(--term-muted)";
+                const chgSign = chg > 0 ? "▲" : chg < 0 ? "▼" : "";
+                return (
                 <div key={pos.id} className="flex items-center justify-between px-4 py-3 font-mono text-xs" style={{ borderTop: `1px solid ${borderColor}` }}>
-                  <div><span className="font-semibold" style={{ color: "var(--term-text)" }}>{pos.ticker}</span>
+                  <div>
+                    <span className="font-semibold" style={{ color: chgColor }}>{pos.ticker}</span>
+                    <span style={{ color: chgColor, marginLeft: 4, fontSize: "10px" }}>
+                      {chgSign}{Math.abs(chg).toFixed(1)}%
+                    </span>
                     <span style={{ color: "var(--term-muted)" }}> x{pos.quantity} @ {detSym}{pos.entry_price.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -178,7 +186,8 @@ export default function PortfoyPage() {
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

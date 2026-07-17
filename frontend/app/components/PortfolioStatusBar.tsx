@@ -154,14 +154,21 @@ export default function PortfolioStatusBar({
           {portfolio.positions.length > 0 && (
             <div style={{ borderTop: `1px solid ${borderColor}` }}>
               <div className="flex gap-3 px-4 py-2 overflow-x-auto">
-                {portfolio.positions.slice(0, 3).map((pos) => (
+                {portfolio.positions.slice(0, 3).map((pos) => {
+                  const chg = pos.change_pct ?? 0;
+                  const chgColor = chg > 0 ? "var(--term-green)" : chg < 0 ? "var(--term-red)" : "var(--term-muted)";
+                  const chgSign = chg > 0 ? "↑" : chg < 0 ? "↓" : "";
+                  return (
                   <div
                     key={pos.id}
                     className="font-mono text-[11px] shrink-0"
                     style={{ color: "var(--term-text)" }}
                   >
-                    <span className="font-semibold">
+                    <span className="font-semibold" style={{ color: chgColor }}>
                       {pos.ticker.replace(".IS", "")}
+                    </span>
+                    <span style={{ color: chgColor, marginLeft: 2 }}>
+                      {chgSign}{Math.abs(chg).toFixed(1)}%
                     </span>{" "}
                     <span style={{ color: "var(--term-muted)" }}>
                       x{pos.quantity}
@@ -179,7 +186,8 @@ export default function PortfolioStatusBar({
                       {pos.unrealized_pl.toFixed(0)}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
                 {portfolio.positions.length > 3 && (
                   <span
                     className="font-mono text-[11px] shrink-0"
