@@ -315,7 +315,7 @@ class AutonomousAgent:
         from app.models.core import Report
         from app.services.agent_logs import log_if_active
         from datetime import timedelta
-        from app.config import now_istanbul
+        from datetime import timedelta
 
         exchange_label = "BIST" if is_bist else "US"
         exchange_arg = [exchange_label] if is_bist else exchanges
@@ -335,7 +335,7 @@ class AutonomousAgent:
         # Rapor 4 saatten eskiyse veya bu exchange için pick yoksa → yeni rapor tetikle
         report_age_hours = 999
         if latest:
-            age = now_istanbul() - latest.created_at
+            age = datetime.now() - latest.created_at
             report_age_hours = age.total_seconds() / 3600 if age.total_seconds() > 0 else 0
 
         if not latest or not has_exchange_picks or report_age_hours > 4:
