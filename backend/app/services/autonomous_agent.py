@@ -309,17 +309,75 @@ class AutonomousAgent:
                 "market_open": market_open, "exchange": exchange_label}
 
     async def _gather_candidates(self, db: Session, exchanges: list[str], is_bist: bool) -> list[dict]:
-        """Aday hisseleri topla — rapordan veya piyasadan, ardindan Bull/Bear arastirma ekibine gonder."""
+        """Aday hisseleri topla — doğru exchange'in son raporundan. Rapor eskiyse yeni rapor tetikle.
+        Rapor yoksa önce yeni rapor üret, sonra pick'leri kullan.
+        """
         from app.models.core import Report
         from app.services.agent_logs import log_if_active
+        from datetime import timedelta
+        from app.config import now_istanbul
 
+        exchange_label = "BIST" if is_bist else "US"
+        exchange_arg = [exchange_label] if is_bist else exchanges
+
+        # Exchange'e göre rapor ara: pick'leri arasında bu exchange'in ticker'ı olan son rapor
         latest = db.query(Report).options(
             joinedload(Report.picks)
         ).order_by(Report.created_at.desc()).first()
 
+        # Raporun bu exchange için uygun pick'i var mı kontrol et
+        has_exchange_picks = False
+        if latest and latest.picks:
+            has_exchange_picks = any(
+                p.ticker.endswith(".IS") == is_bist for p in latest.picks
+            )
+
+        # Rapor 4 saatten eskiyse veya bu exchange için pick yoksa → yeni rapor tetikle
+        report_age_hours = 999
+        if latest:
+            age = now_istanbul() - latest.created_at
+            report_age_hours = age.total_seconds() / 3600 if age.total_seconds() > 0 else 0
+
+        if not latest or not has_exchange_picks or report_age_hours > 4:
+            reason = "henüz rapor yok" if not latest else f"rapor {report_age_hours:.1f} saat eski" if report_age_hours > 4 else f"{exchange_label} pick'i yok"
+            log_if_active(self.portfolio_slug, "market", f"{reason} — yeni rapor üretiliyor ({exchange_label})")
+            logger.info("[%s] %s — yeni rapor tetikleniyor", exchange_label, reason)
+
+            # Rapor üretimini tetikle (asyncio ile arka planda)
+            from app.orchestrator import orchestrator
+            if not orchestrator.is_running:
+                try:
+                    asyncio.create_task(orchestrator.run_pipeline([exchange_label]))
+                    log_if_active(self.portfolio_slug, "market", f"{exchange_label} rapor pipeline'ı başlatıldı")
+                except Exception as e:
+                    log_if_active(self.portfolio_slug, "market", f"Rapor tetikleme başarısız: {e}")
+            else:
+                log_if_active(self.portfolio_slug, "market", "Pipeline zaten çalışıyor — mevcut rapor beklenecek")
+
+            # Rapor üretilene kadar bekle (max 90 sn)
+            log_if_active(self.portfolio_slug, "market", "Rapor üretimi bekleniyor...")
+            for attempt in range(30):
+                await asyncio.sleep(3)
+                db2 = SessionLocal()
+                try:
+                    latest2 = db2.query(Report).options(
+                        joinedload(Report.picks)
+                    ).order_by(Report.created_at.desc()).first()
+                    if latest2 and latest2.picks and latest2.id != (latest.id if latest else -1):
+                        # Raporun bu exchange için pick'leri var mı
+                        if any(p.ticker.endswith(".IS") == is_bist for p in latest2.picks):
+                            latest = latest2
+                            log_if_active(self.portfolio_slug, "market", f"Yeni rapor hazır: ID={latest.id} ({len(latest.picks)} pick)")
+                            break
+                finally:
+                    db2.close()
+            else:
+                log_if_active(self.portfolio_slug, "market", "Rapor 90 sn içinde hazır olmadı — screener'a geçiliyor")
+                latest = None
+
         candidates = []
         if latest and latest.picks:
-            log_if_active(self.portfolio_slug, "market", f"Son rapor bulundu (ID={latest.id}), {len(latest.picks)} pick")
+            log_if_active(self.portfolio_slug, "market", f"Son rapor: ID={latest.id}, {len(latest.picks)} pick, {report_age_hours:.1f}s eski")
             for p in latest.picks:
                 is_bist_ticker = p.ticker.endswith(".IS")
                 if is_bist != is_bist_ticker:
@@ -346,9 +404,9 @@ class AutonomousAgent:
             candidates.sort(key=lambda c: c["composite_score"], reverse=True)
             filtered = len(latest.picks) - len(candidates)
             if filtered > 0:
-                log_if_active(self.portfolio_slug, "market", f"{filtered} pick exchange filtresine takıldı (BIST/US)")
-            log_if_active(self.portfolio_slug, "market", f"Rapordan {len(candidates)} aday alındı")
-            logger.info("[%s] Rapor pick'leri: %d aday", "BIST" if is_bist else "US", len(candidates))
+                log_if_active(self.portfolio_slug, "market", f"{filtered} pick exchange filtresine takıldı")
+            log_if_active(self.portfolio_slug, "market", f"Rapordan {len(candidates)} {exchange_label} adayı alındı")
+            logger.info("[%s] Rapor pick'leri: %d aday", exchange_label, len(candidates))
         else:
             log_if_active(self.portfolio_slug, "market", "Rapor bulunamadı — screener ile canlı tarama yapılıyor")
             from app.services.screener_service import stage1_prescreen, get_universe
