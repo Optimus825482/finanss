@@ -29,26 +29,42 @@ export default function RaporlarPage() {
   const handleGenerate = async (exchange?: string) => {
     const label = exchange || "TÜM";
     setGenerating(label);
-    // Clear any previous poll
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     try {
       await api.generate(exchange);
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await api.getStatus();
-          if (!s.running) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            const h = await api.getHistory();
-            setHistory(h);
-            if (h.length > 0) loadReport(h[0].id);
-            setGenerating(null);
-          }
-        } catch { clearInterval(pollRef.current!); pollRef.current = null; setGenerating(null); }
-      }, 2000);
+      _startPoll();
     } catch {
       setGenerating(null);
     }
+  };
+
+  const handleGenerateDeep = async (exchange?: string) => {
+    const label = exchange ? `${exchange} (DERIN)` : "TÜM (DERIN)";
+    setGenerating(label);
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    try {
+      await api.generateDeep(exchange);
+      _startPoll();
+    } catch {
+      setGenerating(null);
+    }
+  };
+
+  // Poll generator helper
+  const _startPoll = () => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await api.getStatus();
+        if (!s.running) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          const h = await api.getHistory();
+          setHistory(h);
+          if (h.length > 0) loadReport(h[0].id);
+          setGenerating(null);
+        }
+      } catch { clearInterval(pollRef.current!); pollRef.current = null; setGenerating(null); }
+    }, 2000);
   };
 
   const loadReport = async (id: number) => {
@@ -99,6 +115,14 @@ export default function RaporlarPage() {
           style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}
         >
           {generating === "BIST" ? "ÜRETİLİYOR…" : "🇹🇷 BİST RAPORU"}
+        </button>
+        <button
+          onClick={() => handleGenerateDeep()}
+          disabled={generating !== null}
+          className="px-4 py-2 font-mono text-xs rounded-sm transition-none disabled:opacity-40"
+          style={{ border: "1px solid #a855f7", color: "#a855f7" }}
+        >
+          {generating === "TÜM (DERIN)" ? "ÜRETİLİYOR…" : "🔬 DERİN ANALİZ"}
         </button>
       </div>
 

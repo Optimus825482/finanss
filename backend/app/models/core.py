@@ -80,6 +80,16 @@ class StockPick(Base):
 
     narrative = Column(Text)
 
+    # Fair Value (adil değer) — Faz 1 enrich
+    fair_value = Column(Float, nullable=True)
+    margin_pct = Column(Float, nullable=True)
+    valuation_assessment = Column(String, nullable=True)
+
+    # LLM enrichment per pick — Faz 1 enrich
+    llm_reasoning = Column(Text, nullable=True)
+    llm_target_price = Column(Float, nullable=True)
+    llm_expected_return_pct = Column(Float, nullable=True)
+
     report = relationship("Report", back_populates="picks")
 
 

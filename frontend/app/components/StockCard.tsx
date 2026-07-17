@@ -65,30 +65,49 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
         {pick.narrative}
       </p>
 
-      {(pick.pe_ratio || pick.volatility_annualized) && (
-        <div className="flex gap-4 mt-3 pt-3 border-t border-term-border font-mono text-[10px] text-term-muted">
+      {(pick.pe_ratio || pick.volatility_annualized || pick.fair_value || pick.llm_target_price) && (
+        <div className="flex gap-4 mt-3 pt-3 border-t border-term-border font-mono text-[10px] text-term-muted flex-wrap">
           {pick.pe_ratio && <span>F/K {pick.pe_ratio.toFixed(1)}</span>}
           {pick.volatility_annualized && <span>Vol %{pick.volatility_annualized}</span>}
           {pick.max_drawdown_pct && <span>Düşüş %{pick.max_drawdown_pct}</span>}
+          {pick.fair_value && (
+            <span style={{ color: (pick.margin_pct ?? 0) > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+              Adil ${pick.fair_value.toFixed(1)} ({pick.margin_pct != null ? `${pick.margin_pct > 0 ? "+" : ""}${pick.margin_pct}%` : "—"})
+            </span>
+          )}
+          {pick.llm_target_price && (
+            <span style={{ color: "var(--term-amber)" }}>🎯 ${pick.llm_target_price.toFixed(1)}</span>
+          )}
         </div>
       )}
 
       {showPredict !== false && (
         <div className="mt-3 pt-3 border-t border-term-border space-y-2">
-          {/* Adil deger butonu */}
-          {(fairValue
+          {/* Adil deger: DB'den geldiyse direkt göster, yoksa buton */}
+          {pick.fair_value
             ? <div className="flex flex-wrap gap-2 items-center">
                 <span className="font-mono text-[10px]" style={{ color: "var(--term-amber)" }}>⚖</span>
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: fairValue.margin_pct > 0 ? "rgba(74,222,128,0.12)" : "rgba(248,113,113,0.12)", color: fairValue.margin_pct > 0 ? "var(--term-green)" : "var(--term-red)" }}>
-                  Adil: ${fairValue.fair_value} ({fairValue.margin_pct > 0 ? "+" : ""}{fairValue.margin_pct}%)
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: (pick.margin_pct ?? 0) > 0 ? "rgba(74,222,128,0.12)" : "rgba(248,113,113,0.12)", color: (pick.margin_pct ?? 0) > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  Adil: ${pick.fair_value.toFixed(1)} ({pick.margin_pct != null ? `${pick.margin_pct > 0 ? "+" : ""}${pick.margin_pct}%` : "—"})
                 </span>
+                {pick.valuation_assessment && (
+                  <span className="font-mono text-[9px]" style={{ color: "var(--term-muted)" }}>{pick.valuation_assessment}</span>
+                )}
               </div>
-            : <button onClick={()=>{setFvLoading(true);fetch(`${API_BASE}/api/screener/${pick.ticker}/fair-value`,{headers:apiHeaders()}).then(r=>r.json()).then(v=>{setFairValue(v);setFvLoading(false)}).catch(()=>setFvLoading(false))}} disabled={fvLoading}
-                className="font-mono text-[10px] px-2.5 py-1 rounded-sm transition-none disabled:opacity-40"
-                style={{ border: "1px solid var(--term-amber-dim)", color: "var(--term-amber-dim)" }}>
-                {fvLoading ? "…" : "⚖ ADİL DEĞER"}
-              </button>
-          )}
+            : (fairValue
+              ? <div className="flex flex-wrap gap-2 items-center">
+                  <span className="font-mono text-[10px]" style={{ color: "var(--term-amber)" }}>⚖</span>
+                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: fairValue.margin_pct > 0 ? "rgba(74,222,128,0.12)" : "rgba(248,113,113,0.12)", color: fairValue.margin_pct > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                    Adil: ${fairValue.fair_value} ({fairValue.margin_pct > 0 ? "+" : ""}{fairValue.margin_pct}%)
+                  </span>
+                </div>
+              : <button onClick={()=>{setFvLoading(true);fetch(`${API_BASE}/api/screener/${pick.ticker}/fair-value`,{headers:apiHeaders()}).then(r=>r.json()).then(v=>{setFairValue(v);setFvLoading(false)}).catch(()=>setFvLoading(false))}} disabled={fvLoading}
+                  className="font-mono text-[10px] px-2.5 py-1 rounded-sm transition-none disabled:opacity-40"
+                  style={{ border: "1px solid var(--term-amber-dim)", color: "var(--term-amber-dim)" }}>
+                  {fvLoading ? "…" : "⚖ ADİL DEĞER"}
+                </button>
+            )
+          }
           {/* Ongoru butonu */}
           {(prediction?.predictions
             ? <div className="flex flex-wrap gap-2 items-center">
@@ -104,6 +123,12 @@ export default function StockCard({ pick, rank, showPredict }: { pick: StockPick
                 style={{ border: "1px solid var(--term-amber)", color: "var(--term-amber)" }}>
                 {predLoading ? "…" : "📈 ÖNGÖRÜ"}
               </button>
+          )}
+          {/* LLM reasoning varsa göster */}
+          {pick.llm_reasoning && (
+            <p className="font-mono text-[9px] leading-relaxed" style={{ color: "var(--term-muted)", opacity: 0.7 }}>
+              🤖 {pick.llm_reasoning?.slice(0, 200)}
+            </p>
           )}
         </div>
       )}

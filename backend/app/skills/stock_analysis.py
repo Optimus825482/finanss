@@ -65,6 +65,11 @@ def format_report(
     position_pl: Optional[dict],
     data_missing: list[str],
     macro_indicators: list[dict] | None = None,
+    fair_value: float | None = None,
+    margin_pct: float | None = None,
+    valuation_assessment: str | None = None,
+    fair_value_models: list[dict] | None = None,
+    predictions: dict | None = None,
 ) -> str:
     """Markdown rapor üret — StockAnalysisResult.markdown için."""
     md = [f"# {ticker} — Hisse Analiz Raporu", ""]
@@ -147,6 +152,38 @@ def format_report(
         md.append("## 🌍 Küresel Makro")
         md.append("- VERİ YOK — harici makro veri gerektirir")
     md.append("")
+
+    # 📊 Fair Value (adil değer)
+    if fair_value is not None:
+        md.append("## 📊 Adil Değer Analizi")
+        md.append(f"- **Ensemble Adil Değer:** ${fair_value:.2f}")
+        if margin_pct is not None:
+            direction = "iskontolu" if margin_pct > 0 else "primli"
+            md.append(f"- **Marj:** %{margin_pct:+.1f} (mevcut fiyata gore {direction})")
+        if valuation_assessment:
+            md.append(f"- **Değerlendirme:** {valuation_assessment}")
+        if fair_value_models:
+            md.append("")
+            md.append("| Model | Adil Değer |")
+            md.append("|---|---|")
+            for m in fair_value_models:
+                if m.get("value"):
+                    md.append(f"| {m.get('method', 'N/A')} | ${m['value']:.2f} |")
+        md.append("")
+
+    # 🔮 Prediction (fiyat tahmini)
+    if predictions:
+        md.append("## 🔮 Fiyat Tahmini")
+        for horizon, key in [("7 Gün", "day_7"), ("15 Gün", "day_15"), ("30 Gün", "day_30")]:
+            p = predictions.get(key, {})
+            if p:
+                drift = p.get("drift_pct")
+                predicted = p.get("predicted")
+                source = p.get("source", "?")
+                if drift is not None:
+                    direction = "📈" if drift > 0 else "📉" if drift < 0 else "➡️"
+                    md.append(f"- **{horizon}:** {direction} %{drift:+.1f} (hedef: ${predicted:.2f}) [{source}]")
+        md.append("")
 
     return "\n".join(md)
 
@@ -278,7 +315,12 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         data_missing.append("position_pl")
 
     # 7. Markdown rapor
-    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing, macro_indicators=macro_indicators or None)
+    markdown = format_report(ticker, candidate, price, bias, conclusion, position_pl, data_missing,
+                             macro_indicators=macro_indicators or None,
+                             fair_value=fair_value, margin_pct=margin_pct,
+                             valuation_assessment=valuation_assessment,
+                             fair_value_models=fair_value_models,
+                             predictions=predictions)
 
     # 8. Watchlist signal güncelle (sessiz)
     if db is not None:
@@ -385,6 +427,47 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
     except Exception as e:
         logger.warning("LLM reasoning failed for %s: %s", ticker, e)
 
+    # ── Fair Value (adil değer) ──
+    fair_value: float | None = None
+    margin_pct: float | None = None
+    valuation_assessment: str | None = None
+    fair_value_models: list[dict] = []
+    try:
+        from app.services.fair_value import calculate_fair_value as calc_fv
+        fv_result = await asyncio.to_thread(calc_fv, ticker)
+        fair_value = fv_result.get("fair_value")
+        margin_pct = fv_result.get("margin_pct")
+        valuation_assessment = fv_result.get("assessment")
+        fair_value_models = fv_result.get("models", [])
+        logger.info("Fair value for %s: %.2f (margin %.1f%%, %s)", ticker, fair_value or 0, margin_pct or 0, valuation_assessment)
+    except Exception as e:
+        logger.warning("Fair value failed for %s: %s", ticker, e)
+
+    # ── Prediction Engine (fiyat tahmini) ──
+    predictions: dict | None = None
+    if db is not None and price_history and len(price_history) >= 30:
+        try:
+            from app.services.prediction_engine import create_prediction
+            pred_result = await create_prediction(
+                db=db, ticker=ticker,
+                price_history=price_history,
+                agent_scores={
+                    "fundamental_score": scores.get("fundamental") or 50,
+                    "sentiment_score": scores.get("sentiment") or 50,
+                    "risk_score": scores.get("risk") or 50,
+                    "composite_score": scores.get("composite") or 50,
+                    "momentum_pct": momentum_pct,
+                    "pe_ratio": candidate.get("pe_ratio"),
+                },
+            )
+            predictions = pred_result.get("predictions", {})
+            logger.info("Prediction for %s: 7d=%s, 15d=%s, 30d=%s", ticker,
+                         predictions.get("day_7", {}).get("drift_pct"),
+                         predictions.get("day_15", {}).get("drift_pct"),
+                         predictions.get("day_30", {}).get("drift_pct"))
+        except Exception as e:
+            logger.warning("Prediction failed for %s: %s", ticker, e)
+
     # ── NaN sanitize: tüm float değerleri temizle (yfinance/hesap hatası → JSON fail) ──
     def _sanitize_dict(d: dict) -> dict:
         for k, v in d.items():
@@ -412,5 +495,11 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
         "llm_target_price": _ok(llm_target_price),
         "llm_expected_return_pct": _ok(llm_expected_return),
         "momentum_pct": _ok(momentum_pct),
+        # Faz 2 zenginlestirmeleri
+        "fair_value": _ok(fair_value),
+        "margin_pct": _ok(margin_pct),
+        "valuation_assessment": valuation_assessment,
+        "fair_value_models": [m for m in fair_value_models if m.get("value")],
+        "predictions": predictions,
     }
     return _sanitize_dict(result)

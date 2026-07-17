@@ -65,6 +65,23 @@ class StockAnalysisResult(BaseModel):
     momentum_pct: Optional[float] = Field(
         None, description="Son 5 günlük momentum %"
     )
+    # Faz 2 zenginlestirme: Fair Value
+    fair_value: Optional[float] = Field(
+        None, description="Ensemble adil değer (Graham+DCF+Lynch+PE)"
+    )
+    margin_pct: Optional[float] = Field(
+        None, description="Adil değere göre marj % (pozitif = iskontolu)"
+    )
+    valuation_assessment: Optional[str] = Field(
+        None, description="Değerleme: 'Asiri degerli', 'Adil degerde', 'Dusuk degerli'"
+    )
+    fair_value_models: list[dict] = Field(
+        default_factory=list, description="Bireysel model sonuçları [{method, value, inputs}]"
+    )
+    # Faz 2 zenginlestirme: Prediction
+    predictions: Optional[dict] = Field(
+        None, description="7/15/30 gün fiyat tahminleri {day_7, day_15, day_30}"
+    )
 
 
 # --- 股息分析 (dividend) ---
@@ -157,9 +174,139 @@ class _FromAttr(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- Sector Rotation ---
+
+class SectorRotationRequest(BaseModel):
+    query: Optional[str] = Field(None, description="Opsiyonel: belirli bir ticker için sektör")
+
+
+class SectorData(BaseModel):
+    name: str
+    ticker_count: int
+    avg_return_pct: float
+    tickers: list[str] = Field(default_factory=list)
+
+
+class SectorRotationResult(BaseModel):
+    query: Optional[str] = None
+    sector: Optional[str] = None
+    sectors: list[dict] = Field(default_factory=list)
+    top_sector: Optional[str] = None
+    bottom_sector: Optional[str] = None
+
+
+# --- Correlation Matrix ---
+
+class CorrelationRequest(BaseModel):
+    tickers: Optional[str] = Field(None, description="Virgülle ayrılmış ticker listesi")
+
+
+class CorrelationResult(BaseModel):
+    tickers: list[str] = Field(default_factory=list)
+    matrix: list[list[float]] = Field(default_factory=list)
+    clusters: list[list[str]] = Field(default_factory=list)
+    highest_correlation: Optional[dict] = None
+    lowest_correlation: Optional[dict] = None
+    error: Optional[str] = None
+
+
+# --- Insider Activity ---
+
+class InsiderRequest(BaseModel):
+    ticker: str
+
+
+class InsiderTransaction(BaseModel):
+    type: str
+    shares: int = 0
+    value: Optional[float] = None
+    insider_name: str = "Bilinmiyor"
+    date: str = ""
+
+
+class InsiderResult(BaseModel):
+    ticker: str
+    transactions: list[dict] = Field(default_factory=list)
+    net_sentiment: str = "neutral"
+    buy_count: int = 0
+    sell_count: int = 0
+    buy_value: float = 0.0
+    sell_value: float = 0.0
+    data_missing: list[str] = Field(default_factory=list)
+
+
+# --- Unusual Options ---
+
+class UnusualOptionsRequest(BaseModel):
+    ticker: str
+
+
+class UnusualOptionsResult(BaseModel):
+    ticker: str
+    options_activity: list[dict] = Field(default_factory=list)
+    put_call_ratio: Optional[float] = None
+    unusual_count: int = 0
+    sentiment: str = "neutral"
+    data_missing: list[str] = Field(default_factory=list)
+
+
+# --- Earnings Surprise ---
+
+class EarningsSurpriseRequest(BaseModel):
+    ticker: str
+
+
+class EarningsSurpriseResult(BaseModel):
+    ticker: str
+    history: list[dict] = Field(default_factory=list)
+    avg_surprise_pct: float = 0.0
+    next_earnings_date: Optional[str] = None
+    beat_count: int = 0
+    miss_count: int = 0
+    sentiment: str = "neutral"
+    data_missing: list[str] = Field(default_factory=list)
+
+
+# --- Seasonality ---
+
+class SeasonalityRequest(BaseModel):
+    ticker: str
+
+
+class SeasonalityResult(BaseModel):
+    ticker: str
+    monthly_returns: dict = Field(default_factory=dict)
+    quarterly_patterns: dict = Field(default_factory=dict)
+    best_month: Optional[str] = None
+    worst_month: Optional[str] = None
+    best_quarter: Optional[str] = None
+    worst_quarter: Optional[str] = None
+    data_missing: list[str] = Field(default_factory=list)
+
+
+# --- Fair Value (bağımsız skill) ---
+
+class FairValueSkillRequest(BaseModel):
+    ticker: str
+
+
+class FairValueSkillResult(BaseModel):
+    ticker: str
+    fair_value: Optional[float] = None
+    current_price: Optional[float] = None
+    margin_pct: Optional[float] = None
+    assessment: Optional[str] = None
+    models: list[dict] = Field(default_factory=list)
+    markdown: str = ""
+    data_missing: list[str] = Field(default_factory=list)
+
+
 # YARDIMCI: ortak config —— tüm Result şemaları için
 for _cls in (
     StockAnalysisResult, DividendResult, RumorSignal, RumorScanResult,
     WatchlistAlert, KlineResult,
+    SectorRotationResult, CorrelationResult, InsiderResult,
+    UnusualOptionsResult, EarningsSurpriseResult, SeasonalityResult,
+    FairValueSkillResult,
 ):
     _cls.model_config = ConfigDict(from_attributes=True)

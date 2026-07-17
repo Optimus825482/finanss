@@ -9,6 +9,13 @@ from app.schemas.analysis import (
     DividendAnalysisRequest, DividendResult,
     RumorScanRequest, RumorScanResult, RumorSignal,
     WatchlistToolArgs, KlineRequest, KlineResult,
+    SectorRotationRequest, SectorRotationResult,
+    CorrelationRequest, CorrelationResult,
+    InsiderRequest, InsiderResult,
+    UnusualOptionsRequest, UnusualOptionsResult,
+    EarningsSurpriseRequest, EarningsSurpriseResult,
+    SeasonalityRequest, SeasonalityResult,
+    FairValueSkillRequest, FairValueSkillResult,
 )
 
 __all__ = [
@@ -46,4 +53,18 @@ __all__ = [
     "WatchlistToolArgs",
     "KlineRequest",
     "KlineResult",
+    "SectorRotationRequest",
+    "SectorRotationResult",
+    "CorrelationRequest",
+    "CorrelationResult",
+    "InsiderRequest",
+    "InsiderResult",
+    "UnusualOptionsRequest",
+    "UnusualOptionsResult",
+    "EarningsSurpriseRequest",
+    "EarningsSurpriseResult",
+    "SeasonalityRequest",
+    "SeasonalityResult",
+    "FairValueSkillRequest",
+    "FairValueSkillResult",
 ]

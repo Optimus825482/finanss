@@ -8,16 +8,30 @@ import {
   DividendResult,
   RumorScanResult,
   KlineResult,
+  SectorRotationResult,
+  CorrelationResult,
+  InsiderResult,
+  UnusualOptionsResult,
+  EarningsSurpriseResult,
+  SeasonalityResult,
+  FairValueSkillResult,
 } from "../lib/api";
 
-type SkillTab = "stock" | "dividend" | "rumors" | "kline";
+type SkillTab = "stock" | "dividend" | "rumors" | "kline" | "sector" | "correlation" | "insider" | "options" | "earnings" | "seasonality" | "fairvalue";
 type Suggestion = { ticker: string; name: string; exchange: string; exchange_name: string; type: string };
 
 const TAB_LABELS: Record<SkillTab, string> = {
   stock: "📊 Hisse Analizi",
   dividend: "💰 Temettü",
-  rumors: "📡 Rumor Tara",
+  rumors: "📡 Haber Sinyal",
   kline: "📈 K-Line",
+  sector: "📊 Sektör",
+  correlation: "🔗 Korelasyon",
+  insider: "🔍 İçeriden",
+  options: "🎰 Opsiyon",
+  earnings: "📅 Bilanço",
+  seasonality: "📅 Mevsim",
+  fairvalue: "💎 Adil Değer",
 };
 
 const SIGNAL_TYPE_STYLES: Record<string, React.CSSProperties> = {
@@ -80,6 +94,13 @@ export default function SkillPanel() {
   const [dividendResult, setDividendResult] = useState<DividendResult | null>(null);
   const [rumorResult, setRumorResult] = useState<RumorScanResult | null>(null);
   const [klineResult, setKlineResult] = useState<KlineResult | null>(null);
+  const [sectorResult, setSectorResult] = useState<SectorRotationResult | null>(null);
+  const [correlationResult, setCorrelationResult] = useState<CorrelationResult | null>(null);
+  const [insiderResult, setInsiderResult] = useState<InsiderResult | null>(null);
+  const [optionsResult, setOptionsResult] = useState<UnusualOptionsResult | null>(null);
+  const [earningsResult, setEarningsResult] = useState<EarningsSurpriseResult | null>(null);
+  const [seasonalityResult, setSeasonalityResult] = useState<SeasonalityResult | null>(null);
+  const [fairValueResult, setFairValueResult] = useState<FairValueSkillResult | null>(null);
 
   // Takibe ekle
   const [watchlistLoading, setWatchlistLoading] = useState(false);
@@ -121,6 +142,20 @@ export default function SkillPanel() {
         setRumorResult(await api.scanRumors(t || undefined));
       } else if (tab === "kline") {
         setKlineResult(await api.analyzeKline(t));
+      } else if (tab === "sector") {
+        setSectorResult(await api.analyzeSectorRotation(t || undefined));
+      } else if (tab === "correlation") {
+        setCorrelationResult(await api.analyzeCorrelation(t || undefined));
+      } else if (tab === "insider") {
+        setInsiderResult(await api.analyzeInsider(t));
+      } else if (tab === "options") {
+        setOptionsResult(await api.analyzeUnusualOptions(t));
+      } else if (tab === "earnings") {
+        setEarningsResult(await api.analyzeEarningsSurprise(t));
+      } else if (tab === "seasonality") {
+        setSeasonalityResult(await api.analyzeSeasonality(t));
+      } else if (tab === "fairvalue") {
+        setFairValueResult(await api.analyzeFairValue(t));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Skill çağrısı başarısız");
@@ -430,7 +465,72 @@ export default function SkillPanel() {
             </div>
           )}
 
-          {/* ── LLM Gerekçe + Hedef Fiyat ── */}
+          {/* ── Fair Value kartı ── */}
+          {stockResult.fair_value != null && (
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", background: "linear-gradient(135deg, rgba(234,179,8,0.10), rgba(249,115,22,0.05))" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">💎</span>
+                <span className="text-[11px] font-mono font-bold tracking-wider uppercase" style={{ color: "var(--term-amber)" }}>Adil Değer Analizi</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>Adil Değer</div>
+                  <div className="text-lg font-bold font-mono" style={{ color: "var(--term-green)" }}>$ {stockResult.fair_value.toFixed(2)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>Marj</div>
+                  <div className="text-lg font-bold font-mono" style={{ color: (stockResult.margin_pct ?? 0) > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                    {(stockResult.margin_pct ?? 0) > 0 ? "+" : ""}{stockResult.margin_pct?.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>Değerlendirme</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: (stockResult.margin_pct ?? 0) > 5 ? "var(--term-green)" : (stockResult.margin_pct ?? 0) < -5 ? "var(--term-red)" : "var(--term-amber)" }}>
+                    {stockResult.valuation_assessment || "—"}
+                  </div>
+                </div>
+              </div>
+              {stockResult.fair_value_models && stockResult.fair_value_models.length > 0 && (
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {stockResult.fair_value_models.map((m) => (
+                    <div key={m.method} className="rounded-lg p-2 text-center" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[9px] font-mono" style={{ color: "var(--term-muted)" }}>{m.method?.replace(" (Indirgenmis Nakit Akisi)", "").replace(" Fair Value", "")}</div>
+                      <div className="text-sm font-bold font-mono" style={{ color: "var(--term-text)" }}>${m.value?.toFixed(0)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Prediction kartı ── */}
+          {stockResult.predictions && (
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", background: "linear-gradient(135deg, rgba(6,182,212,0.08), rgba(34,211,238,0.03))" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">🔮</span>
+                <span className="text-[11px] font-mono font-bold tracking-wider uppercase" style={{ color: "#06b6d4" }}>Fiyat Tahmini</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {(["day_7", "day_15", "day_30"] as const).map((key) => {
+                  const p = stockResult.predictions?.[key];
+                  const label = key === "day_7" ? "7 Gün" : key === "day_15" ? "15 Gün" : "30 Gün";
+                  const drift = p?.drift_pct;
+                  return (
+                    <div key={key} className="rounded-lg p-3 text-center" style={{ backgroundColor: drift != null && drift > 0 ? "rgba(34,197,94,0.08)" : drift != null && drift < 0 ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[10px] font-mono tracking-wider mb-1" style={{ color: "var(--term-muted)" }}>{label}</div>
+                      <div className="text-lg font-bold font-mono" style={{ color: drift != null && drift > 0 ? "var(--term-green)" : drift != null && drift < 0 ? "var(--term-red)" : "var(--term-muted)" }}>
+                        {drift != null ? `${drift > 0 ? "+" : ""}${drift.toFixed(1)}%` : "—"}
+                      </div>
+                      {p?.predicted != null && (
+                        <div className="text-[10px] font-mono mt-0.5" style={{ color: "var(--term-muted)" }}>$ {p.predicted.toFixed(2)}</div>
+                      )}
+                      <div className="text-[9px] font-mono mt-0.5" style={{ color: "var(--term-muted)" }}>{p?.source || "—"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {stockResult.llm_reasoning && (
             <div className="rounded-xl p-4" style={{ border: "1px solid var(--term-border)", background: "linear-gradient(135deg, rgba(168,85,247,0.08), rgba(6,182,212,0.05))" }}>
               <div className="flex items-center gap-2 mb-3">
@@ -827,6 +927,325 @@ export default function SkillPanel() {
           {klineResult.vlm_analysis && (
             <div className="rounded-lg p-3 text-sm whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "var(--term-text)" }}>
               {klineResult.vlm_analysis}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Sector Rotation ── */}
+      {tab === "sector" && sectorResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg">📊</span>
+            <span className="text-sm font-bold" style={{ color: "var(--term-text)" }}>
+              {sectorResult.query ? `${sectorResult.query} → ${sectorResult.sector || "?"}` : "Tüm Sektörler"}
+            </span>
+            {sectorResult.top_sector && (
+              <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(34,197,94,0.20)", color: "var(--term-green)" }}>
+                🥇 {sectorResult.top_sector}
+              </span>
+            )}
+            {sectorResult.bottom_sector && (
+              <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(239,68,68,0.20)", color: "var(--term-red)" }}>
+                🔻 {sectorResult.bottom_sector}
+              </span>
+            )}
+          </div>
+          {sectorResult.sectors.slice(0, 10).map((s, i) => (
+            <div key={s.name} className="rounded-lg p-3 flex items-center gap-3" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
+              <span className="text-xs font-bold px-2 py-1 rounded" style={{ backgroundColor: i === 0 ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)", color: i === 0 ? "var(--term-green)" : "var(--term-muted)" }}>
+                #{i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-mono font-semibold" style={{ color: "var(--term-text)" }}>{s.name}</div>
+                <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>{s.ticker_count} hisse — {s.tickers?.slice(0, 3).join(", ")}</div>
+              </div>
+              <span className="text-sm font-bold font-mono" style={{ color: s.avg_return_pct >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                {s.avg_return_pct > 0 ? "+" : ""}{s.avg_return_pct}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Correlation Matrix ── */}
+      {tab === "correlation" && correlationResult && (
+        <div className="space-y-3">
+          {correlationResult.error ? (
+            <div className="text-sm" style={{ color: "var(--term-red)" }}>{correlationResult.error}</div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                {correlationResult.highest_correlation && (
+                  <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(34,197,94,0.15)", color: "var(--term-green)" }}>
+                    🟢 En yüksek: {correlationResult.highest_correlation.pair.join(" ↔ ")} ({correlationResult.highest_correlation.value.toFixed(2)})
+                  </span>
+                )}
+                {correlationResult.lowest_correlation && (
+                  <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "var(--term-red)" }}>
+                    🔴 En düşük: {correlationResult.lowest_correlation.pair.join(" ↔ ")} ({correlationResult.lowest_correlation.value.toFixed(2)})
+                  </span>
+                )}
+              </div>
+              {/* Heatmap table */}
+              <div className="overflow-x-auto">
+                <table className="text-xs font-mono w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th className="p-1.5 text-left" style={{ color: "var(--term-muted)" }}></th>
+                      {correlationResult.tickers.map((t) => (
+                        <th key={t} className="p-1.5 text-center font-bold" style={{ color: "var(--term-amber)" }}>{t}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correlationResult.matrix.map((row, ri) => (
+                      <tr key={ri}>
+                        <td className="p-1.5 font-bold" style={{ color: "var(--term-amber)" }}>{correlationResult.tickers[ri]}</td>
+                        {row.map((val, ci) => {
+                          const color = ri === ci ? "#64748b" : val > 0.7 ? "#22c55e" : val > 0.4 ? "#eab308" : val > 0 ? "#f97316" : "#ef4444";
+                          return (
+                            <td key={ci} className="p-1.5 text-center" style={{ color, backgroundColor: ri === ci ? "rgba(255,255,255,0.03)" : "transparent" }}>
+                              {val.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {correlationResult.clusters.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-xs font-mono font-bold" style={{ color: "var(--term-muted)" }}>Kümeler (r &gt; 0.7):</div>
+                  {correlationResult.clusters.map((cl, i) => (
+                    <div key={i} className="rounded-lg px-3 py-1.5" style={{ backgroundColor: "rgba(168,85,247,0.10)", border: "1px solid rgba(168,85,247,0.20)" }}>
+                      <span className="text-xs font-mono" style={{ color: "#a855f7" }}>{cl.join("  ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Insider Activity ── */}
+      {tab === "insider" && insiderResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{insiderResult.ticker}</span>
+            <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{
+              backgroundColor: insiderResult.net_sentiment === "bullish" ? "rgba(34,197,94,0.20)" : insiderResult.net_sentiment === "bearish" ? "rgba(239,68,68,0.20)" : "rgba(230,160,0,0.20)",
+              color: insiderResult.net_sentiment === "bullish" ? "var(--term-green)" : insiderResult.net_sentiment === "bearish" ? "var(--term-red)" : "var(--term-amber)",
+            }}>
+              {insiderResult.net_sentiment === "bullish" ? "🟢 Alım ağırlıklı" : insiderResult.net_sentiment === "bearish" ? "🔴 Satış ağırlıklı" : "🟡 Nötr"}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-green)" }}>{insiderResult.buy_count}</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Alım</div>
+            </div>
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-red)" }}>{insiderResult.sell_count}</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Satım</div>
+            </div>
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-text)" }}>${(insiderResult.buy_value / 1000).toFixed(0)}K</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Alım Değer</div>
+            </div>
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-text)" }}>${(insiderResult.sell_value / 1000).toFixed(0)}K</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Satım Değer</div>
+            </div>
+          </div>
+          {insiderResult.transactions.slice(0, 10).map((tx, i) => (
+            <div key={i} className="rounded-lg p-2 flex items-center gap-2 text-xs" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
+              <span className="rounded px-1.5 py-0.5 font-bold" style={{ backgroundColor: tx.type === "buy" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: tx.type === "buy" ? "var(--term-green)" : "var(--term-red)" }}>
+                {tx.type.toUpperCase()}
+              </span>
+              <span className="flex-1 font-mono" style={{ color: "var(--term-text)" }}>{tx.insider_name}</span>
+              <span className="font-mono" style={{ color: "var(--term-muted)" }}>{tx.shares.toLocaleString()} lot</span>
+              <span className="font-mono" style={{ color: "var(--term-muted)" }}>{tx.date?.slice(0, 10)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Unusual Options ── */}
+      {tab === "options" && optionsResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{optionsResult.ticker}</span>
+            <span className="rounded-full px-2 py-0.5 text-xs" style={{
+              backgroundColor: optionsResult.sentiment === "bullish" ? "rgba(34,197,94,0.20)" : optionsResult.sentiment === "bearish" ? "rgba(239,68,68,0.20)" : "rgba(230,160,0,0.20)",
+              color: optionsResult.sentiment === "bullish" ? "var(--term-green)" : optionsResult.sentiment === "bearish" ? "var(--term-red)" : "var(--term-amber)",
+            }}>
+              {optionsResult.sentiment === "bullish" ? "🟢 Call ağırlıklı" : optionsResult.sentiment === "bearish" ? "🔴 Put ağırlıklı" : "🟡 Dengeli"}
+            </span>
+            <span className="text-xs font-mono" style={{ color: "var(--term-muted)" }}>
+              P/C: {optionsResult.put_call_ratio?.toFixed(2) ?? "—"}
+            </span>
+          </div>
+          <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "rgba(168,85,247,0.08)" }}>
+            <span className="text-2xl font-bold font-mono" style={{ color: "#a855f7" }}>{optionsResult.unusual_count}</span>
+            <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>Olağandışı Aktivite (Vol &gt; 3x OI)</div>
+          </div>
+          {optionsResult.options_activity.slice(0, 10).map((o, i) => (
+            <div key={i} className="rounded-lg p-2 flex items-center gap-2 text-xs" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
+              <span className="rounded px-1.5 py-0.5 font-bold" style={{ backgroundColor: o.type === "call" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: o.type === "call" ? "var(--term-green)" : "var(--term-red)" }}>
+                {o.type.toUpperCase()} ${o.strike}
+              </span>
+              <span className="font-mono" style={{ color: "var(--term-muted)" }}>{o.expiry?.slice(0, 10)}</span>
+              <span className="flex-1 text-right font-mono" style={{ color: "var(--term-text)" }}>
+                Vol: {o.volume.toLocaleString()} / OI: {o.open_interest.toLocaleString()}
+              </span>
+              <span className="rounded px-1 py-0.5 font-bold" style={{ backgroundColor: o.sentiment === "bullish" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: o.sentiment === "bullish" ? "var(--term-green)" : "var(--term-red)" }}>
+                {o.sentiment.toUpperCase()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Earnings Surprise ── */}
+      {tab === "earnings" && earningsResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{earningsResult.ticker}</span>
+            <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{
+              backgroundColor: earningsResult.sentiment === "bullish" ? "rgba(34,197,94,0.20)" : earningsResult.sentiment === "bearish" ? "rgba(239,68,68,0.20)" : "rgba(230,160,0,0.20)",
+              color: earningsResult.sentiment === "bullish" ? "var(--term-green)" : earningsResult.sentiment === "bearish" ? "var(--term-red)" : "var(--term-amber)",
+            }}>
+              {earningsResult.avg_surprise_pct > 0 ? "+" : ""}{earningsResult.avg_surprise_pct}% ortalama sürpriz
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-green)" }}>{earningsResult.beat_count}</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Beat</div>
+            </div>
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--term-red)" }}>{earningsResult.miss_count}</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Miss</div>
+            </div>
+            <div className="rounded-lg p-2" style={{ backgroundColor: "rgba(6,182,212,0.10)" }}>
+              <div className="text-xs font-bold" style={{ color: "#06b6d4" }}>{earningsResult.next_earnings_date || "—"}</div>
+              <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>Sonraki Bilanço</div>
+            </div>
+          </div>
+          {earningsResult.history.map((h, i) => (
+            <div key={i} className="rounded-lg p-2 flex items-center gap-2 text-xs" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
+              <span className="font-mono" style={{ color: "var(--term-muted)", width: "80px" }}>{h.date?.slice(0, 10)}</span>
+              <span className="font-mono" style={{ color: "var(--term-muted)" }}>Tah: {h.estimated?.toFixed(2)}</span>
+              <span className="font-mono" style={{ color: "var(--term-text)" }}>Ger: {h.actual?.toFixed(2)}</span>
+              <span className="flex-1 text-right font-bold font-mono" style={{ color: h.surprise_pct >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                {h.surprise_pct > 0 ? "+" : ""}{h.surprise_pct}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Seasonality ── */}
+      {tab === "seasonality" && seasonalityResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{seasonalityResult.ticker}</span>
+            {seasonalityResult.best_month && (
+              <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(34,197,94,0.20)", color: "var(--term-green)" }}>
+                🥇 {seasonalityResult.best_month}
+              </span>
+            )}
+            {seasonalityResult.worst_month && (
+              <span className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "rgba(239,68,68,0.20)", color: "var(--term-red)" }}>
+                🔻 {seasonalityResult.worst_month}
+              </span>
+            )}
+          </div>
+          {/* Aylık bar chart */}
+          <div className="space-y-1">
+            {Object.entries(seasonalityResult.monthly_returns).map(([month, data]) => (
+              <div key={month} className="flex items-center gap-2">
+                <span className="text-[10px] font-mono w-16 text-right" style={{ color: "var(--term-muted)" }}>{month}</span>
+                <div className="flex-1 h-5 rounded-sm relative" style={{ backgroundColor: "var(--term-bg)" }}>
+                  <div className="absolute top-0 h-full rounded-sm transition-all" style={{
+                    left: "50%",
+                    width: `${Math.min(Math.abs(data.avg_return_pct) * 3, 48)}%`,
+                    backgroundColor: data.avg_return_pct >= 0 ? "rgba(34,197,94,0.50)" : "rgba(239,68,68,0.50)",
+                    transform: data.avg_return_pct >= 0 ? "translateX(0)" : "translateX(-100%)",
+                  }} />
+                </div>
+                <span className="text-[10px] font-mono w-12 text-right" style={{ color: data.avg_return_pct >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {data.avg_return_pct > 0 ? "+" : ""}{data.avg_return_pct}%
+                </span>
+                <span className="text-[9px] font-mono w-10 text-right" style={{ color: "var(--term-muted)" }}>{data.win_rate_pct}%W</span>
+              </div>
+            ))}
+          </div>
+          {/* Çeyreklik */}
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            {Object.entries(seasonalityResult.quarterly_patterns).map(([q, data]) => (
+              <div key={q} className="rounded-lg p-2 text-center" style={{ backgroundColor: data.avg_return_pct >= 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)" }}>
+                <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>{q}</div>
+                <div className="text-sm font-bold font-mono" style={{ color: data.avg_return_pct >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {data.avg_return_pct > 0 ? "+" : ""}{data.avg_return_pct}%
+                </div>
+                <div className="text-[9px] font-mono" style={{ color: "var(--term-muted)" }}>W:{data.win_rate_pct}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Fair Value Skill ── */}
+      {tab === "fairvalue" && fairValueResult && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--term-text)" }}>{fairValueResult.ticker}</span>
+            <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{
+              backgroundColor: (fairValueResult.margin_pct ?? 0) > 5 ? "rgba(34,197,94,0.20)" : (fairValueResult.margin_pct ?? 0) < -5 ? "rgba(239,68,68,0.20)" : "rgba(230,160,0,0.20)",
+              color: (fairValueResult.margin_pct ?? 0) > 5 ? "var(--term-green)" : (fairValueResult.margin_pct ?? 0) < -5 ? "var(--term-red)" : "var(--term-amber)",
+            }}>
+              {fairValueResult.assessment || "Veri yok"}
+            </span>
+          </div>
+          {fairValueResult.fair_value != null && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
+                <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>Adil Değer</div>
+                <div className="text-xl font-bold font-mono" style={{ color: "var(--term-green)" }}>$ {fairValueResult.fair_value.toFixed(2)}</div>
+              </div>
+              <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "rgba(6,182,212,0.08)" }}>
+                <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>Güncel Fiyat</div>
+                <div className="text-xl font-bold font-mono" style={{ color: "#06b6d4" }}>$ {fairValueResult.current_price?.toFixed(2)}</div>
+              </div>
+              <div className="rounded-lg p-3 text-center" style={{ backgroundColor: (fairValueResult.margin_pct ?? 0) > 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)" }}>
+                <div className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>Marj</div>
+                <div className="text-xl font-bold font-mono" style={{ color: (fairValueResult.margin_pct ?? 0) > 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                  {(fairValueResult.margin_pct ?? 0) > 0 ? "+" : ""}{fairValueResult.margin_pct?.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          )}
+          {fairValueResult.models.map((m) => (
+            <div key={m.method} className="rounded-lg p-2 flex items-center gap-2 text-xs" style={{ border: "1px solid var(--term-border)", backgroundColor: "var(--term-bg)" }}>
+              <span className="font-mono font-semibold w-40" style={{ color: "var(--term-text)" }}>{m.method}</span>
+              {m.value != null ? (
+                <span className="flex-1 text-right font-bold font-mono" style={{ color: m.value > (fairValueResult.current_price ?? 0) ? "var(--term-green)" : "var(--term-red)" }}>
+                  $ {m.value.toFixed(2)}
+                </span>
+              ) : (
+                <span className="flex-1 text-right font-mono" style={{ color: "var(--term-red)" }}>
+                  ❌ {m.error || "hesaplanamadi"}
+                </span>
+              )}
+            </div>
+          ))}
+          {fairValueResult.markdown && (
+            <div className="rounded-lg p-3 text-xs whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,0.03)", color: "var(--term-text)", maxHeight: "300px", overflow: "auto" }}>
+              {fairValueResult.markdown}
             </div>
           )}
         </div>

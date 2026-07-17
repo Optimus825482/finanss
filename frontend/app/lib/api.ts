@@ -44,6 +44,13 @@ export type StockPick = {
   volatility_annualized: number | null;
   max_drawdown_pct: number | null;
   narrative: string;
+  // Faz 1
+  fair_value?: number | null;
+  margin_pct?: number | null;
+  valuation_assessment?: string | null;
+  llm_reasoning?: string | null;
+  llm_target_price?: number | null;
+  llm_expected_return_pct?: number | null;
 };
 
 export type Report = {
@@ -141,11 +148,16 @@ export type StockAnalysisResult = {
   scores: { fundamental?: number | null; sentiment?: number | null; risk?: number | null; composite?: number | null };
   position_pl: { cost_total: number; current_total: number; pl: number; pl_pct: number } | null;
   macro_indicators: Array<{ ticker: string; name: string; label: string; price: number | null; change_pct: number | null; sentiment: "bullish" | "bearish" | "neutral" | null; unit: string }>;
-  // LLM zenginleştirme
   llm_reasoning?: string | null;
   llm_target_price?: number | null;
   llm_expected_return_pct?: number | null;
   momentum_pct?: number | null;
+  // Faz 2
+  fair_value?: number | null;
+  margin_pct?: number | null;
+  valuation_assessment?: string | null;
+  fair_value_models?: Array<{ method: string; value: number; inputs?: Record<string, unknown> }>;
+  predictions?: Record<string, { predicted: number; drift_pct: number; lower_bound: number; upper_bound: number; signal: number; source: string }> | null;
 };
 
 export type DividendResult = {
@@ -184,6 +196,78 @@ export type KlineResult = {
   pattern_detected: string | null;
   used_fallback: boolean;
   error: string | null;
+};
+
+// ── Faz 4: Yeni Skill Results ──
+
+export type SectorRotationResult = {
+  query: string | null;
+  sector?: string;
+  sectors: Array<{ name: string; ticker_count: number; avg_return_pct: number; tickers: string[] }>;
+  top_sector: string | null;
+  bottom_sector: string | null;
+};
+
+export type CorrelationResult = {
+  tickers: string[];
+  matrix: number[][];
+  clusters: string[][];
+  highest_correlation: { pair: string[]; value: number } | null;
+  lowest_correlation: { pair: string[]; value: number } | null;
+  error?: string;
+};
+
+export type InsiderResult = {
+  ticker: string;
+  transactions: Array<{ type: string; shares: number; value: number | null; insider_name: string; date: string }>;
+  net_sentiment: "bullish" | "bearish" | "neutral";
+  buy_count: number;
+  sell_count: number;
+  buy_value: number;
+  sell_value: number;
+  data_missing: string[];
+};
+
+export type UnusualOptionsResult = {
+  ticker: string;
+  options_activity: Array<{ strike: number; expiry: string; volume: number; open_interest: number; type: "call" | "put"; sentiment: "bullish" | "bearish"; last_price: number }>;
+  put_call_ratio: number | null;
+  unusual_count: number;
+  sentiment: "bullish" | "bearish" | "neutral";
+  data_missing: string[];
+};
+
+export type EarningsSurpriseResult = {
+  ticker: string;
+  history: Array<{ date: string; estimated: number; actual: number; surprise_pct: number }>;
+  avg_surprise_pct: number;
+  next_earnings_date: string | null;
+  beat_count: number;
+  miss_count: number;
+  sentiment: "bullish" | "bearish" | "neutral";
+  data_missing: string[];
+};
+
+export type SeasonalityResult = {
+  ticker: string;
+  monthly_returns: Record<string, { avg_return_pct: number; win_rate_pct: number; sample_years: number }>;
+  quarterly_patterns: Record<string, { avg_return_pct: number; win_rate_pct: number; sample_years: number }>;
+  best_month: string | null;
+  worst_month: string | null;
+  best_quarter: string | null;
+  worst_quarter: string | null;
+  data_missing: string[];
+};
+
+export type FairValueSkillResult = {
+  ticker: string;
+  fair_value: number | null;
+  current_price: number | null;
+  margin_pct: number | null;
+  assessment: string | null;
+  models: Array<{ method: string; value: number; inputs?: Record<string, unknown>; error?: string }>;
+  markdown: string;
+  data_missing: string[];
 };
 
 export type TickerSuggestion = {
@@ -319,6 +403,62 @@ export const api = {
     apiFetch(`/api/predictions/${encodeURIComponent(ticker)}`, { method: "POST" }).then(
       j<Record<string, unknown>>
     ),
+
+  // Faz 3: Deep Batch
+  generateDeep: (exchange?: string) =>
+    apiFetch(`/api/generate/deep${exchange ? `?exchange=${exchange}` : ""}`, { method: "POST" }).then(
+      j<{ started: boolean; exchange: string; mode: string }>
+    ),
+
+  // Faz 4: Yeni Skill'ler
+  analyzeSectorRotation: (query?: string) =>
+    apiFetch("/api/skill/sector-rotation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query || null }),
+    }).then(j<SectorRotationResult>),
+
+  analyzeCorrelation: (tickers?: string) =>
+    apiFetch("/api/skill/correlation-matrix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tickers: tickers || null }),
+    }).then(j<CorrelationResult>),
+
+  analyzeInsider: (ticker: string) =>
+    apiFetch("/api/skill/insider-activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<InsiderResult>),
+
+  analyzeUnusualOptions: (ticker: string) =>
+    apiFetch("/api/skill/unusual-options", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<UnusualOptionsResult>),
+
+  analyzeEarningsSurprise: (ticker: string) =>
+    apiFetch("/api/skill/earnings-surprise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<EarningsSurpriseResult>),
+
+  analyzeSeasonality: (ticker: string) =>
+    apiFetch("/api/skill/seasonality", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<SeasonalityResult>),
+
+  analyzeFairValue: (ticker: string) =>
+    apiFetch("/api/skill/fair-value", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    }).then(j<FairValueSkillResult>),
 
   getUnreadCount: () =>
     apiFetch("/api/notifications/unread-count", { cache: "no-store" }).then(j<{ count: number }>),

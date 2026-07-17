@@ -29,6 +29,21 @@ async def generate_report(background_tasks: BackgroundTasks, exchange: str | Non
     return {"started": True, "exchange": label}
 
 
+@router.post("/generate/deep")
+async def generate_deep_report(background_tasks: BackgroundTasks, exchange: str | None = None):
+    """Deep Batch: Stage 2 sonrası Fair Value + Prediction + LLM per pick."""
+    if orchestrator.is_running:
+        raise HTTPException(status_code=409, detail="Pipeline zaten calisiyor")
+
+    exchanges = [exchange.upper()] if exchange else None
+    label = exchange.upper() if exchange else "TÜM EVREN"
+    async def _task():
+        await orchestrator.run_deep_pipeline(exchanges)
+
+    background_tasks.add_task(_task)
+    return {"started": True, "exchange": label, "mode": "deep"}
+
+
 @router.get("/reports/latest", response_model=ReportOut)
 def get_latest_report(db: Session = Depends(get_db)):
     report = (

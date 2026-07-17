@@ -1,4 +1,4 @@
-"""传闻扫描 — şirket dedikodu/haber sinyal tarayıcı.
+"""Haber Sinyal Tarama — şirket haber sinyal tarayıcı.
 
 Kaynak: stock_analysis skill'in rumorScanner.ts port. yfinance `.news` + VADER
 sentiment + LLM sınıflandırma. 5 sinyal tipi (impact skor):

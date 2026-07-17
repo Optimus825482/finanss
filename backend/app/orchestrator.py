@@ -67,6 +67,24 @@ class Orchestrator:
         finally:
             self.is_running = False
 
+    async def run_deep_pipeline(self, exchanges: list[str] | None = None) -> int:
+        """Deep Batch modu: Stage 2 sonrası her pick için Fair Value + Prediction + LLM."""
+        if self.is_running:
+            raise RuntimeError("Pipeline zaten calisiyor")
+
+        self.is_running = True
+        self.last_error = None
+        self.progress_log = []
+        self.exchanges = exchanges or []
+
+        try:
+            return await self._run_deep(exchanges)
+        except Exception as e:
+            self.last_error = str(e)
+            raise
+        finally:
+            self.is_running = False
+
     async def _run_two_stage(self, exchanges: list[str] | None) -> int:
         """Iki asamali pipeline: on tarama → derin analiz."""
         # Reset all agents to IDLE at start
@@ -130,6 +148,103 @@ class Orchestrator:
             pass
         return rid
 
+    async def _run_deep(self, exchanges: list[str] | None) -> int:
+        """Deep Batch pipeline: Stage 2 sonrasi her pick'e Fair Value + Prediction + LLM."""
+        import asyncio as _asyncio
+
+        for a in self.agents:
+            a._set(AgentStatus.IDLE)
+
+        tickers = get_universe(exchanges)
+        total_scanned = len(tickers)
+        self._log(f"Deep Pipeline basladi: {total_scanned} hisse, islem: {exchanges or 'tum evren'}")
+
+        # Stage 1
+        self.scanner._set(AgentStatus.RUNNING, f"{total_scanned} hisse taranacak...")
+        stage1 = await stage1_prescreen(tickers)
+        self._log(f"Stage 1 sonuc: {len(stage1)}/{total_scanned} aday secti")
+        self.scanner._set(AgentStatus.DONE, f"Stage 1: {len(stage1)}/{total_scanned}")
+
+        if not stage1:
+            return self._persist({"summary": "Stage 1: aday bulunamadi.", "candidates_scanned": total_scanned, "picks": []})
+
+        # Stage 2
+        stage2 = await stage2_deep_analysis(stage1, fundamental=self.fundamental, sentiment=self.sentiment, risk=self.risk)
+        self._log(f"Stage 2 sonuc: {len(stage2)} hisse")
+
+        if not stage2:
+            return self._persist({"summary": "Stage 2: derin analiz tamamlanamadi.", "candidates_scanned": total_scanned, "picks": []})
+
+        # Deep enrichment: Fair Value + Prediction + MA20 bias + LLM per pick
+        self._log(f"Deep enrichment: {len(stage2)} pick isleniyor...")
+
+        # Composite score + narrative
+        from app.config import SCORING_WEIGHTS
+        w = SCORING_WEIGHTS
+        for c in stage2:
+            c["composite_score"] = round(c["fundamental_score"] * w["fundamental"] + c["sentiment_score"] * w["sentiment"] + (100 - c["risk_score"]) * w["risk"], 1)
+
+        # Fair Value (concurrent)
+        async def _deep_enrich(c: dict) -> dict:
+            try:
+                from app.services.fair_value import calculate_fair_value
+                fv = await _asyncio.to_thread(calculate_fair_value, c["ticker"])
+                if fv.get("fair_value"):
+                    c["fair_value"] = fv["fair_value"]
+                    c["margin_pct"] = fv.get("margin_pct")
+                    c["valuation_assessment"] = fv.get("assessment")
+            except Exception:
+                pass
+            return c
+
+        stage2 = await _asyncio.gather(*[_deep_enrich(c) for c in stage2])
+        stage2 = [c for c in stage2 if c is not None]
+
+        # MA20 bias
+        for c in stage2:
+            hist = c.get("history")
+            if hist is not None and not hist.empty and "Close" in hist:
+                closes = [float(x) for x in hist["Close"].dropna().tolist() if x is not None]
+                if len(closes) >= 20:
+                    ma20 = sum(closes[-20:]) / 20
+                    price_val = c.get("price", closes[-1])
+                    bias = (price_val - ma20) / ma20 * 100 if ma20 != 0 else None
+                    if bias is not None:
+                        c["bias_pct"] = round(bias, 2)
+
+        # Sort by composite
+        stage2.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
+        top_picks = stage2[:8]
+
+        # LLM enrichment per pick (concurrent)
+        try:
+            from app.agents.report_agent import _llm_enrich_pick
+            enriched = await _asyncio.gather(*[_llm_enrich_pick(p) for p in top_picks], return_exceptions=True)
+            for i, result in enumerate(enriched):
+                if not isinstance(result, Exception) and result:
+                    top_picks[i] = result
+        except Exception:
+            pass
+
+        # Build summary
+        for c in top_picks:
+            c["narrative"] = (
+                f"{c['ticker']}: composite {c.get('composite_score', 0):.0f}, "
+                f"{c.get('valuation_assessment', 'degerleme yok')}"
+            )
+            if c.get("llm_reasoning"):
+                c["narrative"] += f" — {c['llm_reasoning'][:200]}"
+
+        summary_lines = [f"Deep Batch Raporu: {total_scanned} hisse tarandi, {len(top_picks)} pick secildi."]
+        best = top_picks[0] if top_picks else None
+        if best:
+            summary_lines.append(f"En guclu: {best['ticker']} ({best.get('composite_score', 0):.0f}/100)")
+        result = {"summary": "\n".join(summary_lines), "candidates_scanned": total_scanned, "picks": top_picks}
+
+        rid = self._persist(result)
+        self._log(f"Deep Rapor #{rid} kaydedildi ({len(top_picks)} pick)")
+        return rid
+
     def _persist(self, result: dict) -> int:
         db = SessionLocal()
         try:
@@ -153,7 +268,15 @@ class Orchestrator:
                     volume_ratio=pick.get("volume_ratio"),
                     momentum_20d=pick.get("momentum_20d"),
                     technical_score=pick.get("technical_score"),
-                    narrative=pick["narrative"]))
+                    narrative=pick["narrative"],
+                    # Faz 1 zenginlestirmeleri
+                    fair_value=pick.get("fair_value"),
+                    margin_pct=pick.get("margin_pct"),
+                    valuation_assessment=pick.get("valuation_assessment"),
+                    llm_reasoning=pick.get("llm_reasoning"),
+                    llm_target_price=pick.get("llm_target_price"),
+                    llm_expected_return_pct=pick.get("llm_expected_return_pct"),
+                ))
             db.commit()
             return report.id
         finally:
