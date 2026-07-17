@@ -754,7 +754,7 @@ class AutonomousAgent:
         from app.services.regime_detector import RegimeDetector
         regime = RegimeDetector().detect()
         logger.info("[%s] Piyasa rejimi: %s (score=%.0f)",
-                    exchange_label, regime["regime"], regime.get("regime_score", 50))
+                    self.portfolio_slug, regime["regime"], regime.get("regime_score", 50))
 
         # ── FAZ 1.3: Kelly Position Sizing ──
         from app.services.position_sizing import get_position_budget, adjust_for_regime
