@@ -45,69 +45,93 @@ if not DATABASE_URL:
 # Ilk asama tarama (teknik filtre) bu listeden yapilir.
 STOCK_UNIVERSE = {
     "NASDAQ": [
-        # Teknoloji
-        "AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","AVGO","CRM",
-        "ADBE","NFLX","INTC","CSCO","PEP","COST","CMCSA","TXN","QCOM","INTU",
-        "AMGN","GILD","ISRG","REGN","VRTX","ADP","MRNA","PYPL","AMAT","LRCX",
-        "MU","ADI","KLAC","SNPS","CDNS","MELI","WDAY","SNOW","DDOG","CRWD",
-        "ZS","NET","PLTR","MDB","TEAM","DASH","ABNB","ZM","DKNG",
-        "PANW","FTNT","MRVL","NXPI","ASML","CTAS","ORLY","MAR","HLT",
-        "PAYX","FAST","CTSH","BIIB","CHTR","LULU","EA","TTD","HUBS",
+        # Mega-cap Tech
+        "AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AVGO","CRM",
+        "ADBE","NFLX","INTC","CSCO","AMD","QCOM","TXN","INTU","AMAT",
+        "LRCX","MU","ADI","KLAC","SNPS","CDNS","MELI","WDAY","SNOW",
+        "DDOG","CRWD","ZS","NET","PLTR","MDB","TEAM","DASH","ABNB",
+        "ZM","DKNG","PANW","FTNT","MRVL","NXPI","ASML","CTAS","ORLY",
+        "MAR","HLT","PAYX","FAST","CTSH","BIIB","CHTR","LULU","EA",
+        "TTD","HUBS","GFS","ON","MCHP","VRT","MPWR","ANET",
+        # Biotech / Healthcare (yüksek volatilite)
+        "AMGN","GILD","ISRG","REGN","VRTX","MRNA","BIIB","ILMN",
+        "ALNY","BMRN","EXAS","SRPT","NBIX",
+        # Active Fintech / Payments
+        "PYPL","SQ","COIN","AFRM","SOFI","HOOD","TOST",
+        # Yüksek hareketli / momentum
+        "RIVN","LCID","DKNG","ROKU","SHOP","SPOT","MARA","RIOT",
+        "CLSK","AI","PLTR","ARM","SMCI","CELH","APP","DDOG",
+        # Consumer / Retail
+        "PEP","COST","CMCSA","ISRG","ADP","WBD","TTWO","EXPE",
     ],
     "NYSE": [
-        # Finans
+        # Finans (aktif)
         "JPM","BAC","WFC","GS","MS","C","AXP","V","MA","BLK",
         "SCHW","PNC","USB","TFC","BK","COF","AIG","MET","PRU","ALL",
+        "BX","KKR","APO","ARES","OWL",
         # Saglik
         "JNJ","UNH","PFE","MRK","ABBV","LLY","TMO","DHR","ABT","BMY",
-        "SYK","CI","HUM","CVS",
-        # Enerji & Sanayi
-        "XOM","CVX","CAT","GE","BA","HON","LMT","UNP","RTX","DE",
-        "MMM","ITW","ETN","EMR","ROK","PH","NSC","FDX","UPS",
+        "SYK","CI","HUM","CVS","MCK","ZTS","EW",
+        # Enerji & Sanayi (aktif)
+        "XOM","CVX","COP","EOG","SLB","HAL","BKR","OXY","DVN",
+        "CAT","GE","BA","HON","LMT","UNP","RTX","DE","MMM","ITW",
+        "ETN","EMR","ROK","PH","NSC","FDX","UPS","DAL","UAL","AAL",
         # Tuketici & Perakende
         "WMT","HD","KO","PG","NKE","MCD","SBUX","TGT","LOW",
-        "TJX","DG","ROST","BBY","AZO","CMG","YUM","DPZ",
-        # Diger
-        "DIS","VZ","T","TMUS","SPG","O","PLD","AMT","WELL",
-        "DUK","SO","NEE","D","AEP","XEL","SRE","ED","PEG","EXC",
-        "LIN","APD","ECL","SHW","FCX","NEM","GOLD","AEM",
+        "TJX","DG","ROST","BBY","AZO","CMG","YUM","DPZ","DHI","LEN",
+        # E-ticaret / Tech-adjacent
+        "UBER","LYFT","SNAP","PINS","U","PATH","GTLB",
+        # Enerji / Renewables (hareketli)
+        "NEE","SO","DUK","D","AEP","XEL","SRE","ED","PEG","EXC",
+        "CEG","VST","NRG","TLN",
+        # Materyals / Mining
+        "LIN","APD","ECL","SHW","FCX","NEM","GOLD","AEM","AA",
+        # REIT & Infrastructure
+        "SPG","O","PLD","AMT","WELL","CCI","EQIX","DLR",
+        # Media / Entertainment
+        "DIS","VZ","T","TMUS","SPOT","LYV","WBD","PARA",
     ],
     "DOWJONES": [
-        # Dow Jones Industrial Average 30 (2026)
+        # Dow Jones Industrial Average 30 (tam liste)
         "MMM","AMGN","AMZN","AXP","AAPL","BA","CAT","CVX","CSCO","KO",
         "DOW","GS","HD","HON","IBM","INTC","JNJ","JPM","MCD","MRK",
         "MSFT","NKE","PG","CRM","TRV","UNH","VZ","V","WMT","DIS",
     ],
     "BIST": [
+        # BIST 100 — Tam liste (2026)
         # Bankacilik
         "AKBNK.IS","GARAN.IS","ISCTR.IS","YKBNK.IS","VAKBN.IS",
         "HALKB.IS","TSKB.IS","ALBRK.IS",
         # Holding & Yatirim
         "KCHOL.IS","SAHOL.IS","SISE.IS","AGHOL.IS","ENKAI.IS",
-        "TAVHL.IS","DOAS.IS","GUBRF.IS","KOZAL.IS","KOZAA.IS",
+        "TAVHL.IS","DOAS.IS","DOHOL.IS","ALARK.IS","TKFEN.IS",
         # Sanayi & Metal
         "EREGL.IS","KRDMD.IS","CEMTS.IS","ISDMR.IS","CIMSA.IS",
         "TUPRS.IS","PETKM.IS","SASA.IS","HEKTS.IS","SOKM.IS",
         "FROTO.IS","TOASO.IS","TTRAK.IS","OTKAR.IS","ARCLK.IS",
         "VESTL.IS","FORD.IS","KARSN.IS","BRSAN.IS","PGSUS.IS",
+        "AKSA.IS","ERBOS.IS","INDES.IS","KLSER.IS",
         # Perakende & Gida
         "BIMAS.IS","MGROS.IS","AEFES.IS","CCOLA.IS",
-        "ULKER.IS","KERVT.IS","OBAMS.IS",
+        "ULKER.IS","KERVT.IS","OBAMS.IS","TUKAS.IS","KAYSE.IS",
         # Telekom & Teknoloji
         "TCELL.IS","TTKOM.IS","ASELS.IS","NETAS.IS","LOGO.IS",
-        "MIATK.IS","ARDYZ.IS","SMART.IS",
+        "MIATK.IS","ARDYZ.IS","SMART.IS","ALFAS.IS","REEDR.IS",
         # Enerji
         "ZOREN.IS","AKSEN.IS","AYEN.IS","ODAS.IS","MAGEN.IS",
-        "GWIND.IS","ESCOM.IS","ARTMS.IS",
+        "GWIND.IS","ESCOM.IS","ARTMS.IS","ENJSA.IS","AYDEM.IS",
+        "EUPWR.IS","GESAN.IS","SMRTG.IS","ASTOR.IS","BIOEN.IS",
         # Insaat & GYO
         "EKGYO.IS","ISGYO.IS","AKFGY.IS","TRGYO.IS","HLGYO.IS",
-        "OYAKC.IS","KONTR.IS","ORGE.IS",
+        "OYAKC.IS","KONTR.IS","ORGE.IS","KZBGY.IS",
         # Sigorta & Finans
-        "ANSGR.IS","TSGYO.IS","AKGRT.IS","RAYSG.IS",
+        "ANSGR.IS","TSGYO.IS","AKGRT.IS","RAYSG.IS","TKNSA.IS",
         # Diger
-        "THYAO.IS","MAVI.IS",
+        "THYAO.IS","MAVI.IS","MPARK.IS",
         "KONYA.IS","BAGFS.IS","IZENR.IS","DOCO.IS",
         "KMPUR.IS","ALKA.IS","ORCAY.IS","UFUK.IS","AKFIS.IS",
+        "CANTE.IS","CWENE.IS","QUAGR.IS","GUBRF.IS",
+        "KOZAL.IS","KOZAA.IS",
     ],
     "LSE": [
         "AZN.L","SHEL.L","HSBA.L","ULVR.L","BP.L","GSK.L",
