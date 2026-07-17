@@ -9,8 +9,6 @@ type LivePricesState = {
   error: string | null;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
-
 export function useLivePrices(portfolioSlug: "bist" | "us"): LivePricesState {
   const [watchlist, setWatchlist] = useState<LiveWatchlistItem[]>([]);
   const [portfolio, setPortfolio] = useState<LivePortfolio | null>(null);
@@ -23,7 +21,8 @@ export function useLivePrices(portfolioSlug: "bist" | "us"): LivePricesState {
       sourceRef.current.close();
     }
 
-    const url = `${API_BASE}/api/prices/stream?portfolio_slug=${portfolioSlug}`;
+    // Relative path → Next.js proxy rewrites /api/* → backend (works in Docker & dev)
+    const url = `/api/prices/stream?portfolio_slug=${portfolioSlug}`;
     const es = new EventSource(url);
     sourceRef.current = es;
 
