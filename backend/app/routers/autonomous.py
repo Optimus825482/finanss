@@ -89,11 +89,31 @@ async def run_agent(
     _resolve_portfolio_id(db, portfolio_slug)
     agent = AutonomousAgent(portfolio_slug=portfolio_slug)
 
+    from app.services.agent_logs import start_run, end_run, log_step
+
+    run_id = start_run(portfolio_slug)
+
     async def _run():
-        await asyncio.to_thread(agent.run, exchanges)
+        try:
+            log_step(run_id, "market", "Piyasa verileri toplanıyor...")
+            result = await asyncio.to_thread(agent.run, exchanges)
+            actions = result.get("actions", []) if isinstance(result, dict) else []
+            decisions = result.get("decisions", []) if isinstance(result, dict) else []
+            log_step(run_id, "result", f"{len(actions)} işlem, {len(decisions)} karar")
+            if actions:
+                for a in actions[:5]:
+                    detail = a.get("action", "?") + " " + a.get("ticker", "?")
+                    if a.get("quantity"):
+                        detail += f" x{a['quantity']}"
+                    log_step(run_id, "trade", detail)
+            log_step(run_id, "done", "İşlem tamamlandı")
+            end_run(run_id)
+        except Exception as e:
+            log_step(run_id, "error", str(e))
+            end_run(run_id, str(e))
 
     background_tasks.add_task(_run)
-    return {"started": True, "portfolio_slug": portfolio_slug, "mode": "autonomous"}
+    return {"started": True, "portfolio_slug": portfolio_slug, "mode": "autonomous", "run_id": run_id}
 
 
 @router.post("/schedule")
@@ -144,3 +164,17 @@ def stop_agent(
         return {"stopped": True, "portfolio_slug": portfolio_slug}
     except Exception:
         return {"stopped": False, "portfolio_slug": portfolio_slug, "message": "Ajan zaten calismiyor"}
+
+
+@router.get("/logs/{run_id}")
+def get_run_logs(run_id: str):
+    """Ajan çalışma loglarını döndür — frontend polling için."""
+    from app.services.agent_logs import get_run_logs as _get_logs
+    return _get_logs(run_id)
+
+
+@router.get("/active-runs")
+def get_active_runs(portfolio_slug: Optional[str] = Query(default=None)):
+    """Aktif çalışan ajan run'larını listele."""
+    from app.services.agent_logs import get_active_runs as _get_active
+    return {"runs": _get_active(portfolio_slug)}

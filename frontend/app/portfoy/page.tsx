@@ -18,6 +18,9 @@ export default function PortfoyPage() {
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<Array<{step: string; msg: string; ts: number}>>([]);
+  const [logStatus, setLogStatus] = useState<string>("");
 
   const loadAll = useCallback(async () => {
     try { setBistPortfolio(await api.getAgentPortfolio("bist")); } catch { /* */ }
@@ -30,17 +33,37 @@ export default function PortfoyPage() {
   useEffect(() => { const i = setInterval(loadAll, 60_000); return () => clearInterval(i); }, [loadAll]);
 
   const handleRun = async (slug: PortfolioSlug) => {
-    setRunning(true); setError(null);
+    setRunning(true); setError(null); setLogs([]); setLogStatus("running");
     try {
-      await api.runAgent(slug);
-      let attempts = 0;
-      const rapidPoll = setInterval(() => {
-        loadAll();
-        if (++attempts >= 10) clearInterval(rapidPoll);
-      }, 3000);
+      const res = await api.runAgent(slug);
+      const rid = (res as any).run_id;
+      if (rid) {
+        setRunId(rid);
+        // Poll logs every 2s
+        const logPoll = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/autonomous/logs/${rid}`);
+            const d = await r.json();
+            setLogs(d.steps || []);
+            setLogStatus(d.status || "");
+            loadAll();
+            if (d.status === "done" || d.status === "error") {
+              clearInterval(logPoll);
+              setRunning(false);
+              loadAll();
+            }
+          } catch { /* */ }
+        }, 2000);
+      } else {
+        // Fallback: no run_id from backend
+        let attempts = 0;
+        const rapidPoll = setInterval(() => {
+          loadAll();
+          if (++attempts >= 10) { clearInterval(rapidPoll); setRunning(false); }
+        }, 3000);
+      }
     }
-    catch { setError(`${PORTFOLIO_LABELS[slug]} ajan çalıştırılamadı`); }
-    finally { setRunning(false); }
+    catch { setError(`${PORTFOLIO_LABELS[slug]} ajan çalıştırılamadı`); setRunning(false); }
   };
 
   const borderColor = "var(--term-border)";
@@ -189,6 +212,29 @@ export default function PortfoyPage() {
           ▶ US AJANI ÇALIŞTIR
         </button>
       </div>
+
+      {/* Agent execution log */}
+      {logs.length > 0 && (
+        <div className="rounded-sm mt-4" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+          <div className="px-4 py-2 text-xs font-mono tracking-wider flex items-center justify-between"
+            style={{ color: "var(--term-muted)", borderBottom: `1px solid ${borderColor}` }}>
+            <span>AJAN ÇALIŞMA LOGU</span>
+            <span style={{ color: logStatus === "running" ? "var(--term-green)" : logStatus === "error" ? "var(--term-red)" : "var(--term-amber)" }}>
+              {logStatus === "running" ? "● ÇALIŞIYOR" : logStatus === "done" ? "✓ TAMAMLANDI" : logStatus === "error" ? "✕ HATA" : logStatus}
+            </span>
+          </div>
+          <div className="px-4 py-2 max-h-48 overflow-y-auto">
+            {logs.map((l, i) => (
+              <div key={i} className="font-mono text-[11px] py-0.5" style={{ color: l.step === "error" ? "var(--term-red)" : l.step === "trade" ? "var(--term-green)" : "var(--term-text)" }}>
+                <span className="text-[9px] mr-2" style={{ color: "var(--term-muted)" }}>
+                  {new Date(l.ts * 1000).toLocaleTimeString("tr-TR")}
+                </span>
+                {l.msg}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

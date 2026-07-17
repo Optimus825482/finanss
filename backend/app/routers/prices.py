@@ -79,7 +79,6 @@ async def stream_prices(
         while True:
             if await request.is_disconnected():
                 break
-            # Her iterasyonda taze session aç — Depends session'ı request ile kapanır
             db = SessionLocal()
             try:
                 data = await asyncio.to_thread(_fetch_prices_sync, db, portfolio_slug)
@@ -89,6 +88,9 @@ async def stream_prices(
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
             finally:
                 db.close()
-            await asyncio.sleep(3)
+            try:
+                await asyncio.sleep(3)
+            except asyncio.CancelledError:
+                break
 
     return EventSourceResponse(event_generator())
