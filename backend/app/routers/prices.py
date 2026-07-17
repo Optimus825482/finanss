@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import WatchlistItem
 from app.services.market_data import get_live_prices
 from app.services.autonomous_agent import AutonomousAgent
@@ -21,14 +21,12 @@ logger = logging.getLogger(__name__)
 VALID_SLUGS = ("bist", "us")
 
 
-async def _fetch_prices(db: Session, portfolio_slug: str) -> dict:
-    """Watchlist + otonom portföy fiyatlarını tek hamlede çek."""
+def _fetch_prices_sync(db: Session, portfolio_slug: str) -> dict:
+    """Watchlist + otonom portföy fiyatlarını tek hamlede çek (sync)."""
     # Watchlist
     wl_items = db.query(WatchlistItem).order_by(WatchlistItem.added_at.desc()).all()
     wl_tickers = [i.ticker for i in wl_items]
-    wl_prices = (
-        await asyncio.to_thread(get_live_prices, wl_tickers) if wl_tickers else {}
-    )
+    wl_prices = get_live_prices(wl_tickers) if wl_tickers else {}
     watchlist = [
         {
             "id": i.id,
@@ -74,7 +72,6 @@ async def _fetch_prices(db: Session, portfolio_slug: str) -> dict:
 async def stream_prices(
     request: Request,
     portfolio_slug: str = Query("bist", description="bist | us"),
-    db: Session = Depends(get_db),
 ):
     """SSE fiyat akışı — her 3 saniyede bir watchlist + portföy durumu."""
 
@@ -82,12 +79,16 @@ async def stream_prices(
         while True:
             if await request.is_disconnected():
                 break
+            # Her iterasyonda taze session aç — Depends session'ı request ile kapanır
+            db = SessionLocal()
             try:
-                data = await _fetch_prices(db, portfolio_slug)
+                data = await asyncio.to_thread(_fetch_prices_sync, db, portfolio_slug)
                 yield {"event": "prices", "data": json.dumps(data, default=str)}
             except Exception as e:
                 logger.error(f"SSE fetch error: {e}")
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            finally:
+                db.close()
             await asyncio.sleep(3)
 
     return EventSourceResponse(event_generator())
