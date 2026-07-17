@@ -81,6 +81,23 @@ export default function SkillPanel() {
   const [rumorResult, setRumorResult] = useState<RumorScanResult | null>(null);
   const [klineResult, setKlineResult] = useState<KlineResult | null>(null);
 
+  // Takibe ekle
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistMsg, setWatchlistMsg] = useState<string | null>(null);
+
+  const handleAddWatchlist = async (t: string) => {
+    setWatchlistLoading(true);
+    try {
+      await api.addWatchlistItem(t);
+      setWatchlistMsg("✓ Takibe eklendi");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setWatchlistMsg(msg.includes("409") ? "Zaten listede" : "Eklenemedi");
+    }
+    setWatchlistLoading(false);
+    setTimeout(() => setWatchlistMsg(null), 2000);
+  };
+
   const handleRun = async (e: FormEvent) => {
     e.preventDefault();
     const t = ticker.trim().toUpperCase();
@@ -256,6 +273,14 @@ export default function SkillPanel() {
           {/* Üst bar — ticker + conclusion + bias — canlı renk */}
           <div className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3" style={{ background: "linear-gradient(90deg, var(--term-bg), var(--term-panel))", border: "1px solid var(--term-border)" }}>
             <span className="text-xl font-bold tracking-tight" style={{ color: "var(--term-text)" }}>{stockResult.ticker}</span>
+            <button
+              onClick={() => handleAddWatchlist(stockResult.ticker)}
+              disabled={watchlistLoading}
+              className="font-mono text-[10px] px-2.5 py-1 rounded-full transition-none disabled:opacity-40"
+              style={{ border: "1px solid var(--term-border)", color: watchlistMsg ? "var(--term-green)" : "var(--term-muted)" }}
+            >
+              {watchlistLoading ? "…" : watchlistMsg || "+ Takibe Ekle"}
+            </button>
             <span className="rounded-full px-3 py-1 text-xs font-bold tracking-wider uppercase" style={
               stockResult.conclusion === "strong_buy" ? { backgroundColor: "#4ADE80", color: "#12161B" }
               : stockResult.conclusion === "buy" ? { backgroundColor: "rgba(74,222,128,0.80)", color: "var(--term-text)" }
