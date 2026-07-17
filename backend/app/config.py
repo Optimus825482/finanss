@@ -156,7 +156,7 @@ PORTFOLIOS = {
     "bist": {
         "display_name": "BIST Portföyü",
         "exchanges": ["BIST"],
-        "cash": 10_000.0,
+        "cash": 50_000.0,
         "max_positions": 8,
         "max_per_position_pct": 0.25,
     },
