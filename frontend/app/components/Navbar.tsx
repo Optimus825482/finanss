@@ -15,30 +15,78 @@ const NAV_ITEMS = [
   { label: "AYARLAR", href: "/ayarlar" },
 ];
 
-/** BIST açılış/kapanış saatleri (UTC+3) */
-function bistMarketStatus(now: Date): { open: boolean; label: string } {
-  const day = now.getDay(); // 0=Pazar, 6=Cumartesi
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const t = hour * 60 + minute;
+type MarketInfo = { open: boolean; label: string; countdown: string | null };
 
-  if (day === 0 || day === 6) return { open: false, label: "BIST KAPALI" };
-  // BIST: 10:00-18:00, öğle arası 12:55-14:00 (opsiyonel)
-  if (t < 600 || t >= 1080) return { open: false, label: "BIST KAPALI" };
-  return { open: true, label: "BIST AÇIK" };
+function fmtCountdown(seconds: number): string {
+  if (seconds <= 0) return "00:00:00";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** ABD borsaları (NASDAQ/NYSE) açılış/kapanış — UTC+3 (EDT=UTC-4 → yaz saati UTC+3'te 16:30-23:00) */
-function usMarketStatus(now: Date): { open: boolean; label: string } {
-  const day = now.getDay();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const t = hour * 60 + minute;
+/** BIST açılış/kapanış saatleri (UTC+3) — 10:00-18:00 */
+const BIST_OPEN = 600;  // 10:00
+const BIST_CLOSE = 1080; // 18:00
 
-  if (day === 0 || day === 6) return { open: false, label: "US KAPALI" };
-  // US: 16:30-23:00 Istanbul time (EDT yaz saati)
-  if (t >= 990 && t < 1380) return { open: true, label: "US AÇIK" };
-  return { open: false, label: "US KAPALI" };
+function bistMarketStatus(now: Date): MarketInfo {
+  const day = now.getDay();
+  const t = now.getHours() * 60 + now.getMinutes();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (day === 0 || day === 6) return { open: false, label: "BIST KAPALI", countdown: null };
+
+  if (t >= BIST_OPEN && t < BIST_CLOSE) {
+    // Açık → kapanışa kalan
+    const close = new Date(today); close.setHours(18, 0, 0, 0);
+    const diff = Math.floor((close.getTime() - now.getTime()) / 1000);
+    return { open: true, label: "BIST AÇIK", countdown: fmtCountdown(diff) };
+  }
+
+  // Kapalı → açılışa kalan
+  let openTarget: Date;
+  if (t >= BIST_CLOSE) {
+    // Bugün kapandı → yarın 10:00
+    openTarget = new Date(today); openTarget.setDate(openTarget.getDate() + 1);
+  } else {
+    // Henüz açılmadı → bugün 10:00
+    openTarget = new Date(today);
+  }
+  openTarget.setHours(10, 0, 0, 0);
+  const diff = Math.floor((openTarget.getTime() - now.getTime()) / 1000);
+  return { open: false, label: "BIST KAPALI", countdown: fmtCountdown(diff) };
+}
+
+/** ABD borsaları (NASDAQ/NYSE) — UTC+3: 16:30-23:00 (EDT yaz saati) */
+const US_OPEN = 990;   // 16:30
+const US_CLOSE = 1380; // 23:00
+
+function usMarketStatus(now: Date): MarketInfo {
+  const day = now.getDay();
+  const t = now.getHours() * 60 + now.getMinutes();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (day === 0 || day === 6) return { open: false, label: "US KAPALI", countdown: null };
+
+  if (t >= US_OPEN && t < US_CLOSE) {
+    // Açık → kapanışa kalan
+    const close = new Date(today); close.setHours(23, 0, 0, 0);
+    const diff = Math.floor((close.getTime() - now.getTime()) / 1000);
+    return { open: true, label: "US AÇIK", countdown: fmtCountdown(diff) };
+  }
+
+  // Kapalı → açılışa kalan
+  let openTarget: Date;
+  if (t >= US_CLOSE) {
+    // Bugün kapandı → yarın 16:30
+    openTarget = new Date(today); openTarget.setDate(openTarget.getDate() + 1);
+  } else {
+    // Henüz açılmadı → bugün 16:30
+    openTarget = new Date(today);
+  }
+  openTarget.setHours(16, 30, 0, 0);
+  const diff = Math.floor((openTarget.getTime() - now.getTime()) / 1000);
+  return { open: false, label: "US KAPALI", countdown: fmtCountdown(diff) };
 }
 
 function formatTime(now: Date): string {
@@ -53,8 +101,8 @@ export default function Navbar() {
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [timeStr, setTimeStr] = useState("");
-  const [bist, setBist] = useState({ open: false, label: "" });
-  const [us, setUs] = useState({ open: false, label: "" });
+  const [bist, setBist] = useState<MarketInfo>({ open: false, label: "", countdown: null });
+  const [us, setUs] = useState<MarketInfo>({ open: false, label: "", countdown: null });
 
   const loadUnread = async () => {
     try {
@@ -105,6 +153,22 @@ export default function Navbar() {
     boxShadow: open ? "0 0 6px #22c55e" : "none",
   });
 
+  const marketLabel = (info: MarketInfo) => (
+    <span className="flex items-center gap-1">
+      <span style={dotColor(info.open)} />
+      <span className="font-mono text-[9px] sm:text-[10px] tracking-wider"
+        style={{ color: info.open ? "var(--term-green)" : "var(--term-muted)" }}>
+        {info.label}
+      </span>
+      {info.countdown && (
+        <span className="font-mono text-[9px] sm:text-[10px] tabular-nums ml-0.5"
+          style={{ color: "var(--term-amber-dim)" }}>
+          · {info.countdown}
+        </span>
+      )}
+    </span>
+  );
+
   return (
     <nav className="sticky top-0 z-50 border-b backdrop-blur-sm" style={{ backgroundColor: "var(--term-panel)", borderColor: "var(--term-border)" }}>
       <div className="max-w-6xl mx-auto flex items-center justify-between px-3 sm:px-6 py-0">
@@ -124,20 +188,12 @@ export default function Navbar() {
         <div className="flex items-center gap-3 sm:gap-4">
           {/* BIST indicator */}
           <div className="hidden sm:flex items-center gap-1.5">
-            <span style={dotColor(bist.open)} />
-            <span className="font-mono text-[9px] sm:text-[10px] tracking-wider"
-              style={{ color: bist.open ? "var(--term-green)" : "var(--term-muted)" }}>
-              {bist.label}
-            </span>
+            {marketLabel(bist)}
           </div>
 
           {/* US indicator */}
           <div className="hidden sm:flex items-center gap-1.5">
-            <span style={dotColor(us.open)} />
-            <span className="font-mono text-[9px] sm:text-[10px] tracking-wider"
-              style={{ color: us.open ? "var(--term-green)" : "var(--term-muted)" }}>
-              {us.label}
-            </span>
+            {marketLabel(us)}
           </div>
 
           {/* Digital clock */}
@@ -156,10 +212,8 @@ export default function Navbar() {
           {NAV_ITEMS.map(item => navLink(item.href, item.label))}
           {/* Mobile market indicators */}
           <div className="flex items-center gap-3 px-3 py-2 border-t" style={{ borderColor: "var(--term-border)" }}>
-            <span style={dotColor(bist.open)} />
-            <span className="font-mono text-[10px]" style={{ color: bist.open ? "var(--term-green)" : "var(--term-muted)" }}>{bist.label}</span>
-            <span style={dotColor(us.open)} />
-            <span className="font-mono text-[10px]" style={{ color: us.open ? "var(--term-green)" : "var(--term-muted)" }}>{us.label}</span>
+            {marketLabel(bist)}
+            {marketLabel(us)}
           </div>
         </div>
       )}
