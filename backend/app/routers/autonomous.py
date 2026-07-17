@@ -51,7 +51,31 @@ def get_decisions(
     return get_trading_logs(db, ticker, limit, portfolio_id=portfolio_id)
 
 
-@router.post("/run")
+@router.get("/pending")
+def get_pending_orders(
+    portfolio_slug: str = Query("bist"),
+    db: Session = Depends(get_db),
+):
+    """Bekleyen emirler — piyasa kapaliyken verilen, acilinca gerceklesecek."""
+    portfolio_id = _resolve_portfolio_id(db, portfolio_slug)
+    from app.models.core import PendingOrder
+    orders = (
+        db.query(PendingOrder)
+        .filter(PendingOrder.portfolio_id == portfolio_id)
+        .filter(PendingOrder.status == "pending")
+        .order_by(PendingOrder.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": o.id, "ticker": o.ticker, "action": o.action,
+            "quantity": o.quantity, "price": o.price,
+            "reasoning": o.reasoning, "confidence": o.confidence,
+            "exchange": o.exchange, "created_at": o.created_at.isoformat() if o.created_at else None,
+            "analysis": o.analysis_json,
+        }
+        for o in orders
+    ]
 async def run_agent(
     background_tasks: BackgroundTasks,
     portfolio_slug: str = Query("bist"),

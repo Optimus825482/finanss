@@ -18,7 +18,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from app.config import now_istanbul
+from app.config import now_istanbul, market_is_open
 from typing import Optional
 
 import yfinance as yf
@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session, joinedload
 logger = logging.getLogger(__name__)
 
 from app.database import SessionLocal
-from app.models.core import PortfolioPosition, TradingDecision
+from app.models.core import PortfolioPosition, TradingDecision, PendingOrder
 from app.models.balance import BalanceTransaction
 from app.models.portfolio import Portfolio
 from app.services.balance_service import (
@@ -257,36 +257,66 @@ class AutonomousAgent:
 
     async def think_and_act(self, db: Session, exchanges: list[str] | None = None) -> dict:
         """Ana dusunme dongusu:
-        1. Takili pozisyonlari temizle (delisted/fiyat alinamayan)
-        2. Son rapordaki pick'leri kullan (varsa) — hizli yol
-        3. Rapor yoksa piyasayi tara + analiz et — yavas yol
+        1. Bekleyen emirleri kontrol et (piyasa acildiysa gerceklestir)
+        2. Takili pozisyonlari temizle
+        3. Piyasa aciksa → normal karar + islem
+           Piyasa kapaliysa → derin analiz + bekleyen emir olustur
         4. LLM/kural-bazli karar ver + uygula
-
-        exchanges None ise PORTFOLIOS[slug]["exchanges"] kullanılır.
         """
         if exchanges is None:
             exchanges = self.portfolio_exchanges
         portfolio = self.get_portfolio(db)
 
-        # 0. Takili pozisyonlari kapat (fiyati olmayanlar)
-        self._cleanup_stuck_positions(db, portfolio)
-        portfolio = self.get_portfolio(db)  # refresh after cleanup
+        # 0. Piyasa acik mi? Exchange tipini belirle
+        is_bist = "BIST" in (exchanges or [])
+        exchange_label = "BIST" if is_bist else "US"
+        market_open = market_is_open(exchange_label)
 
-        # 1. Son rapordaki pick'leri dene (hazir veri, tekrar indirme yok)
+        # 1. Bekleyen emirleri gerceklestir (piyasa acildiysa)
+        if market_open:
+            executed = self._execute_pending_orders(db, portfolio)
+            if executed:
+                portfolio = self.get_portfolio(db)
+
+        # 2. Takili pozisyonlari kapat
+        self._cleanup_stuck_positions(db, portfolio)
+        portfolio = self.get_portfolio(db)
+
+        # 3. Adaylari topla
+        candidates = await self._gather_candidates(db, exchanges, is_bist)
+
+        if not candidates:
+            logger.info("[%s] Hic aday bulunamadi", exchange_label)
+            return {"actions": [], "decisions": [], "portfolio": self.get_portfolio(db),
+                    "timestamp": now_istanbul().isoformat(), "note": "aday yok",
+                    "market_open": market_open, "exchange": exchange_label}
+
+        # 4. Piyasa durumuna gore karar
+        if market_open:
+            # Piyasa acik → normal karar + islem
+            actions, decisions = await self._llm_decide(portfolio, candidates, db)
+        else:
+            # Piyasa kapali → derin analiz + bekleyen emir
+            actions = await self._deep_analyze_and_queue(db, candidates, portfolio, is_bist, exchange_label)
+
+        return {"actions": actions, "decisions": decisions if market_open else [],
+                "portfolio": self.get_portfolio(db),
+                "timestamp": now_istanbul().isoformat(),
+                "market_open": market_open, "exchange": exchange_label}
+
+    async def _gather_candidates(self, db: Session, exchanges: list[str], is_bist: bool) -> list[dict]:
+        """Aday hisseleri topla — rapordan veya piyasadan."""
         from app.models.core import Report
+
         latest = db.query(Report).options(
             joinedload(Report.picks)
         ).order_by(Report.created_at.desc()).first()
 
         candidates = []
-
         if latest and latest.picks:
-            # Rapor var — sadece bu portföyün borsasına ait pick'leri kullan
-            is_bist_agent = "BIST" in (exchanges or self.portfolio_exchanges)
             for p in latest.picks:
                 is_bist_ticker = p.ticker.endswith(".IS")
-                # BIST agent sadece .IS, US agent sadece .IS olmayanları alır
-                if is_bist_agent != is_bist_ticker:
+                if is_bist != is_bist_ticker:
                     continue
                 candidates.append({
                     "ticker": p.ticker,
@@ -301,27 +331,20 @@ class AutonomousAgent:
                     "pe_ratio": p.pe_ratio,
                     "volatility": p.volatility_annualized,
                     "narrative": p.narrative or "",
+                    "fair_value": p.fair_value,
+                    "margin_pct": p.margin_pct,
+                    "llm_reasoning": p.llm_reasoning,
                 })
-            # Rapor pick'lerini skora gore sirala
             candidates.sort(key=lambda c: c["composite_score"], reverse=True)
-            logger.info("Rapor #%d pick'leri kullaniliyor: %d aday", latest.id, len(candidates))
+            logger.info("[%s] Rapor pick'leri: %d aday", "BIST" if is_bist else "US", len(candidates))
         else:
-            # 2. Rapor yok — piyasayi tara (yavas)
-            logger.info("Rapor bulunamadi, piyasa taniyor...")
             from app.services.screener_service import stage1_prescreen, get_universe
             tickers = get_universe(exchanges) if exchanges else get_universe(["NASDAQ", "NYSE"])
             scanned = await stage1_prescreen(tickers)
-            top = scanned[:8]
-
-            # Derinlemesine analiz
-            for c in top:
+            for c in scanned[:8]:
                 try:
                     a = await self.analyze_single(c["ticker"])
-                    candidates.append({
-                        "ticker": c["ticker"], "price": c["price"],
-                        "technical_score": c["technical_score"],
-                        "momentum_5d": c.get("momentum_5d", 0),
-                        "rsi_14": c.get("rsi_14", 50),
+                    candidates.append({**c,
                         "composite_score": a.get("composite_score", 0),
                         "fundamental_score": a.get("fundamental_score", 50),
                         "sentiment_score": a.get("sentiment_score", 50),
@@ -333,15 +356,159 @@ class AutonomousAgent:
                 except Exception:
                     pass
 
-        if not candidates:
-            logger.info("Hiç aday bulunamadi, islem yapilmadi")
-            return {"actions": [], "decisions": [], "portfolio": self.get_portfolio(db),
-                    "timestamp": now_istanbul().isoformat(), "note": "aday yok"}
+        return candidates
 
-        # 3. LLM/kural-bazli karar
-        actions, decisions = await self._llm_decide(portfolio, candidates, db)
-        return {"actions": actions, "decisions": decisions, "portfolio": self.get_portfolio(db),
-                "timestamp": now_istanbul().isoformat()}
+    def _execute_pending_orders(self, db: Session, portfolio: dict) -> int:
+        """Bekleyen emirleri gerceklestir (piyasa acildiginda cagrilir)."""
+        executed = 0
+        pending = (
+            db.query(PendingOrder)
+            .filter(PendingOrder.status == "pending")
+            .filter(PendingOrder.portfolio_id == self._ensure_portfolio_id(db))
+            .all()
+        )
+        for order in pending:
+            try:
+                # Guncel fiyati al
+                prices = get_live_prices([order.ticker])
+                current_price = prices.get(order.ticker, {}).get("price")
+                if not current_price or current_price <= 0:
+                    continue
+
+                if order.action == "buy":
+                    result = self.execute_buy(
+                        db, order.ticker, order.quantity, current_price,
+                        f"Bekleyen emir gerceklesti: {order.reasoning}",
+                        portfolio, confidence=order.confidence,
+                    )
+                else:
+                    # sell - pozisyonu bul
+                    pos = (
+                        db.query(PortfolioPosition)
+                        .filter(PortfolioPosition.ticker == order.ticker)
+                        .filter(PortfolioPosition.status == "open")
+                        .filter(PortfolioPosition.portfolio_id == self._ensure_portfolio_id(db))
+                        .first()
+                    )
+                    if pos:
+                        result = self.execute_sell(
+                            db, pos.id, current_price,
+                            f"Bekleyen emir gerceklesti: {order.reasoning}",
+                            portfolio, confidence=order.confidence,
+                        )
+                    else:
+                        result = {"success": False, "error": "Pozisyon bulunamadi"}
+
+                if result.get("success"):
+                    order.status = "executed"
+                    order.executed_at = now_istanbul()
+                    order.price = current_price
+                    order.notes = f"Piyasa acilisinda gerceklesti @ {current_price}"
+                    executed += 1
+                    portfolio = self.get_portfolio(db)
+                    logger.info("Pending order executed: %s %s x%s @ %s",
+                                order.action, order.ticker, order.quantity, current_price)
+                else:
+                    order.notes = f"Basarisiz: {result.get('error', 'bilinmeyen')}"
+                    order.status = "cancelled"
+                    logger.warning("Pending order failed: %s", result.get("error"))
+            except Exception as e:
+                order.notes = f"Hata: {e}"
+                order.status = "cancelled"
+                logger.error("Pending order error: %s", e)
+
+        if executed:
+            db.commit()
+        return executed
+
+    async def _deep_analyze_and_queue(self, db: Session, candidates: list[dict],
+                                      portfolio: dict, is_bist: bool, exchange_label: str) -> list[dict]:
+        """Piyasa kapaliyken derin analiz + bekleyen emir olustur."""
+        from app.skills import stock_analysis as _stock_skill
+
+        actions = []
+        cash = portfolio.get("cash", 0)
+        max_positions = self.max_positions
+        current_count = portfolio.get("position_count", 0)
+
+        # Sadece en guclu 5 adaya derin analiz yap
+        deep_candidates = candidates[:5]
+        logger.info("[%s] Piyasa KAPALI — %d aday derin analiz ediliyor...", exchange_label, len(deep_candidates))
+
+        for c in deep_candidates:
+            if current_count + len(actions) >= max_positions or cash <= 0:
+                break
+
+            try:
+                # Deep analysis via stock_analysis skill
+                analysis = await _stock_skill.run(c["ticker"], db=db)
+                conclusion = analysis.get("conclusion", "hold")
+                composite = analysis.get("scores", {}).get("composite", c.get("composite_score", 0)) or 0
+                momentum = analysis.get("momentum_pct", c.get("momentum_5d", 0)) or 0
+
+                # Sadece buy/strong_buy ve composite >= 60
+                if conclusion not in ("buy", "strong_buy") or composite < 60:
+                    logger.debug("[%s] %s elendi: conclusion=%s composite=%.0f",
+                                 exchange_label, c["ticker"], conclusion, composite)
+                    continue
+
+                # Buy emri olustur
+                price = c.get("price", 0) or 0
+                if price <= 0:
+                    continue
+
+                max_per_pos = cash * self.max_per_position_pct
+                budget = min(max_per_pos, cash * 0.5)
+                qty = max(1, int(budget / price))
+
+                reasoning = (
+                    f"Piyasa kapaliyken derin analiz: conclusion={conclusion} composite={composite:.0f} "
+                    f"bias={analysis.get('bias_pct', 0)}% F/K={c.get('pe_ratio', 'N/A')} "
+                    f"fair_value={analysis.get('fair_value', 'N/A')} "
+                    f"margin={analysis.get('margin_pct', 0):.1f}%"
+                )
+                if analysis.get("llm_reasoning"):
+                    reasoning += f" | AI: {analysis['llm_reasoning'][:150]}"
+
+                order = PendingOrder(
+                    portfolio_id=self._ensure_portfolio_id(db),
+                    ticker=c["ticker"], action="buy", quantity=qty,
+                    price=price, reasoning=reasoning[:1000],
+                    analysis_json={
+                        "conclusion": conclusion,
+                        "composite": composite,
+                        "bias_pct": analysis.get("bias_pct"),
+                        "fundamental": analysis.get("scores", {}).get("fundamental"),
+                        "sentiment": analysis.get("scores", {}).get("sentiment"),
+                        "risk": analysis.get("scores", {}).get("risk"),
+                        "fair_value": analysis.get("fair_value"),
+                        "margin_pct": analysis.get("margin_pct"),
+                        "llm_reasoning": analysis.get("llm_reasoning"),
+                        "llm_target_price": analysis.get("llm_target_price"),
+                        "momentum_pct": momentum,
+                    },
+                    confidence=max(0.65, composite / 100),
+                    exchange=exchange_label,
+                )
+                db.add(order)
+                db.flush()
+                actions.append({
+                    "action": "queue_buy", "ticker": c["ticker"],
+                    "quantity": qty, "price": price,
+                    "reasoning": f"Bekleyen emir: {conclusion} (composite={composite:.0f})",
+                    "order_id": order.id,
+                })
+                cash -= budget
+                logger.info("[%s] Bekleyen emir: BUY %s x%s @ %s (composite=%.0f)",
+                            exchange_label, c["ticker"], qty, price, composite)
+
+            except Exception as e:
+                logger.warning("[%s] Derin analiz basarisiz %s: %s", exchange_label, c["ticker"], e)
+
+        if actions:
+            db.commit()
+            logger.info("[%s] %d bekleyen emir olusturuldu", exchange_label, len(actions))
+        return actions
 
     async def _llm_decide(self, portfolio: dict, candidates: list[dict], db: Session) -> tuple:
         """LLM portfoy + adaylari degerlendirip dinamik al/sat kararlari verir.

@@ -15,6 +15,27 @@ def now_istanbul() -> datetime:
     """Tüm uygulamada kullanılacak ortak zaman dilimi yardımcısı."""
     return datetime.now(ISTANBUL_TZ)
 
+
+def market_is_open(exchange: str) -> bool:
+    """Borsa açık mı? Istanbul saatiyle (UTC+3).
+
+    BIST: Hafta içi 10:00-18:00
+    US (NASDAQ/NYSE): Hafta içi 16:30-23:00 (EDT yaz saati)
+    """
+    now = now_istanbul()
+    day = now.weekday()  # 0=Pazartesi, 6=Pazar
+    t = now.hour * 60 + now.minute
+
+    if day >= 5:  # Cumartesi-Pazar
+        return False
+
+    exchange = exchange.upper()
+    if exchange in ("BIST",):
+        return 600 <= t < 1080  # 10:00-18:00
+    elif exchange in ("NASDAQ", "NYSE", "DOWJONES", "US"):
+        return 990 <= t < 1380  # 16:30-23:00
+    return True  # bilinmeyen borsa → varsayılan açık
+
 # PostgreSQL (primary) — Docker'da 'db' hostname, lokal'de 'localhost'
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:

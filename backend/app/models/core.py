@@ -153,3 +153,28 @@ class TradingDecision(Base):
     __table_args__ = (
         Index("ix_trading_decisions_portfolio_id", "portfolio_id"),
     )
+
+
+class PendingOrder(Base):
+    """Bekleyen emir — piyasa kapalıyken verilen, açılınca gerçekleştirilecek."""
+    __tablename__ = "pending_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), index=True)
+    ticker = Column(String, index=True)
+    action = Column(String)  # buy | sell
+    quantity = Column(Float)
+    price = Column(Float, nullable=True)  # limit fiyat (None = piyasa)
+    reasoning = Column(Text)
+    analysis_json = Column(JSON, default=dict)  # derin analiz sonucu
+    confidence = Column(Float, default=0.7)
+    status = Column(String, default="pending")  # pending | executed | cancelled | expired
+    exchange = Column(String, nullable=True)  # BIST | US
+    created_at = Column(DateTime, default=now_istanbul)
+    executed_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_pending_orders_status", "status"),
+        Index("ix_pending_orders_portfolio", "portfolio_id"),
+    )
