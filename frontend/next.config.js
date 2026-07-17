@@ -1,14 +1,16 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV !== "production";
+const BACKEND_HOST = isDev ? "localhost" : "backend";
+
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
     return [
       {
-      source: "/api/:path*",
-      // Use internal Docker hostname — NEXT_PUBLIC_API_URL is the public URL
-      // which would cause a loop if used here. Only fires when browser sends
-      // relative /api/* requests (i.e. when NEXT_PUBLIC_API_URL is empty in build).
-      destination: "http://backend:8012/api/:path*",
+        source: "/api/:path*",
+        // local dev → localhost:8012; Docker → backend:8012 (compose network)
+        // Server-side rewrites only — browser calls use NEXT_PUBLIC_API_URL directly.
+        destination: `http://${BACKEND_HOST}:8012/api/:path*`,
       },
     ];
   },
