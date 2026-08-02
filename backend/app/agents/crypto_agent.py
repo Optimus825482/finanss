@@ -39,7 +39,7 @@ def _rsi(closes: np.ndarray, period: int = RSI_PERIOD) -> float:
     avg_gain = np.mean(gains[-period:])
     avg_loss = np.mean(losses[-period:])
     if avg_loss == 0:
-        return 100.0
+        return 100.0 if avg_gain > 0 else 50.0
     rs = avg_gain / avg_loss
     return round(100.0 - (100.0 / (1.0 + rs)), 1)
 
