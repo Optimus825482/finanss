@@ -17,7 +17,7 @@ Her karar trading_decisions tablosuna loglanir.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from app.config import now_istanbul, market_is_open
 from typing import Optional
 
@@ -334,7 +334,6 @@ class AutonomousAgent:
         from app.models.core import Report
         from app.services.agent_logs import log_if_active
         from datetime import timedelta
-        from datetime import timedelta
 
         exchange_label = "BIST" if is_bist else "US"
         exchange_arg = [exchange_label] if is_bist else exchanges
@@ -354,8 +353,14 @@ class AutonomousAgent:
         # Rapor 4 saatten eskiyse veya bu exchange için pick yoksa → yeni rapor tetikle
         report_age_hours = 999
         if latest:
-            age = datetime.now() - latest.created_at
-            report_age_hours = age.total_seconds() / 3600 if age.total_seconds() > 0 else 0
+            # naive/aware uyumluluğu: created_at (now_istanbul, UTC+3 aware) vs datetime.now (naive)
+            # Postgres DateTime naive döner — ikisini de UTC naive'ye indirge
+            created = latest.created_at
+            if created is not None:
+                if created.tzinfo is not None:
+                    created = created.astimezone(timezone.utc).replace(tzinfo=None)
+                age = datetime.now(timezone.utc).replace(tzinfo=None) - created
+                report_age_hours = age.total_seconds() / 3600 if age.total_seconds() > 0 else 0
 
         if not latest or not has_exchange_picks or report_age_hours > 4:
             reason = "henüz rapor yok" if not latest else f"rapor {report_age_hours:.1f} saat eski" if report_age_hours > 4 else f"{exchange_label} pick'i yok"
