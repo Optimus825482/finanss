@@ -103,3 +103,10 @@ def api_scalp_status():
     """Scalper durumu + son tur bilgisi (frontend 1s polling)."""
     from app.services.crypto_scalper import status
     return status()
+
+
+@router.get("/scalp/cards")
+def api_scalp_cards():
+    """Kural bazlı AL/HOLD/SELL kartları — her sembol için canlı sinyal + kural sonucu."""
+    from app.services.crypto_scalper import cards
+    return cards()

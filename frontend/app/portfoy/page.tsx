@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { api, AgentPortfolio, AgentDecision, CryptoKline, CryptoAnalysis } from "../lib/api";
+import { api, AgentPortfolio, AgentDecision, CryptoKline, CryptoAnalysis, ScalpCardsResponse } from "../lib/api";
 import CryptoChart from "../components/CryptoChart";
 
 type PortfolioSlug = "bist" | "us" | "crypto";
@@ -47,6 +47,10 @@ export default function PortfoyPage() {
   const [cryptoUniverse, setCryptoUniverse] = useState<string[]>([]);
   const [cryptoLoading, setCryptoLoading] = useState(false);
 
+  // Scalper: kural bazlı AL/HOLD/SELL kartları
+  const [scalp, setScalp] = useState<ScalpCardsResponse | null>(null);
+  const [scalpBusy, setScalpBusy] = useState(false);
+
   const loadAll = useCallback(async () => {
     for (const slug of ["bist", "us", "crypto"] as PortfolioSlug[]) {
       try {
@@ -80,6 +84,10 @@ export default function PortfoyPage() {
     }
   }, []);
 
+  const loadScalp = useCallback(async () => {
+    try { setScalp(await api.cryptoScalpCards()); } catch { /* scalper kapalı olabilir */ }
+  }, []);
+
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { const i = setInterval(loadAll, 60_000); return () => clearInterval(i); }, [loadAll]);
   useEffect(() => { loadCrypto(); }, [loadCrypto]);
@@ -91,6 +99,28 @@ export default function PortfoyPage() {
     const i = setInterval(() => loadCryptoChart(cryptoChartSymbol), 30_000);
     return () => clearInterval(i);
   }, [activeTab, cryptoChartSymbol, loadCryptoChart]);
+
+  // Scalper: crypto sekmesinde 1s canlı kart güncelleme
+  useEffect(() => {
+    if (activeTab !== "crypto") return;
+    loadScalp();
+    const i = setInterval(loadScalp, 1_000);
+    return () => clearInterval(i);
+  }, [activeTab, loadScalp]);
+
+  const handleScalpStart = async () => {
+    setScalpBusy(true); setError(null);
+    try { await api.cryptoScalpStart(); await loadScalp(); }
+    catch (e) { setError(`Scalper başlatılamadı: ${e instanceof Error ? e.message : "?"}`); }
+    finally { setScalpBusy(false); }
+  };
+
+  const handleScalpStop = async () => {
+    setScalpBusy(true); setError(null);
+    try { await api.cryptoScalpStop(); await loadScalp(); }
+    catch (e) { setError(`Scalper durdurulamadı: ${e instanceof Error ? e.message : "?"}`); }
+    finally { setScalpBusy(false); }
+  };
 
   const handleRun = async (slug: PortfolioSlug) => {
     setRunning(true); setError(null);
@@ -233,6 +263,93 @@ export default function PortfoyPage() {
                     <span style={{ color: "var(--term-amber)" }}>{(cryptoAnalysis.volatility_penalty * 100).toFixed(0)}%</span>
                   </div>
                 ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* ── SCALPER: kural bazlı AL/HOLD/SELL kartları ── */}
+          <div className="rounded-sm p-4 mb-4" style={{ border: `1px solid ${borderColor}`, backgroundColor: "var(--term-panel)" }}>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="font-mono text-xs tracking-wider" style={{ color: "var(--term-muted)" }}>
+                SCALPER KURALLARI <span className="text-[9px]">(1s canlı)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px]" style={{ color: scalp?.running ? "var(--term-green)" : "var(--term-red)" }}>
+                  {scalp?.running ? "● ÇALIŞIYOR" : "○ DURDU"}
+                </span>
+                {scalp?.running ? (
+                  <button onClick={handleScalpStop} disabled={scalpBusy}
+                    className="font-mono text-[10px] px-2 py-1 rounded-sm transition-none disabled:opacity-40"
+                    style={{ border: "1px solid var(--term-red)", color: "var(--term-red)" }}>
+                    ■ DURDUR
+                  </button>
+                ) : (
+                  <button onClick={handleScalpStart} disabled={scalpBusy}
+                    className="font-mono text-[10px] px-2 py-1 rounded-sm transition-none disabled:opacity-40"
+                    style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}>
+                    ▶ BAŞLAT
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {scalp?.params && (
+              <div className="flex gap-3 flex-wrap mb-3 font-mono text-[10px]" style={{ color: "var(--term-muted)" }}>
+                <span>AL ≥ {scalp.params.buy_threshold}</span>
+                <span>STOP -{scalp.params.stop_loss_pct}%</span>
+                <span>KÂR +{scalp.params.take_profit_pct}%</span>
+                <span>MAX {scalp.params.max_open_positions} poz</span>
+                <span>${scalp.params.position_usd}/poz</span>
+                <span>Tur {scalp.status?.rounds ?? 0}</span>
+              </div>
+            )}
+
+            {!scalp || scalp.cards.length === 0 ? (
+              <div className="py-8 text-center font-mono text-xs" style={{ color: "var(--term-muted)" }}>
+                Kartlar yükleniyor…
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                {scalp.cards.map((c) => {
+                  const actionColor = c.action === "buy" ? "var(--term-green)"
+                    : c.action === "sell" ? "var(--term-red)"
+                    : c.action === "hold" ? "var(--term-amber)" : "var(--term-muted)";
+                  const actionLabel = c.action === "buy" ? "AL"
+                    : c.action === "sell" ? "SAT"
+                    : c.action === "hold" ? "HOLD" : "BEKLE";
+                  const price = c.price ?? 0;
+                  const decimals = price >= 1 ? 2 : 6;
+                  return (
+                    <div key={c.ticker} className="rounded-sm p-3"
+                      style={{ border: `1px solid ${c.position_open ? actionColor : borderColor}`, backgroundColor: "rgba(0,0,0,0.2)" }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono text-xs font-semibold" style={{ color: "var(--term-text)" }}>{c.ticker}</span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: actionColor, color: "#0b0b0f", fontWeight: 700 }}>
+                          {actionLabel}
+                        </span>
+                      </div>
+                      <div className="font-mono text-sm font-semibold" style={{ color: "var(--term-text)" }}>
+                        ${price.toFixed(decimals)}
+                      </div>
+                      <div className="font-mono text-[10px] mt-1" style={{ color: "var(--term-muted)" }}>
+                        COMP {c.composite?.toFixed(0) ?? "—"} · RSI {c.rsi != null ? c.rsi.toFixed(0) : "—"}
+                      </div>
+                      <div className="font-mono text-[10px]" style={{ color: "var(--term-muted)" }}>
+                        M5 {c.momentum_5m != null ? c.momentum_5m.toFixed(0) : "—"}
+                        {c.momentum_15m != null ? ` / 15m ${c.momentum_15m.toFixed(0)}` : ""}
+                        {c.momentum_1h != null ? ` / 1h ${c.momentum_1h.toFixed(0)}` : ""}
+                      </div>
+                      {c.position_open && (
+                        <div className="font-mono text-[10px] mt-1"
+                          style={{ color: (c.pnl_pct ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)" }}>
+                          POZ x{c.position_qty} @ ${(c.entry_price ?? 0).toFixed(decimals)}
+                          {" "}· {c.pnl_pct != null ? `${c.pnl_pct >= 0 ? "+" : ""}${c.pnl_pct.toFixed(2)}%` : ""}
+                        </div>
+                      )}
+                      <div className="font-mono text-[10px] mt-1" style={{ color: actionColor }}>{c.rule}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

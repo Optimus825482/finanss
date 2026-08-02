@@ -309,6 +309,48 @@ export type CryptoAnalysis = {
   risk_score?: number;
 };
 
+// ── Crypto Scalper ──
+
+export type ScalpCard = {
+  ticker: string;
+  price: number;
+  composite: number;
+  rsi?: number;
+  momentum_5m?: number;
+  momentum_15m?: number;
+  momentum_1h?: number;
+  action: "buy" | "sell" | "hold" | "wait";
+  rule: string;
+  position_open: boolean;
+  position_qty: number;
+  entry_price: number | null;
+  pnl_pct: number | null;
+};
+
+export type ScalpParams = {
+  buy_threshold: number;
+  stop_loss_pct: number;
+  take_profit_pct: number;
+  max_open_positions: number;
+  position_usd: number;
+  min_signal_drop: number;
+  scan_interval_s: number;
+};
+
+export type ScalpCardsResponse = {
+  running: boolean;
+  status: {
+    running: boolean;
+    started_at: string | null;
+    stopped_at: string | null;
+    last_round_at: string | null;
+    last_round: Record<string, unknown> | null;
+    rounds: number;
+  };
+  cards: ScalpCard[];
+  params: ScalpParams;
+};
+
 // ── SSE Live Prices ──
 
 export type LiveWatchlistItem = {
@@ -593,6 +635,12 @@ export const api = {
     apiFetch(`/api/crypto/scan?interval=${interval}`, { cache: "no-store" }).then(
       j<{ symbols_scanned: number; candidates: CryptoAnalysis[] }>
     ),
+
+  // ── Scalper ──
+  cryptoScalpStart: () => apiFetch("/api/crypto/scalp/start", { method: "POST" }).then(j<Record<string, unknown>>),
+  cryptoScalpStop: () => apiFetch("/api/crypto/scalp/stop", { method: "POST" }).then(j<Record<string, unknown>>),
+  cryptoScalpStatus: () => apiFetch("/api/crypto/scalp/status", { cache: "no-store" }).then(j<Record<string, unknown>>),
+  cryptoScalpCards: () => apiFetch("/api/crypto/scalp/cards", { cache: "no-store" }).then(j<ScalpCardsResponse>),
 
   // ── Ayarlar: bakiye + scraping ──
   setBalance: (portfolioSlug: string, amount: number) =>
