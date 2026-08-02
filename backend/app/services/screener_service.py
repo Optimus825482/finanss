@@ -310,7 +310,13 @@ async def stage2_deep_analysis(
 ) -> list[dict]:
     """Stage 1'den gelen en iyi adaylari full agent pipeline'dan gecir.
     Optional agent instances keep orchestrator status wiring consistent.
+
+    Pipeline: Fundamental → Sentiment (+ NewsAnalyst derinleştirme) → Risk.
+    Fundamental/Sentiment/Risk bağımsız olduğundan paralel (gather) çalıştırılır (R2.1).
+    NewsAnalyst (burst/trend/event) çıktısı sentiment_score'u zenginleştirir (M6) —
+    sıralı bir adım olarak sentiment'ten sonra koşar (aynı news verisi).
     """
+    import copy as _copy
     from app.agents.base import AgentStatus
     from app.agents.fundamental_agent import FundamentalAgent
     from app.agents.sentiment_agent import SentimentAgent
@@ -342,6 +348,7 @@ async def stage2_deep_analysis(
     if risk is None:
         risk = RiskAgent()
 
+    # ── Paralel: Fundamental / Sentiment / Risk (bağımsız, ayrı kopyalarda) ──
     for agent, label in (
         (fundamental, "fundamental"),
         (sentiment, "sentiment"),
@@ -349,8 +356,61 @@ async def stage2_deep_analysis(
     ):
         if hasattr(agent, "_set"):
             agent._set(AgentStatus.RUNNING, f"Stage 2 {label}: {len(enriched)} hisse")
-        enriched = await agent.run(enriched)
+
+    async def _run_agent(agent, label):
+        # Deep copy: her ajan kendi kopyasında çalışır, sonuçlar merge edilir
+        # (risk_agent c.pop("history") yapıyor; fundamental/sentiment alan ekliyor).
+        work = _copy.deepcopy(enriched)
+        out = await agent.run(work)
         if hasattr(agent, "_set"):
-            agent._set(AgentStatus.DONE, f"Stage 2 {label}: {len(enriched)}")
+            agent._set(AgentStatus.DONE, f"Stage 2 {label}: {len(out)}")
+        return out
+
+    f_out, s_out, r_out = await asyncio.gather(
+        _run_agent(fundamental, "fundamental"),
+        _run_agent(sentiment, "sentiment"),
+        _run_agent(risk, "risk"),
+    )
+
+    # Merge: her ajanın eklediği alanları ana listeye taşı (ticker bazlı)
+    merged: list[dict] = []
+    by_ticker = {c["ticker"]: c for c in enriched}
+    for c in f_out:
+        t = c["ticker"]
+        base = by_ticker.get(t, {})
+        merged.append({**base, **c})  # fundamental alanları
+    s_map = {c["ticker"]: c for c in s_out}
+    r_map = {c["ticker"]: c for c in r_out}
+    for c in merged:
+        s = s_map.get(c["ticker"], {})
+        r = r_map.get(c["ticker"], {})
+        c.update({k: v for k, v in s.items() if k not in c})
+        c.update({k: v for k, v in r.items() if k not in c})
+    enriched = merged
+
+    # ── NewsAnalyst derinleştirme (M6): sentiment_score'u news_score ile güncelle ──
+    try:
+        from app.agents.news_analyst import NewsAnalyst
+        news = NewsAnalyst()
+        if hasattr(news, "_set"):
+            news._set(AgentStatus.RUNNING, f"Stage 2 news: {len(enriched)} hisse")
+        news_out = await news.run(_copy.deepcopy(enriched))
+        news_map = {c["ticker"]: c for c in news_out}
+        for c in enriched:
+            n = news_map.get(c["ticker"], {})
+            ns = n.get("news_score")
+            if ns is not None:
+                # NewsAnalyst zengin sinyali (burst/trend/event) sentiment'i derinleştirir.
+                # SentimentAgent zaten VADER tabanlı skor üretti; haber yoksa nötr 50 verir.
+                c["sentiment_score"] = round((c.get("sentiment_score", 50) + ns) / 2, 1)
+                c["news_score"] = ns
+                c["news_count"] = n.get("news_count")
+                c["news_burst"] = n.get("news_burst")
+                c["news_sentiment_trend"] = n.get("news_sentiment_trend")
+                c["news_events"] = n.get("news_events")
+        if hasattr(news, "_set"):
+            news._set(AgentStatus.DONE, f"Stage 2 news: {len(enriched)}")
+    except Exception as e:
+        logger.warning("NewsAnalyst stage2 entegrasyonu basarisiz (sentiment korunur): %s", e)
 
     return enriched

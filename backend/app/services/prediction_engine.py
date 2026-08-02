@@ -14,6 +14,7 @@ import logging
 import math
 import hashlib
 import json
+import os
 from datetime import datetime, date, timedelta
 from app.config import now_istanbul
 from typing import Optional
@@ -353,7 +354,8 @@ class XGBoostPredictor:
                 continue
             model = xgb.XGBRegressor(
                 n_estimators=100, max_depth=4, learning_rate=0.1,
-                subsample=0.8, colsample_bytree=0.8, n_jobs=-1,
+                subsample=0.8, colsample_bytree=0.8,
+                n_jobs=max(1, (os.cpu_count() or 2) // 2),  # tüm çekirdekleri doyurma (R5.1)
             )
             model.fit(X, y)
             model.save_model(str(cls._model_path(ticker, horizon)))
@@ -369,6 +371,33 @@ class XGBoostPredictor:
     @classmethod
     def _has_model(cls, ticker: str, horizon: int) -> bool:
         return cls._model_path(ticker, horizon).exists()
+
+    @classmethod
+    def _model_fresh(cls, ticker: str, max_age_hours: float = 24.0) -> bool:
+        """Tüm horizon'ların model dosyaları mevcut ve < max_age_hours saniyelik mi?
+
+        XGBoost eğitimi pahalı (n_estimators=100, 3 horizon). Her create_prediction'da
+        retrain CPU starvation yaratıyordu (R5.1). Günlük gate: modeller tazeyse train atlanır.
+        """
+        import time
+        cutoff = time.time() - max_age_hours * 3600
+        for h in cls.HORIZONS:
+            p = cls._model_path(ticker, h)
+            if not p.exists() or p.stat().st_mtime < cutoff:
+                return False
+        return True
+
+    @classmethod
+    def train_if_stale(cls, ticker: str, closes, highs, lows, volumes, opens,
+                       max_age_hours: float = 24.0) -> bool:
+        """Tazelik kontrolüyle train — modeller < max_age_hours ise train'i atla.
+
+        Returns: True eğer (a) train yapıldı veya (b) modeller zaten tazeyse.
+        """
+        if cls._model_fresh(ticker.upper(), max_age_hours):
+            logger.info("XGBoost %s modelleri taze — train atlandı (günlük gate)", ticker)
+            return True
+        return cls.train(ticker, closes, highs, lows, volumes, opens)
 
     @classmethod
     def _xgb_predict(cls, ticker: str, features: dict, horizon: int) -> float | None:
@@ -484,9 +513,9 @@ async def create_prediction(
     features.update({f"agent_{k}": float(v) for k, v in agent_scores.items() if v is not None})
     current_price = closes[-1]
 
-    # Try to train XGBoost models if enough history
+    # Try to train XGBoost models if enough history (günlük gate — R5.1)
     try:
-        trained = XGBoostPredictor.train(ticker.upper(), closes, highs, lows, volumes, opens)
+        trained = XGBoostPredictor.train_if_stale(ticker.upper(), closes, highs, lows, volumes, opens)
         model_name = "xgboost" if trained else "heuristic"
     except Exception as e:
         logger.warning("XGBoost train failed for %s: %s (using heuristic)", ticker, e)
@@ -560,7 +589,7 @@ async def _evaluate_one(db: Session, pred: Prediction) -> dict:
     try:
         hist = safe_ticker_history(pred.ticker, period="1y")
         if not hist.empty and len(hist) > XGBoostPredictor.MIN_HISTORY + 30:
-            XGBoostPredictor.train(
+            XGBoostPredictor.train_if_stale(
                 pred.ticker,
                 hist["Close"].values, hist["High"].values, hist["Low"].values,
                 hist["Volume"].values, hist["Open"].values,

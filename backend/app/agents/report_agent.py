@@ -152,7 +152,6 @@ async def _llm_enrich_pick(pick: dict) -> dict:
     """Her pick icin LLM gerekcesi + 12 aylik hedef fiyat (varsa). Pick dict mutasyona ugrar."""
     try:
         from app.services.llm_bridge import generate
-        import json as _json
 
         ctx = {
             "ticker": pick.get("ticker"),
@@ -180,10 +179,10 @@ async def _llm_enrich_pick(pick: dict) -> dict:
             "\nSadece JSON dondur, baska bir sey yazma."
         )
         raw = await generate(prompt=prompt, max_tokens=256, temperature=0.4)
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-        parsed = _json.loads(raw)
+        # Robust JSON parse — fenced blok çıkar + json_repair toleranslı (skill_router)
+        from app.services.skill_router import _extract_json, _parse_json_robust
+        raw = _extract_json(raw) or raw
+        parsed = _parse_json_robust(raw)
         pick["llm_reasoning"] = str(parsed.get("reasoning", ""))[:300]
         pick["llm_target_price"] = float(parsed["target_price"]) if parsed.get("target_price") else None
         pick["llm_expected_return_pct"] = float(parsed["expected_return_pct"]) if parsed.get("expected_return_pct") else None

@@ -21,6 +21,21 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup + shutdown lifecycle."""
+    import os
+    # S4 — prod'da auth'suz çalışmayı engelle (NODE_ENV=production iken API_KEY zorunlu).
+    # Local dev: API_KEY boş bırakılabilir; ALLOW_NO_AUTH=1 aynı davranışı korur.
+    if os.getenv("NODE_ENV") == "production" and not os.getenv("API_KEY"):
+        raise RuntimeError(
+            "API_KEY zorunlu (NODE_ENV=production). Güvenli olmayan anonim modda çalışma reddedildi. "
+            "Local dev için API_KEY set et veya ALLOW_NO_AUTH=1 kullan."
+        )
+    # S1 — FERNET_KEY yoksa LLM API key'leri DB'de düz metin saklanır (uyarı, fail değil).
+    if not os.getenv("FERNET_KEY"):
+        logger.warning(
+            "FERNET_KEY ayarlanmamış — LLM provider API key'leri DB'de DÜZ METİN saklanacak. "
+            "Üretim için FERNET_KEY zorunlu (GUVENLIK_RAPORU S1)."
+        )
+
     init_db()
     seed_default_provider()
     start_scheduler()

@@ -9,7 +9,21 @@ Also converts np.float64/int64 → native Python float/int to prevent
 SQLAlchemy "schema \"np\" does not exist" errors.
 """
 import math
+import re
 import numpy as np
+
+# Ticker: harf, rakam, nokta, tire; 1-10 karakter (BIST .IS, LSE .L dahil)
+_TICKER_RE = re.compile(r"^[A-Z0-9.\-]{1,10}$")
+
+def validate_ticker(ticker: str) -> bool:
+    """Yatirim ticker desen dogrulamasi (S7).
+
+    Geçersiz/uzun girdiler yfinance'a uzun network çağrısı yaptırabilir.
+    Sadece harf/rakam/nokta/tire ve 1-10 karakter kabul edilir.
+    """
+    if not ticker or not isinstance(ticker, str):
+        return False
+    return bool(_TICKER_RE.match(ticker.strip().upper()))
 
 
 def _native(v):

@@ -24,6 +24,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             if any(request.url.path.startswith(p) for p in PUBLIC_PATHS):
                 return await call_next(request)
             auth = request.headers.get("X-API-Key", "")
+            # SSE (EventSource) header gönderemez — api_key query param kabul edilir.
+            if not auth:
+                auth = request.query_params.get("api_key", "")
             if not _safe_compare(auth, api_key):
                 raise HTTPException(status_code=401, detail="Unauthorized")
 

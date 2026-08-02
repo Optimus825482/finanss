@@ -118,7 +118,7 @@ class PortfolioPosition(Base):
     entry_date = Column(DateTime, default=now_istanbul)
     notes = Column(String, nullable=True)
     # Çoklu portföy: nullable — null = legacy (portföy-bağımsız)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True)  # index __table_args__'ta
 
     status = Column(String, default="open")  # open | closed
     exit_price = Column(Float, nullable=True)
@@ -147,7 +147,7 @@ class TradingDecision(Base):
     portfolio_value_before = Column(Float, nullable=True)
     portfolio_value_after = Column(Float, nullable=True)
     # Çoklu portföy: nullable — null = legacy
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True)  # index __table_args__'ta
     created_at = Column(DateTime, default=now_istanbul, index=True)
 
     __table_args__ = (
@@ -160,7 +160,7 @@ class PendingOrder(Base):
     __tablename__ = "pending_orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"))  # index __table_args__'ta
     ticker = Column(String, index=True)
     action = Column(String)  # buy | sell
     quantity = Column(Float)

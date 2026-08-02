@@ -405,13 +405,11 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
             '{"reasoning": "...", "target_price": 123.45, "expected_return_pct": 12.3}'
             "\nSadece JSON döndür, başka bir şey yazma."
         )
-        import json as _json
         raw = await generate(prompt=prompt, max_tokens=256, temperature=0.4)
-        # JSON extract
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-        parsed = _json.loads(raw)
+        # Robust JSON parse — fenced blok çıkar + json_repair toleranslı (skill_router)
+        from app.services.skill_router import _extract_json, _parse_json_robust
+        raw = _extract_json(raw) or raw
+        parsed = _parse_json_robust(raw)
         llm_reasoning = str(parsed.get("reasoning", ""))[:300]
         llm_target_price = float(parsed.get("target_price", 0)) if parsed.get("target_price") else None
         llm_expected_return = float(parsed.get("expected_return_pct", 0)) if parsed.get("expected_return_pct") else None

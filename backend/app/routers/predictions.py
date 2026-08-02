@@ -20,6 +20,9 @@ async def create_forecast(ticker: str, report_id: int | None = None, db: Session
     from app.services.technicals import compute_all_technicals
 
     ticker_str = ticker.strip().upper()
+    from app.utils.sanitize import validate_ticker
+    if not validate_ticker(ticker_str):
+        raise HTTPException(status_code=400, detail="Geçersiz ticker formatı (S7)")
     try:
         t = yf.Ticker(ticker_str)
         hist = await asyncio.to_thread(t.history, period="1y", interval="1d")

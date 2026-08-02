@@ -4,6 +4,7 @@ Orchestrator — Two-stage pipeline:
   Stage 2: Full agent team (derin analiz, secilmis adaylara)
 """
 import logging
+import threading
 from datetime import datetime
 from app.config import now_istanbul
 
@@ -31,6 +32,7 @@ class Orchestrator:
         self.risk = RiskAgent()
         self.reporter = ReportAgent()
         self.is_running = False
+        self._run_lock = threading.Lock()  # is_running çakışmasına karşı (thread-safe)
         self.last_error: str | None = None
         self.progress_log: list[str] = []  # canli log mesajlari
 
@@ -52,39 +54,45 @@ class Orchestrator:
         logger.info("[pipeline] %s", msg)
 
     async def run_pipeline(self, exchanges: list[str] | None = None) -> int:
-        if self.is_running:
+        # is_running yarışı: scheduler thread'i + router aynı anda girebilir.
+        # Lock almadan çift başlatmayı önle.
+        if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("Pipeline zaten calisiyor")
-
-        self.is_running = True
-        self.last_error = None
-        self.progress_log = []
-        self.exchanges = exchanges or []
-
         try:
-            return await self._run_two_stage(exchanges)
-        except Exception as e:
-            self.last_error = str(e)
-            raise
+            if self.is_running:
+                raise RuntimeError("Pipeline zaten calisiyor")
+            self.is_running = True
+            self.last_error = None
+            self.progress_log = []
+            try:
+                return await self._run_two_stage(exchanges)
+            except Exception as e:
+                self.last_error = str(e)
+                raise
+            finally:
+                self.is_running = False
         finally:
-            self.is_running = False
+            self._run_lock.release()
 
     async def run_deep_pipeline(self, exchanges: list[str] | None = None) -> int:
         """Deep Batch modu: Stage 2 sonrası her pick için Fair Value + Prediction + LLM."""
-        if self.is_running:
+        if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("Pipeline zaten calisiyor")
-
-        self.is_running = True
-        self.last_error = None
-        self.progress_log = []
-        self.exchanges = exchanges or []
-
         try:
-            return await self._run_deep(exchanges)
-        except Exception as e:
-            self.last_error = str(e)
-            raise
+            if self.is_running:
+                raise RuntimeError("Pipeline zaten calisiyor")
+            self.is_running = True
+            self.last_error = None
+            self.progress_log = []
+            try:
+                return await self._run_deep(exchanges)
+            except Exception as e:
+                self.last_error = str(e)
+                raise
+            finally:
+                self.is_running = False
         finally:
-            self.is_running = False
+            self._run_lock.release()
 
     async def _run_two_stage(self, exchanges: list[str] | None) -> int:
         """Iki asamali pipeline: on tarama → derin analiz."""
@@ -217,15 +225,10 @@ class Orchestrator:
         stage2.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
         top_picks = stage2[:8]
 
-        # LLM enrichment per pick (concurrent)
-        try:
-            from app.agents.report_agent import _llm_enrich_pick
-            enriched = await _asyncio.gather(*[_llm_enrich_pick(p) for p in top_picks], return_exceptions=True)
-            for i, result in enumerate(enriched):
-                if not isinstance(result, Exception) and result:
-                    top_picks[i] = result
-        except Exception:
-            pass
+        # LLM enrichment: mükerrer token maliyetini önle (R7.1) — ikinci
+        # _llm_enrich_pick gather'i kaldırıldı. NOT: _run_deep reporter'ı
+        # (_compose_async) çağırmaz; deep mode LLM istiyorsa bu pipeline'ın
+        # reporter.run() üzerinden geçmesi gerekir (tek kaynak: _compose_async step 7).
 
         # Build summary
         for c in top_picks:

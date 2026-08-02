@@ -128,6 +128,32 @@ def delete_model(db: Session, model_id: int) -> bool:
 
 # ── Provider Test ──
 
+def _validate_public_url(url: str) -> bool:
+    """SSRF koruması (S3): internal/private/link-local IP'lere istek engelle.
+
+    Provider test endpoint'i kullanıcı kontrollü base_url'e HTTP çağrısı yapar.
+    localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, link-local (169.254.x), IPv6
+    loopback ve metadata (169.254.169.254) erişimi reddedilir.
+    """
+    from urllib.parse import urlparse
+    import ipaddress
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        # Hostname literal IP mi?
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            return True  # domain — DNS çözümleme test anında yapılır (üretimde daha sıkı olabilir)
+        return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                    or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+    except Exception:
+        return False
+
 def test_provider_connection(provider_id: int, test_message: str = "Merhaba, bağlantı testi") -> dict:
     """Provider API bağlantısını test et."""
     db = SessionLocal()
@@ -135,6 +161,10 @@ def test_provider_connection(provider_id: int, test_message: str = "Merhaba, ba�
         p = db.query(LLMProvider).filter(LLMProvider.id == provider_id).first()
         if not p:
             return {"ok": False, "error": "Provider bulunamadı"}
+
+        # SSRF koruması: base_url public olmalı (S3)
+        if p.base_url and not _validate_public_url(p.base_url):
+            return {"ok": False, "error": "base_url internal/private IP'ye işaret ediyor — SSRF riski nedeniyle engellendi"}
 
         active_model = db.query(LLMModel).filter(
             LLMModel.provider_id == provider_id,

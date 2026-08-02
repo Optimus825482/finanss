@@ -367,12 +367,15 @@ class AutonomousAgent:
             log_if_active(self.portfolio_slug, "market", f"{reason} — yeni rapor üretiliyor ({exchange_label})")
             logger.info("[%s] %s — yeni rapor tetikleniyor", exchange_label, reason)
 
-            # Rapor üretimini tetikle (asyncio ile arka planda)
+            # Rapor üretimini tetikle — create_task yerine DOĞRUDAN await.
+            # _gather_candidates zaten async; create_task, job thread'indeki
+            # asyncio.run loop'u kapanınca "Task was destroyed" ile ölüyordu.
+            # Orchestrator zaten çalışıyorsa 409 çakışmasını önlemek için atla.
             from app.orchestrator import orchestrator
             if not orchestrator.is_running:
                 try:
-                    asyncio.create_task(orchestrator.run_pipeline([exchange_label]))
-                    log_if_active(self.portfolio_slug, "market", f"{exchange_label} rapor pipeline'ı başlatıldı")
+                    await orchestrator.run_pipeline([exchange_label])
+                    log_if_active(self.portfolio_slug, "market", f"{exchange_label} rapor pipeline'ı tamamlandı")
                 except Exception as e:
                     log_if_active(self.portfolio_slug, "market", f"Rapor tetikleme başarısız: {e}")
             else:

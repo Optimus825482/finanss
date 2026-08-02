@@ -3,7 +3,10 @@ LLM Bridge: Model-agnostic tek arayüz. LiteLLM ile tüm sağlayıcıları deste
 Desteklenen: Ollama (yerel), OpenAI, Claude, Gemini, Groq.
 """
 import os
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # LiteLLM lazy import — ilk çağrıda yüklenir
 _litellm = None
@@ -138,13 +141,19 @@ async def generate(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "timeout": 60,  # S11: provider yavaşsa pipeline asılı kalmasın
     }
     if api_key:
         call_kwargs["api_key"] = api_key
     if api_base:
         call_kwargs["api_base"] = api_base
 
-    response = await litellm.acompletion(**call_kwargs)
+    # S11: tek retry — geçici ağ/provider hatasına dayanıklı
+    try:
+        response = await litellm.acompletion(**call_kwargs)
+    except Exception as e:
+        logger.warning("LLM acompletion failed (retry): %s", e)
+        response = await litellm.acompletion(**call_kwargs)
     return response.choices[0].message.content
 
 

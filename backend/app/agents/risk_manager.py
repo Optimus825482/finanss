@@ -103,9 +103,10 @@ class RiskManager(BaseAgent):
         max_corr: float = MAX_CORRELATION,
     ) -> tuple[bool, str]:
         """Bu hisse mevcut pozisyonlarla çok mu korele?"""
-        if not positions or correlation_data is None:
+        if not positions:
             return True, "ok"
-        # Basitleştirilmiş: aynı sektör = yüksek korelasyon varsay
+        # Sektör-bazlı korelasyon: correlation_data yoksa bile aynı sektör
+        # pozisyon yoğunluğu korelasyon riski işaretidir (basitleştirilmiş).
         sector = self.get_sector(ticker)
         same_sector = [
             p for p in positions

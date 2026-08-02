@@ -107,10 +107,14 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
             except Exception:
                 result[t] = {"price": None, "change_pct": None}
 
-    # Cache yaz
+    # Cache yaz — başarılı + negatif (None) sonuçlar. Negatif girişler kısa TTL
+    # (15s) ile tutulur: her 3s SSE polling'de aynı başarısız ticker yeniden çekilmesin (R1.2).
+    _NEG_TTL = 15
     for t, data in result.items():
         if data.get("price") is not None or data.get("change_pct") is not None:
             _price_cache[t] = (now, data)
+        else:
+            _price_cache[t] = (now - (_CACHE_TTL - _NEG_TTL), {"price": None, "change_pct": None, "_neg": True})
 
     return result
 

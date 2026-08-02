@@ -2,7 +2,6 @@
 Adil deger hesaplama motoru.
 Modeller: Graham Number, DCF, Peter Lynch, P/E karsilastirmasi, Ensemble.
 """
-import yfinance as yf
 import numpy as np
 
 
@@ -133,8 +132,8 @@ def ensemble_fair_value(values: list[dict], current_price: float) -> dict:
 
 def calculate_fair_value(ticker_str: str) -> dict:
     """Bir hisse icin tum modelleri calistir."""
-    t = yf.Ticker(ticker_str)
-    info = t.info or {}
+    from app.services.yf_utils import safe_ticker_info
+    info = safe_ticker_info(ticker_str) or {}
 
     price = info.get("currentPrice") or info.get("regularMarketPrice") or 0.0
     eps = info.get("trailingEps")
