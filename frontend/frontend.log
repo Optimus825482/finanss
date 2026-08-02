@@ -5,6 +5,4 @@ npm notice run next dev -p 3009
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 2.1s
- ○ Compiling /kripto ...
- ✓ Compiled /kripto in 1391ms (532 modules)
+ ✓ Ready in 2.2s

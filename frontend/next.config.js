@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
-const BACKEND_HOST = process.env.BACKEND_HOST || "localhost";
-const BACKEND_PORT = process.env.BACKEND_PORT || "8000";
+// Dev: local uvicorn (localhost:8000). Prod (Docker compose): backend servisi (backend:8012).
+// BACKEND_HOST/BACKEND_PORT env ile her zaman override edilebilir.
+const BACKEND_HOST = process.env.BACKEND_HOST || (isDev ? "localhost" : "backend");
+const BACKEND_PORT = process.env.BACKEND_PORT || (isDev ? "8000" : "8012");
 
 const nextConfig = {
   reactStrictMode: true,
