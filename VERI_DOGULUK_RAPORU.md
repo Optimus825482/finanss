@@ -5,9 +5,9 @@
 
 ---
 
-## 1. KRİTİK: Peter Lynch Fair Value formülü sistematik PEG sapması üretir
+## 1. ORTA: Peter Lynch formülü matematiksel tutarlı ama tasarım belirsiz + dokümantasyon yanıltıcı
 
-`backend/app/services/fair_value.py:22-35`
+`backend/app/services/fair_value.py:22-42`
 
 ```python
 def peter_lynch_fair_value(eps, eps_growth_pct, dividend_yield_pct=0):
@@ -16,25 +16,27 @@ def peter_lynch_fair_value(eps, eps_growth_pct, dividend_yield_pct=0):
     peg = (fair / eps) / growth if growth > 0 else 99   # = ratio/growth = 18/15 = 1.2
 ```
 
-**Sorun 1 — PEG hesaplaması:** `peg = (fair/eps)/growth = (growth+div)/growth = 1 + div/growth`. Temettü verimi PEG'e dahil edilmemeli. Standart PEG = PE / growth. Sonuç: temettü ödeyen hisselerde PEG her zaman >1 → **sistematik "pahalı" görünüm** (Lynch modeli temettüyü ayrı değerler, PEG'i bozmaz).
+**Doğrulama:** PEG = implied PE / growth = (fair/eps)/growth = ratio/growth = (growth+div)/growth. Fair değer zaten growth+yield çarpanlı olduğundan PEG tutarlı — **formül hatası YOK**, kod kendi içinde doğru.
 
-**Sorun 2 — Lynch'in temettü düzeltmesi:** Lynch'in orijinal PEG yaklaşımında temettü verimi growth'a eklenir (`PEG = PE / (growth + yield)` değil — Lynch "growth + yield" oranını kullanır ama **PE'yi böler**, fair value = EPS × (growth+yield) şeklinde değil). Bu implementasyonda `fair = eps × (growth+yield)` — bu, PE_implied = growth+yield yapar, yani fair value growth+yield çarpanlı. Bu, "fair = EPS × growth" (yaygın) veya "fair = EPS × (growth + yield)" (Lynch'e yakın) arasında belirsiz. **Formül dokümantasyonu + PEG mantığı çelişkili.**
+**Gerçek sorunlar (tasarım/netlik):**
+
+1. **Lynch'in orijinal modeliyle çelişki:** Lynch "PEG = PE / growth" der; temettü verimi değerlemeye ayrı katkıdır. Burada `fair = EPS × (growth + yield)` yapılıyor — temettü büyüme oranına *ekleniyor*. Lynch'in "growth + yield" kombinasyonu PEG paydasında olabilir (`PEG = PE/(growth+yield)`) ama burada **fair çarpanı** olarak kullanılıyor. İki yorum da literatürde var; hangisinin amaçlandığı belirsiz.
+
+2. **PEG'in `growth` yerine `ratio` ile bölünmesi:** PEG = (growth+div)/growth = 1 + div/growth. Temettü ödeyen hisselerde PEG her zaman 1'den büyük → **sistematik "pahalı" etiket** (div=3%, growth=15% → PEG=1.2). Oysa Lynch'in niyeti temettü ödeyen güçlü büyüme hissesini *ucuz* göstermekti. Fair value'da temettü dahil ediliyorsa PEG'de dahil edilmesi tutarlı; ama "PEG ≤ 1 undervalued" kararı bu kombinasyonla yanlış yorumlanır.
+
+3. **Docstring yanıltıcı:** "PEG ratio <= 1 is considered undervalued" — PEG'in ratio/growth olduğu docstring'de belirtilmiyor.
 
 **Somut örnek:**
-- EPS=2.00, growth=15%, div=3%, fiyat=30
-- Bu kod: fair = 2 × 18 = **36**, PEG = 18/15 = **1.2**
-- Beklenen (Lynch PE/growth): PE = 15, PEG = **1.0**, fair ≈ 30 (adil)
-- Sonuç: hisse "iskontolu" (%20 marj) görünür — oysa adil fiyatlandırılmış.
+- EPS=2.00, growth=15%, div=3%, fiyat=30 → fair = 2×18 = **36**, PEG = **1.2**
+- "PEG ≤ 1 undervalued" kuralına göre PEG=1.2 → pahalı; ama fair=36 > fiyat=30 → iskontolu. **İki sinyal çelişiyor** (kullanıcı kararını zorlaştırır).
 
-**Etki:** **Sinyal bozulması** — fair value ensemble'ında Lynch ağırlığı 0.20 (satır 114), "düşük değerli" yanlış pozitifleri artırır.
+**Etki:** Sinyal tutarsızlığı — fair value ensemble'ında Lynch ağırlığı 0.20; "değerleme" ile "PEG" aynı modelde çelişebilir.
 
-**Düzeltme:**
+**Düzeltme (tasarım kararı):**
 ```python
-# Lynch PEG-uyumlu: PEG = PE / (growth + yield); fair = EPS * (growth + yield) KABUL ediliyorsa
-# PEG'i ayrı hesapla, fair'ı etkilemesin:
-peg = eps_growth_pct and (ratio / eps_growth_pct) if eps_growth_pct else None
-# VEYA temettüyü PEG'den çıkar:
-peg = (fair / eps) / growth  # growth>0 ise; div'ı dahil etme
+# Seçenek A — Lynch klasik: fair = EPS * growth (temettü hariç), PEG = growth/growth = 1
+# Seçenek B — temettü dahil: fair = EPS * (growth + yield), PEG = ratio / growth, docstring'de net belirt
+# Öneri: Docstring'e PEG formülünü yaz + "temettü dahil PEG 1+div/growth'tur, yorumlarken dikkat" notu ekle
 ```
 
 ---

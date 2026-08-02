@@ -1,6 +1,6 @@
 # ORBIS FINAI — Mimari & Kod Kalitesi Analiz Raporu
 
-> Tamamlayıcı: ORBIS_AI_AGENT_ANALIZI.md (agent odaklı) · GÜVENLIK_RAPORU.md (11 bulgu, 2 kritik) · TEST_KAPSAM_RAPORU.md (19 dosya) · PERFORMANS_RAPORU.md (14 risk) · VERI_DOGULUK_RAPORU.md (1 kritik formül) · ONCEKI_OTURUM_BULGULARI.md
+> Tamamlayıcı: ORBIS_AI_AGENT_ANALIZI.md (agent odaklı) · GÜVENLIK_RAPORU.md (11 bulgu, 2 kritik) · TEST_KAPSAM_RAPORU.md (19 dosya) · PERFORMANS_RAPORU.md (14 risk) · VERI_DOGULUK_RAPORU.md (1 tasarım bulgusu) · ONCEKI_OTURUM_BULGULARI.md
 > Tarih: 2026-08-02 · Tüm repo tarandı: 90+ dosya, 28 servis, 17 router, 9 agent, 13 skill
 
 ---
@@ -193,9 +193,9 @@ return asyncio.run(self.think_and_act(db, exchanges))
 |---------|---------|----------|
 | 🔴 P1 | NewsAnalyst + BullBearResearcher Stage 2'ye ekle (skor kalitesi) | ORBIS_AI_AGENT_ANALIZI #1, M6 |
 | 🔴 P1 | Scheduler'ı tek kalıcı async loop'a taşı (create_task sessiz ölümü) | M3, R7.1 |
-| 🔴 P1 | **Peter Lynch fair value PEG düzelt (div yield PEG'i bozuyor)** | VERI_DOGULUK_RAPORU Bölüm 1 |
 | 🔴 P1 | **XGBoost günlük train gate (24 fit/CPU starvation)** | M10, R5.1 |
 | 🔴 P1 | **FERNET_KEY zorunlu; API_KEY boşsa prod fail** | GÜVENLIK_RAPORU S1/S4 |
+| 🟠 P2 | Peter Lynch docstring/PEG netliği (temettü dahil PEG yorumu) | VERI_DOGULUK_RAPORU Bölüm 1 |
 | 🟠 P2 | LLM JSON parse'ı skill_router'ın robust parse'ıyla birleştir | M4 |
 | 🟠 P2 | Para işlemleri testi: execute_buy/sell, balance, veto (coverage %22) | TEST_KAPSAM_RAPORU |
 | 🟠 P2 | autonomous_agent.py 1005 satırı böl | M2 |
