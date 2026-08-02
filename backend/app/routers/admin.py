@@ -304,6 +304,17 @@ def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None)
     )
     from app.services.balance_service import reset_balance, ensure_portfolio
 
+    # Scalper çalışıyorsa durdur — reset ile eşzamanlı tx yazmasın (FK ihlali + yarı-reset).
+    try:
+        from app.services.crypto_scalper import is_running as scalper_is_running
+        from app.services.crypto_scalper import stop as scalper_stop
+        if scalper_is_running():
+            scalper_stop()
+            import time
+            time.sleep(1.2)  # mevcut tick bitsin (SCAN_INTERVAL_S=1.0)
+    except Exception:
+        pass
+
     if portfolio_slug is not None:
         # Tek portföy sıfırla
         portfolio = ensure_portfolio(db, portfolio_slug)
