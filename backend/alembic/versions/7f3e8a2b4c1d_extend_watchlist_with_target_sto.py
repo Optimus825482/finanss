@@ -19,28 +19,36 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # alert_on_signal için server_default true — mevcut satırlar true kabul edilir
-    op.add_column(
-        "watchlist_items",
-        sa.Column("target_price", sa.Float(), nullable=True),
-    )
-    op.add_column(
-        "watchlist_items",
-        sa.Column("stop_price", sa.Float(), nullable=True),
-    )
-    op.add_column(
-        "watchlist_items",
-        sa.Column(
-            "alert_on_signal",
-            sa.Boolean(),
-            nullable=True,
-            server_default=sa.true(),
-        ),
-    )
-    op.add_column(
-        "watchlist_items",
-        sa.Column("last_signal", sa.String(length=50), nullable=True),
-    )
+    # Kolonlar model metadata'da mevcut (baseline create_all kurar); eski
+    # DB'lerde eksikse ekle (DuplicateColumn'u önle).
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    cols = {c["name"] for c in insp.get_columns("watchlist_items")}
+    if "target_price" not in cols:
+        op.add_column(
+            "watchlist_items",
+            sa.Column("target_price", sa.Float(), nullable=True),
+        )
+    if "stop_price" not in cols:
+        op.add_column(
+            "watchlist_items",
+            sa.Column("stop_price", sa.Float(), nullable=True),
+        )
+    if "alert_on_signal" not in cols:
+        op.add_column(
+            "watchlist_items",
+            sa.Column(
+                "alert_on_signal",
+                sa.Boolean(),
+                nullable=True,
+                server_default=sa.true(),
+            ),
+        )
+    if "last_signal" not in cols:
+        op.add_column(
+            "watchlist_items",
+            sa.Column("last_signal", sa.String(length=50), nullable=True),
+        )
 
 
 def downgrade() -> None:

@@ -16,12 +16,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('stock_picks', sa.Column('fair_value', sa.Float(), nullable=True))
-    op.add_column('stock_picks', sa.Column('margin_pct', sa.Float(), nullable=True))
-    op.add_column('stock_picks', sa.Column('valuation_assessment', sa.String(), nullable=True))
-    op.add_column('stock_picks', sa.Column('llm_reasoning', sa.Text(), nullable=True))
-    op.add_column('stock_picks', sa.Column('llm_target_price', sa.Float(), nullable=True))
-    op.add_column('stock_picks', sa.Column('llm_expected_return_pct', sa.Float(), nullable=True))
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    cols = {c["name"] for c in insp.get_columns("stock_picks")}
+    if "fair_value" not in cols:
+        op.add_column('stock_picks', sa.Column('fair_value', sa.Float(), nullable=True))
+    if "margin_pct" not in cols:
+        op.add_column('stock_picks', sa.Column('margin_pct', sa.Float(), nullable=True))
+    if "valuation_assessment" not in cols:
+        op.add_column('stock_picks', sa.Column('valuation_assessment', sa.String(), nullable=True))
+    if "llm_reasoning" not in cols:
+        op.add_column('stock_picks', sa.Column('llm_reasoning', sa.Text(), nullable=True))
+    if "llm_target_price" not in cols:
+        op.add_column('stock_picks', sa.Column('llm_target_price', sa.Float(), nullable=True))
+    if "llm_expected_return_pct" not in cols:
+        op.add_column('stock_picks', sa.Column('llm_expected_return_pct', sa.Float(), nullable=True))
 
 
 def downgrade() -> None:

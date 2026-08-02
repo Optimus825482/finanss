@@ -15,10 +15,17 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("stock_picks", sa.Column("rsi_14", sa.Float(), nullable=True))
-    op.add_column("stock_picks", sa.Column("volume_ratio", sa.Float(), nullable=True))
-    op.add_column("stock_picks", sa.Column("momentum_20d", sa.Float(), nullable=True))
-    op.add_column("stock_picks", sa.Column("technical_score", sa.Float(), nullable=True))
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    cols = {c["name"] for c in insp.get_columns("stock_picks")}
+    if "rsi_14" not in cols:
+        op.add_column("stock_picks", sa.Column("rsi_14", sa.Float(), nullable=True))
+    if "volume_ratio" not in cols:
+        op.add_column("stock_picks", sa.Column("volume_ratio", sa.Float(), nullable=True))
+    if "momentum_20d" not in cols:
+        op.add_column("stock_picks", sa.Column("momentum_20d", sa.Float(), nullable=True))
+    if "technical_score" not in cols:
+        op.add_column("stock_picks", sa.Column("technical_score", sa.Float(), nullable=True))
 
 
 def downgrade() -> None:

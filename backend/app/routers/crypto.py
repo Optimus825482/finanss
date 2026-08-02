@@ -80,3 +80,26 @@ async def api_scan(interval: str = Query("5m")):
     out = await CryptoAgent().run(candidates)
     out.sort(key=lambda c: c.get("composite_score", 50), reverse=True)
     return {"symbols_scanned": len(candidates), "candidates": out[:10]}
+
+
+# ── Scalper (24/7 otonom döngü) ──
+
+@router.post("/scalp/start")
+def api_scalp_start():
+    """Scalper döngüsünü başlat — idempotent."""
+    from app.services.crypto_scalper import start
+    return start()
+
+
+@router.post("/scalp/stop")
+def api_scalp_stop():
+    """Scalper döngüsünü durdur."""
+    from app.services.crypto_scalper import stop
+    return stop()
+
+
+@router.get("/scalp/status")
+def api_scalp_status():
+    """Scalper durumu + son tur bilgisi (frontend 1s polling)."""
+    from app.services.crypto_scalper import status
+    return status()

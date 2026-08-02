@@ -286,9 +286,16 @@ class AutonomousAgent:
             exchanges = self.portfolio_exchanges
         portfolio = self.get_portfolio(db)
 
-        # 0. Piyasa acik mi? Exchange tipini belirle
-        is_bist = "BIST" in (exchanges or [])
-        exchange_label = "BIST" if is_bist else "US"
+        # 0. Piyasa acik mi? Exchange tipini belirle.
+        # Kripto 7/24 — "US" etiketi crypto'yu geceleri/hafta sonu kapatıyordu.
+        exchanges = exchanges or []
+        if any(e in ("CRYPTO", "BINANCE") for e in exchanges):
+            exchange_label = "CRYPTO"
+        elif "BIST" in exchanges:
+            exchange_label = "BIST"
+        else:
+            exchange_label = "US"
+        is_bist = exchange_label == "BIST"
         market_open = market_is_open(exchange_label)
 
         # -- HMM regime update (daily) --

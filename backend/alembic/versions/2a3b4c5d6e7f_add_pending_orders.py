@@ -17,7 +17,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    conn = op.get_bind()
+    has = conn.execute(
+        sa.text("SELECT to_regclass('public.pending_orders')")
+    ).scalar() is not None
+    if not has:
+        op.create_table(
         'pending_orders',
         sa.Column('id', sa.Integer(), primary_key=True, index=True),
         sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id'), index=True),
@@ -34,8 +39,12 @@ def upgrade() -> None:
         sa.Column('executed_at', sa.DateTime(), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
     )
-    op.create_index('ix_pending_orders_status', 'pending_orders', ['status'])
-    op.create_index('ix_pending_orders_portfolio', 'pending_orders', ['portfolio_id'])
+    insp = sa.inspect(conn)
+    indexes = {i["name"] for i in insp.get_indexes("pending_orders")}
+    if "ix_pending_orders_status" not in indexes:
+        op.create_index('ix_pending_orders_status', 'pending_orders', ['status'])
+    if "ix_pending_orders_portfolio" not in indexes:
+        op.create_index('ix_pending_orders_portfolio', 'pending_orders', ['portfolio_id'])
 
 
 def downgrade() -> None:

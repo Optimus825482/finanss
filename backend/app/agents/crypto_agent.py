@@ -5,13 +5,17 @@ temel analiz yerine M5 teknik odak (kriptoda bilanço yok). Aynı BaseAgent
 sözleşmesine uyar (orchestrator status wiring).
 
 Sinyal bileşenleri (0-100 skor):
-- Momentum (5m/15m/1h): son 3 mum eğilimi
-- RSI (14, 5m): aşırı alım/satım
+- Momentum (5m/15m/1h): son 3 mum eğilimi — çok zaman dilimli (dinamik)
+- RSI (14): aşırı alım/satım — zaman dilimine göre dinamik skor
 - Hacim anomali: son mum hacmi vs 20-mum ortalaması
 - Volatilite: ATR bazlı (kısa vade)
 
-Composite: momentum 0.4 + RSI 0.3 + volume 0.2 + vol_ceza 0.1
+Composite: momentum 0.4 + RSI 0.3 + volume 0.2 (dinamik ağırlık)
 Yüksek volatilite ceza: skoru düşürür (risk yönetimi).
+
+Zaman dilimleri: momentum 5m/15m/1h üç dilimden beslenir; RSI 5m bazlı.
+Dinamiklik: her dilimde RSI aşırı bölgeye girdikçe momentum ağırlığı artar
+(trend yakalama), RSI nötrleştikçe RSI ağırlığı artar (mean-reversion).
 """
 import asyncio
 import logging
@@ -27,6 +31,8 @@ logger = logging.getLogger(__name__)
 RSI_PERIOD = 14
 VOL_WINDOW = 20
 MOM_WINDOW = 3
+# Momentum için kullanılacak zaman dilimleri (5m/15m/1h) — dinamik ağırlık
+MOM_TIMEFRAMES = ["5m", "15m", "1h"]
 
 
 def _rsi(closes: np.ndarray, period: int = RSI_PERIOD) -> float:
@@ -44,11 +50,11 @@ def _rsi(closes: np.ndarray, period: int = RSI_PERIOD) -> float:
     return round(100.0 - (100.0 / (1.0 + rs)), 1)
 
 
-def _score_momentum(closes: np.ndarray) -> float:
-    """Son MOM_WINDOW mum eğilimi → 0-100 skor."""
-    if len(closes) < MOM_WINDOW + 1:
+def _score_momentum(closes: np.ndarray, mom_window: int = MOM_WINDOW) -> float:
+    """Son `mom_window` mum eğilimi → 0-100 skor."""
+    if len(closes) < mom_window + 1:
         return 50.0
-    rets = np.diff(closes[-MOM_WINDOW - 1:]) / closes[-MOM_WINDOW - 1:-1]
+    rets = np.diff(closes[-mom_window - 1:]) / closes[-mom_window - 1:-1]
     avg = float(np.mean(rets))
     # %0.5 mum başına trend = güçlü; %-0.5 = güçlü düşüş
     return round(float(np.clip(50 + avg * 10000, 0, 100)), 1)
@@ -84,12 +90,19 @@ def _volatility_penalty(closes: np.ndarray) -> float:
 
 
 def compute_crypto_signal(klines: list[dict]) -> dict:
-    """M5 klines → sinyal dict. Pure fonksiyon (test edilebilir)."""
+    """M5 klines → sinyal dict. Pure fonksiyon (test edilebilir).
+
+    Momentum tek dilimden (verilen klines); dinamik RSI/momentum ağırlığı:
+    RSI aşırı bölgedeyken trend yakala (momentum ağır), nötrken
+    mean-reversion (RSI ağır). Çok zaman dilimli sürüm için
+    `compute_crypto_signal_mt` kullan.
+    """
     if not klines or len(klines) < 20:
         return {
             "composite": 50.0, "momentum_score": 50.0, "rsi": 50.0,
             "volume_score": 50.0, "volatility_penalty": 0.0,
             "signal": "neutral", "data_missing": True,
+            "w_momentum": 0.4, "w_rsi": 0.35,
         }
     closes = np.array([k["close"] for k in klines], dtype=float)
     volumes = np.array([k["volume"] for k in klines], dtype=float)
@@ -99,7 +112,9 @@ def compute_crypto_signal(klines: list[dict]) -> dict:
     vol_score = _score_volume(volumes)
     penalty = _volatility_penalty(closes)
 
-    composite = round(mom * 0.4 + rsi * 0.3 + vol_score * 0.2 + (100 - rsi * 0) * 0.0, 1)
+    w_mom, w_rsi, w_vol = _dynamic_weights(rsi)
+
+    composite = round(mom * w_mom + rsi * w_rsi + vol_score * w_vol, 1)
     composite = round(composite * (1 - penalty), 1)  # volatilite cezası
     composite = max(0.0, min(100.0, composite))
 
@@ -118,6 +133,98 @@ def compute_crypto_signal(klines: list[dict]) -> dict:
         "volatility_penalty": penalty,
         "signal": signal,
         "data_missing": False,
+        "w_momentum": round(w_mom, 2), "w_rsi": round(w_rsi, 2),
+    }
+
+
+def _dynamic_weights(rsi: float) -> tuple[float, float, float]:
+    """RSI durumuna göre momentum/RSI/hacim ağırlıkları (toplam 1.0)."""
+    w_mom, w_rsi, w_vol = 0.40, 0.35, 0.25
+    if rsi >= 68 or rsi <= 32:      # aşırı bölge → trend yakala
+        w_mom += 0.15
+        w_rsi -= 0.15
+    elif 45 <= rsi <= 55:           # nötr → mean-reversion
+        w_mom -= 0.10
+        w_rsi += 0.10
+    return w_mom, w_rsi, w_vol
+
+
+def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]]) -> dict:
+    """Çok zaman dilimli sinyal — momentum 5m/15m/1h ağırlıklı birleşik.
+
+    `klines_by_tf`: {"5m": [...], "15m": [...], "1h": [...]}
+    Hangi dilim yoksa/eksikse momentum o dilimden 50 (nötr) sayılır.
+
+    Dinamik ağırlık: dilimler trend yönünde hizalıysa (≥2 dilim aynı yönde)
+    üst dilimlerin ağırlığı artar (trend teyidi). RSI aşırı/nötr durumuna
+    göre momentum/RSI ağırlığı kayar.
+    """
+    tf_weights = {"5m": 0.5, "15m": 0.3, "1h": 0.2}
+    mom_by_tf: dict[str, float] = {}
+    closes_5m = None
+    volumes_5m = None
+    for tf, klines in klines_by_tf.items():
+        if not klines or len(klines) < 4:
+            mom_by_tf[tf] = 50.0
+            continue
+        closes = np.array([k["close"] for k in klines], dtype=float)
+        mom_by_tf[tf] = _score_momentum(closes)
+        if tf == "5m":
+            closes_5m = closes
+            volumes_5m = np.array([k["volume"] for k in klines], dtype=float)
+
+    # Trend hizalaması: ≥2 dilim aynı yönde → üst dilimlere ağırlık kay
+    directions = {tf: 1 if s >= 55 else (-1 if s <= 45 else 0)
+                  for tf, s in mom_by_tf.items()}
+    bullish_n = sum(1 for d in directions.values() if d == 1)
+    bearish_n = sum(1 for d in directions.values() if d == -1)
+    aligned = bullish_n >= 2 or bearish_n >= 2
+    if aligned:
+        tf_weights = {"5m": 0.35, "15m": 0.35, "1h": 0.30}
+
+    mom = round(sum(tf_weights[tf] * mom_by_tf[tf] for tf in tf_weights), 1)
+
+    if closes_5m is None or volumes_5m is None or len(closes_5m) < 20:
+        return {
+            "composite": 50.0, "momentum_score": mom,
+            "momentum_5m": mom_by_tf.get("5m", 50.0),
+            "momentum_15m": mom_by_tf.get("15m", 50.0),
+            "momentum_1h": mom_by_tf.get("1h", 50.0),
+            "rsi": 50.0, "volume_score": 50.0, "volatility_penalty": 0.0,
+            "signal": "neutral", "data_missing": True,
+            "w_momentum": 0.4, "w_rsi": 0.35, "tf_aligned": aligned,
+        }
+
+    rsi = _rsi(closes_5m)
+    vol_score = _score_volume(volumes_5m)
+    penalty = _volatility_penalty(closes_5m)
+
+    w_mom, w_rsi, w_vol = _dynamic_weights(rsi)
+
+    composite = round(mom * w_mom + rsi * w_rsi + vol_score * w_vol, 1)
+    composite = round(composite * (1 - penalty), 1)
+    composite = max(0.0, min(100.0, composite))
+
+    if composite >= 65:
+        signal = "bullish"
+    elif composite <= 35:
+        signal = "bearish"
+    else:
+        signal = "neutral"
+
+    return {
+        "composite": composite,
+        "momentum_score": mom,
+        "momentum_5m": mom_by_tf.get("5m", 50.0),
+        "momentum_15m": mom_by_tf.get("15m", 50.0),
+        "momentum_1h": mom_by_tf.get("1h", 50.0),
+        "rsi": rsi,
+        "volume_score": vol_score,
+        "volatility_penalty": penalty,
+        "signal": signal,
+        "data_missing": False,
+        "w_momentum": round(w_mom, 2), "w_rsi": round(w_rsi, 2),
+        "tf_aligned": aligned,
     }
 
 
@@ -139,16 +246,21 @@ class CryptoAgent(BaseAgent):
             raise
 
     def _analyze(self, candidates: list[dict], interval: str) -> list[dict]:
+        # Çok zaman dilimli: verilen interval + üst dilimler
+        tfs = ["5m", "15m", "1h"] if interval in ("", "5m") else [interval]
         for c in candidates:
             symbol = c["ticker"]
-            klines = get_klines(symbol, interval, limit=100)
-            if not klines:
+            klines_by_tf: dict[str, list[dict]] = {}
+            for tf in tfs:
+                klines_by_tf[tf] = get_klines(symbol, tf, limit=100) or []
+            if not any(klines_by_tf.values()):
                 c["composite_score"] = 50.0
                 c["crypto_signal"] = "neutral"
                 c["data_missing"] = True
                 continue
 
-            sig = compute_crypto_signal(klines)
+            sig = compute_crypto_signal_mt(klines_by_tf) if len(tfs) > 1 \
+                else compute_crypto_signal(klines_by_tf[interval])
             c["composite_score"] = sig["composite"]
             c["crypto_signal"] = sig["signal"]
             c["rsi_14"] = sig["rsi"]
@@ -156,9 +268,9 @@ class CryptoAgent(BaseAgent):
             c["volume_score"] = sig["volume_score"]
             c["volatility_penalty"] = sig["volatility_penalty"]
             c["data_missing"] = sig["data_missing"]
-            c["price"] = float(klines[-1]["close"])
+            c["price"] = float((klines_by_tf[tfs[0]] or [{}])[-1].get("close", c.get("price", 0)))
             # risk_score: düşük sinyal + yüksek volatilite = riskli
             c["risk_score"] = round(100 - sig["composite"], 1)
-            c["history"] = klines  # M5 mumları (rapor/grafik için)
+            c["history"] = klines_by_tf[tfs[0]]  # ana dilim mumları (grafik için)
 
         return candidates
