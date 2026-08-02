@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
-const BACKEND_HOST = isDev ? "localhost" : "backend";
+const BACKEND_HOST = process.env.BACKEND_HOST || (isDev ? "localhost" : "backend");
+const BACKEND_PORT = process.env.BACKEND_PORT || "8000";
 
 const nextConfig = {
   reactStrictMode: true,
@@ -10,7 +11,7 @@ const nextConfig = {
         source: "/api/:path*",
         // local dev → localhost:8012; Docker → backend:8012 (compose network)
         // Server-side rewrites only — browser calls use NEXT_PUBLIC_API_URL directly.
-        destination: `http://${BACKEND_HOST}:8012/api/:path*`,
+        destination: `http://${BACKEND_HOST}:${BACKEND_PORT}/api/:path*`,
       },
     ];
   },

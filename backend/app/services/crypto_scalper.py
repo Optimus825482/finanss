@@ -1,7 +1,7 @@
-"""Crypto Scalper — 24/7 otonom scalping döngüsü (kripto).
+"""Crypto Scalper - 24/7 otonom scalping döngüsü (kripto).
 
 Modül seviyesinde tek `asyncio.Task` + `asyncio.Event`:
-- `start()`: idempotent — zaten çalışıyorsa aynı görevi döndürür.
+- `start()`: idempotent - zaten çalışıyorsa aynı görevi döndürür.
 - `stop()`: event set → döngü bir sonraki tick'te kapanır.
 - `status()`: durum + son tur bilgisi (frontend 1s polling).
 
@@ -9,11 +9,12 @@ Her tur:
 1. Universe tara (get_price + CryptoAgent MT sinyali).
 2. Açık pozisyonlara stop / take-profit / zayıf sinyal çıkışı.
 3. Yeni sinyal (composite ≥ eşik) → sabit bütçe ile alım
-   (AutonomousAgent.execute_buy — bakiye + karar loglama).
-4. 1 saniye bekle. Kripto 7/24 — piyasa saati kontrolü yok.
+   (AutonomousAgent.execute_buy - bakiye + karar loglama).
+4. 1 saniye bekle. Kripto 7/24 - piyasa saati kontrolü yok.
 """
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime
 
@@ -28,14 +29,14 @@ logger = logging.getLogger(__name__)
 SCAN_INTERVAL_S = 1.0
 BUY_THRESHOLD = 65.0       # composite ≥ bu → alım
 STOP_LOSS_PCT = 0.015      # -%1.5 → stop
-TAKE_PROFIT_PCT = 0.025    # +%2.5 → kâr al
+TAKE_PROFIT_PCT = 0.025    # +%2.5 → k-r al
 MAX_OPEN_POSITIONS = 3
 POSITION_USD = 25.0        # pozisyon başına bütçe (USDT)
 MIN_SIGNAL_DROP = 55.0     # açık poz: sinyal < bu → çık
 
 # ── Modül state ──
-_task: asyncio.Task | None = None
 _stop_event: asyncio.Event | None = None
+_last_signals: dict[str, dict] | None = None  # son tarama sonucu (cards için)
 _state: dict = {
     "running": False,
     "started_at": None,
@@ -60,22 +61,30 @@ def is_running() -> bool:
 
 
 def cards() -> dict:
-    """Kural bazlı AL/HOLD/SELL kartları — frontend 1s polling.
+    """Kural bazlı AL/HOLD/SELL kartları - frontend 1s polling.
 
-    Her sembol için: canlı fiyat + MT sinyal + açık pozisyon durumu.
+    Sinyaller scalper döngüsünün son taramasından okunur (`_last_signals`);
+    böylece her poll Binance'e tekrar vurmaz, scalper ile çakışmaz.
+    Scalper kapalıysa (veya daha ilk tarama yapılmadıysa) fallback olarak
+    kendi taramasını yapar.
+
     Kural sonucu doğrudan scalper parametrelerinden türetilir:
       - Açık poz: STOP-LOSS / TAKE-PROFIT / sinyal<MIN_SIGNAL_DROP → SELL (nedenli)
       - Açık poz: diğer → HOLD
       - Açık yok: composite≥BUY_THRESHOLD → BUY (AL adayı)
       - Açık yok: diğer → BEKLE
     """
+    global _last_signals
     db = SessionLocal()
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="crypto")
         portfolio_id = agent._ensure_portfolio_id(db)
         open_pos = {p.ticker: p for p in _open_positions(db, portfolio_id)}
-        signals = _crypto_signals(CRYPTO_UNIVERSE)
+        signals = _last_signals
+        if not signals:
+            signals = _crypto_signals(CRYPTO_UNIVERSE)
+            _last_signals = signals
         cards_out: list[dict] = []
         for sym, sig in signals.items():
             price = sig.get("price") or 0
@@ -92,13 +101,13 @@ def cards() -> dict:
                 elif composite < MIN_SIGNAL_DROP:
                     action, rule = "sell", f"sinyal zayıf (composite {composite:.0f})"
                 else:
-                    action, rule = "hold", f"HOLD — stop {STOP_LOSS_PCT*100:.1f}% / TP {TAKE_PROFIT_PCT*100:.1f}%"
+                    action, rule = "hold", f"HOLD - stop {STOP_LOSS_PCT*100:.1f}% / TP {TAKE_PROFIT_PCT*100:.1f}%"
             elif pos:
-                action, rule = "hold", "HOLD — pozisyon var"
+                action, rule = "hold", "HOLD - pozisyon var"
             elif composite >= BUY_THRESHOLD:
-                action, rule = "buy", f"AL adayı — composite {composite:.0f} ≥ {BUY_THRESHOLD:.0f}"
+                action, rule = "buy", f"AL adayı - composite {composite:.0f} ≥ {BUY_THRESHOLD:.0f}"
             else:
-                action, rule = "wait", f"bekle — composite {composite:.0f} < {BUY_THRESHOLD:.0f}"
+                action, rule = "wait", f"bekle - composite {composite:.0f} < {BUY_THRESHOLD:.0f}"
 
             card = {
                 "ticker": sym,
@@ -121,7 +130,7 @@ def cards() -> dict:
                 })
             else:
                 card.update({"position_open": False, "position_qty": 0, "entry_price": None, "pnl_pct": None})
-            # numpy skalerleri JSON'a gitmez — normalize
+            # numpy skalerleri JSON'a gitmez - normalize
             for k, v in card.items():
                 if isinstance(v, (float, int)) and not isinstance(v, bool):
                     card[k] = float(v)
@@ -147,14 +156,30 @@ def cards() -> dict:
 
 
 def start() -> dict:
-    """Scalper döngüsünü başlat — idempotent."""
-    global _task, _stop_event
-    if is_running() and _task and not _task.done():
+    """Scalper döngüsünü başlat - idempotent.
+
+    FastAPI senkron endpoint'i thread pool'da çalıştığı için burada
+    event loop yoktur; `asyncio.create_task` doğrudan çalışmaz.
+    Kendi event loop'lu arka plan thread'i açılır.
+    """
+    global _stop_event
+    if is_running():
         return status()
     _stop_event = asyncio.Event()
-    _set_state(running=True, started_at=datetime.now().isoformat(),
-               stopped_at=None)
-    _task = asyncio.create_task(_loop())
+    _set_state(running=True, started_at=datetime.now().isoformat(), stopped_at=None)
+
+    def _run_loop():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(_loop())
+        except Exception:
+            logger.exception("crypto_scalper döngü hatası")
+        finally:
+            _set_state(running=False, stopped_at=datetime.now().isoformat())
+            logger.info("crypto_scalper: thread kapandı")
+
+    threading.Thread(target=_run_loop, name="crypto-scalper", daemon=True).start()
     logger.info("crypto_scalper: başlatıldı")
     return status()
 
@@ -183,7 +208,7 @@ def _crypto_signals(symbols: list[str]) -> dict[str, dict]:
         if not any(klines_by_tf.values()):
             continue
         sig = compute_crypto_signal_mt(klines_by_tf)
-        # numpy skalerleri JSON'a gitmez — float'a normalize et
+        # numpy skalerleri JSON'a gitmez - float'a normalize et
         sig = {k: (float(v) if isinstance(v, (float, int)) and not isinstance(v, bool) else v)
                for k, v in sig.items()}
         out[sym] = {"price": float(px["price"]), **sig}
@@ -219,6 +244,7 @@ async def _loop():
 
 def _tick(db):
     """Tek tur: sinyaller → açık poz yönetimi → yeni alımlar."""
+    global _last_signals
     from app.services.autonomous_agent import AutonomousAgent
     round_start = time.time()
 
@@ -227,6 +253,7 @@ def _tick(db):
     portfolio_before = agent.get_portfolio(db)
 
     signals = _crypto_signals(CRYPTO_UNIVERSE)
+    _last_signals = signals  # cards() aynı veriyi kullansın
     if not signals:
         _set_state(last_round_at=datetime.now().isoformat(),
                    last_round={"ok": False, "error": "fiyat alınamadı",

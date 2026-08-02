@@ -1,0 +1,11 @@
+npm notice run orbis-finai-dashboard@1.0.0 dev
+npm notice run next dev -p 3009
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3009
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ○ Compiling /kripto ...
+ ✓ Compiled /kripto in 816ms (532 modules)
+ GET /kripto 200 in 1055ms
