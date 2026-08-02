@@ -36,6 +36,7 @@ MIN_SIGNAL_DROP = 55.0     # açık poz: sinyal < bu → çık
 
 # ── Modül state ──
 _stop_event: asyncio.Event | None = None
+_thread: threading.Thread | None = None          # stop() thread'in bitmesini beklesin
 _last_signals: dict[str, dict] | None = None  # son tarama sonucu (cards için)
 _state: dict = {
     "running": False,
@@ -162,7 +163,7 @@ def start() -> dict:
     event loop yoktur; `asyncio.create_task` doğrudan çalışmaz.
     Kendi event loop'lu arka plan thread'i açılır.
     """
-    global _stop_event
+    global _stop_event, _thread
     if is_running():
         return status()
     _stop_event = asyncio.Event()
@@ -179,16 +180,23 @@ def start() -> dict:
             _set_state(running=False, stopped_at=datetime.now().isoformat())
             logger.info("crypto_scalper: thread kapandı")
 
-    threading.Thread(target=_run_loop, name="crypto-scalper", daemon=True).start()
+    _thread = threading.Thread(target=_run_loop, name="crypto-scalper", daemon=True)
+    _thread.start()
     logger.info("crypto_scalper: başlatıldı")
     return status()
 
 
-def stop() -> dict:
-    """Scalper döngüsünü durdur (mevcut tur biter)."""
-    global _stop_event
+def stop(timeout: float = 10.0) -> dict:
+    """Scalper döngüsünü durdur (mevcut tur biter) ve thread'in bitmesini bekle.
+
+    `timeout` — in-flight `_tick` 15 sembol × 3 timeframe tarayabildiği için
+    makul bir üst sınır verir; thread bitmezse daemon olduğu için süreçle gider.
+    """
+    global _stop_event, _thread
     if is_running() and _stop_event is not None:
         _stop_event.set()
+    if _thread is not None and _thread.is_alive():
+        _thread.join(timeout)
     return status()
 
 
