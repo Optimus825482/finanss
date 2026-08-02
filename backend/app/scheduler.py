@@ -56,8 +56,32 @@ def _run_pipeline_sync():
         logger.error(f"Zamanlanmis pipeline calistirmasi basarisiz: {e}")
 
 
+def _scraping_enabled(slug: Optional[str] = None) -> bool:
+    """Otonom scraping açık mı? SystemSettings'ten (varsayılan açık).
+
+    slug verilirse ("bist"|"us"|"crypto") o portföyün toggle'ına bakar;
+    global 'scraping_enabled' kapalıysa her şey durur.
+    """
+    try:
+        from app.database import SessionLocal
+        from app.services.admin_service import get_setting
+        db = SessionLocal()
+        try:
+            if get_setting(db, "scraping_enabled", "1") == "0":
+                return False
+            if slug and get_setting(db, f"scraping_{slug}", "1") == "0":
+                return False
+            return True
+        finally:
+            db.close()
+    except Exception:
+        return True  # DB hatası → varsayılan açık (güvenli taraf)
+
+
 def _run_autonomous_bist_sync():
     """BIST portföyü için otonom ajan periyodik çalışması."""
+    if not _scraping_enabled("bist"):
+        return
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="bist")
@@ -70,6 +94,8 @@ def _run_autonomous_bist_sync():
 
 def _run_autonomous_us_sync():
     """US portföyü (NASDAQ+DJIA) için otonom ajan periyodik çalışması."""
+    if not _scraping_enabled("us"):
+        return
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="us")
@@ -85,6 +111,8 @@ def _run_autonomous_crypto_sync():
 
     Kripto 7/24 açık — 15dk'da bir M5 tarama (hisse 30dk'ya göre daha sık).
     """
+    if not _scraping_enabled("crypto"):
+        return
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="crypto")

@@ -290,13 +290,15 @@ def api_test_model(model_id: int, db: Session = Depends(get_db)):
 # -- Sistem Sıfırlama --
 
 def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None) -> dict:
-    """Portföy + kararlar + bakiye transactions sil, bakiyeyi $10000'a sıfırla.
+    """Portföy + kararlar + bakiye transactions sil, bakiyeyi sıfırla.
 
-    portfolio_slug verilirse ("bist"|"us") sadece o portföyü sıfırla.
+    portfolio_slug verilirse ("bist"|"us"|"crypto") sadece o portföyü sıfırla.
     None ise tüm portföyleri sıfırla (legacy).
 
     Sıralama FK güvenliği için: balance_transactions → portfolio_positions → trading_decisions.
+    Başlangıç bakiyesi PORTFOLIOS config'inden alınır (bist: 50k, us: 10k, crypto: 5k).
     """
+    from app.config import PORTFOLIOS
     from app.models import (
         PortfolioPosition, TradingDecision, BalanceTransaction, VirtualBalance, Portfolio,
     )
@@ -306,6 +308,7 @@ def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None)
         # Tek portföy sıfırla
         portfolio = ensure_portfolio(db, portfolio_slug)
         portfolio_id = portfolio.id
+        starting_cash = PORTFOLIOS.get(portfolio_slug, {}).get("cash", 10_000.0)
         counts = {
             "balance_transactions": db.query(BalanceTransaction).filter(
                 BalanceTransaction.portfolio_id == portfolio_id
@@ -326,14 +329,14 @@ def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None)
         db.query(TradingDecision).filter(
             TradingDecision.portfolio_id == portfolio_id
         ).delete(synchronize_session=False)
-        reset_balance(db, portfolio_id, starting_cash=10_000.0)
+        reset_balance(db, portfolio_id, starting_cash=starting_cash)
         db.commit()
         return {
             "portfolio_slug": portfolio_slug,
             "portfolio_id": portfolio_id,
             "deleted": counts,
             "balance_cash": portfolio.cash,
-            "balance_starting": 10_000.0,
+            "balance_starting": starting_cash,
         }
 
     # Tüm portföyleri sıfırla (legacy — portfolio_id None olanlar dahil)
@@ -395,14 +398,70 @@ def api_reset_portfolio(
     portfolio_slug: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Portföyü sıfırla: pozisyonlar + kararlar + transactions silinir, bakiye $10.000'a ayarlanır.
+    """Portföyü sıfırla: pozisyonlar + kararlar + transactions silinir, bakiye config'ten.
 
-    portfolio_slug query parametresi ("bist" | "us") verilirse sadece o portföyü sıfırla.
+    portfolio_slug query parametresi ("bist" | "us" | "crypto") verilirse sadece o portföyü sıfırla.
     Verilmezse tüm portföyleri sıfırla.
 
     Destructive — geri alınamaz. Frontend onay dialogu göstermeli.
     """
     return _reset_portfolio_internal(db, portfolio_slug=portfolio_slug)
+
+
+@router.post("/balance/set")
+def api_set_balance(
+    portfolio_slug: str = "bist",
+    amount: float = 10_000.0,
+    db: Session = Depends(get_db),
+):
+    """Portföy başlangıç bakiyesini ayarla (pozisyonları/kararları silmeden).
+
+    Ayarlar sayfasından "başlangıç bakiyesi set et" için.
+    """
+    from app.services.balance_service import ensure_portfolio
+
+    if amount < 0:
+        return {"ok": False, "error": "Bakiye negatif olamaz"}
+    p = ensure_portfolio(db, portfolio_slug)
+    p.cash = round(float(amount), 2)
+    p.updated_at = now_istanbul()
+    db.commit()
+    return {"ok": True, "portfolio_slug": portfolio_slug, "balance_cash": p.cash}
+
+
+@router.get("/scraping/status")
+def api_scraping_status(db: Session = Depends(get_db)):
+    """Otonom scraping aktif mi (scheduler job'ları + per-portfolio toggle)."""
+    from app.services.admin_service import get_setting
+    enabled = get_setting(db, "scraping_enabled", "1") != "0"
+    bist = get_setting(db, "scraping_bist", "1") != "0"
+    us = get_setting(db, "scraping_us", "1") != "0"
+    crypto = get_setting(db, "scraping_crypto", "1") != "0"
+    return {
+        "enabled": enabled, "bist": bist, "us": us, "crypto": crypto,
+    }
+
+
+@router.post("/scraping/toggle")
+def api_scraping_toggle(
+    portfolio_slug: Optional[str] = None,
+    enabled: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Otonom scraping'i aç/kapat.
+
+    portfolio_slug ("bist"|"us"|"crypto") verilirse sadece o portföyün job'ı.
+    None ise tümünü aç/kapat (global).
+    """
+    from app.services.admin_service import set_setting
+
+    if portfolio_slug is None:
+        set_setting(db, "scraping_enabled", "1" if enabled else "0",
+                    "Global otonom scraping aç/kapat")
+    else:
+        set_setting(db, f"scraping_{portfolio_slug}", "1" if enabled else "0",
+                    f"{portfolio_slug} otonom scraping aç/kapat")
+    return {"ok": True, "portfolio_slug": portfolio_slug, "enabled": enabled}
 
 
 @router.post("/reset/reports")

@@ -23,6 +23,7 @@ interface Model {
   provider_name: string;
 }
 
+// fallow-ignore-next-line complexity
 export default function AyarlarPage() {
   const [tab, setTab] = useState<"providers" | "translation" | "prediction" | "vlm" | "rumor" | "system">("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -32,7 +33,38 @@ export default function AyarlarPage() {
   const [testLoading, setTestLoading] = useState<Record<number, boolean>>({});
   const [resetLoading, setResetLoading] = useState<"" | "portfolio" | "reports" | "all">("");
   const [resetResult, setResetResult] = useState<string | null>(null);
-  const [resetPortfolioSlug, setResetPortfolioSlug] = useState<"bist" | "us" | "all">("all");
+  const [resetPortfolioSlug, setResetPortfolioSlug] = useState<"bist" | "us" | "crypto" | "all">("all");
+
+  // ── Bakiye set + scraping toggle ──
+  const [balanceSlug, setBalanceSlug] = useState<"bist" | "us" | "crypto">("crypto");
+  const [balanceAmount, setBalanceAmount] = useState<string>("5000");
+  const [balanceMsg, setBalanceMsg] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [scraping, setScraping] = useState<{ enabled: boolean; bist: boolean; us: boolean; crypto: boolean } | null>(null);
+
+  const loadScraping = async () => {
+    try { setScraping(await api.scrapingStatus()); } catch { /* */ }
+  };
+
+  // fallow-ignore-next-line complexity
+  const handleSetBalance = async () => {
+    const amt = parseFloat(balanceAmount);
+    if (isNaN(amt) || amt < 0) { setBalanceMsg("Geçersiz miktar"); return; }
+    setBalanceLoading(true); setBalanceMsg(null);
+    try {
+      const r = await api.setBalance(balanceSlug, amt);
+      setBalanceMsg(`✓ ${balanceSlug.toUpperCase()} bakiyesi $${r.balance_cash.toLocaleString()} olarak ayarlandı`);
+    } catch (e) {
+      setBalanceMsg(`✗ ${e instanceof Error ? e.message : "hata"}`);
+    } finally { setBalanceLoading(false); }
+  };
+
+  const toggleScraping = async (slug: string | null, current: boolean) => {
+    try {
+      await api.scrapingToggle(slug, !current);
+      await loadScraping();
+    } catch { /* */ }
+  };
 
   const loadProviders = async () => {
     const res = await apiFetch("/api/admin/providers");
@@ -44,7 +76,7 @@ export default function AyarlarPage() {
     if (res.ok) setModels(await res.json());
   };
 
-  useEffect(() => { loadProviders(); loadModels(); }, []);
+  useEffect(() => { loadProviders(); loadModels(); loadScraping(); }, []);
 
   const addProvider = async (data: { name: string; slug: string; base_url: string; api_key: string }) => {
     await apiFetch("/api/admin/providers", {
@@ -249,13 +281,105 @@ export default function AyarlarPage() {
             </div>
           )}
 
+          {/* ── OTONOM SCRAPING AKTİF/PASİF ── */}
+          <div className="rounded-sm px-4 py-4" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-text)" }}>
+              OTONOM SCRAPING
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Her portföyün otonom tarama ajanı ayrı ayrı açılıp kapatılabilir (BIST 30dk · US 30dk · Kripto 15dk 7/24).
+            </p>
+            {scraping ? (
+              <div className="flex flex-col gap-2">
+                {/* Global */}
+                <div className="flex items-center justify-between py-2" style={{ borderTop: borderStyle.border }}>
+                  <span className="font-mono text-xs" style={{ color: "var(--term-text)" }}>GLOBAL</span>
+                  <button
+                    onClick={() => toggleScraping(null, scraping.enabled)}
+                    className="font-mono text-[11px] px-3 py-1 rounded-sm transition-none"
+                    style={{
+                      border: `1px solid ${scraping.enabled ? "var(--term-green)" : "var(--term-red)"}`,
+                      color: scraping.enabled ? "var(--term-green)" : "var(--term-red)",
+                    }}
+                  >
+                    {scraping.enabled ? "● AKTİF" : "○ PASİF"}
+                  </button>
+                </div>
+                {([["bist", "BIST"], ["us", "US (NASDAQ+DJIA)"], ["crypto", "KRİPTO (BINANCE)"]] as const).map(([slug, label]) => (
+                  <div key={slug} className="flex items-center justify-between py-2" style={{ borderTop: borderStyle.border }}>
+                    <span className="font-mono text-xs" style={{ color: "var(--term-text)" }}>{label}</span>
+                    <button
+                      onClick={() => toggleScraping(slug, scraping[slug])}
+                      className="font-mono text-[11px] px-3 py-1 rounded-sm transition-none"
+                      style={{
+                        border: `1px solid ${scraping[slug] ? "var(--term-green)" : "var(--term-red)"}`,
+                        color: scraping[slug] ? "var(--term-green)" : "var(--term-red)",
+                      }}
+                    >
+                      {scraping[slug] ? "● AKTİF" : "○ PASİF"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs font-mono" style={muted}>Yükleniyor…</div>
+            )}
+          </div>
+
+          {/* ── BAŞLANGIÇ BAKİYESİ SET ── */}
+          <div className="rounded-sm px-4 py-4" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-text)" }}>
+              BAŞLANGIÇ BAKİYESİ SET ET
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Portföyün nakit bakiyesini ayarlar (pozisyonları/kararları silmeden). BIST varsayılan 50.000 · US 10.000 · Kripto 5.000.
+            </p>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div className="flex gap-1">
+                {(["bist", "us", "crypto"] as const).map((slug) => (
+                  <button key={slug} onClick={() => setBalanceSlug(slug)}
+                    className="font-mono text-[11px] px-3 py-1.5 rounded-sm transition-none"
+                    style={{
+                      border: "1px solid var(--term-border)",
+                      backgroundColor: balanceSlug === slug ? "var(--term-border)" : "var(--term-bg)",
+                      color: balanceSlug === slug ? "var(--term-amber)" : "var(--term-muted)",
+                    }}>
+                    {slug === "bist" ? "BIST" : slug === "us" ? "US" : "KRİPTO"}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="number"
+                value={balanceAmount}
+                onChange={(e) => setBalanceAmount(e.target.value)}
+                min="0"
+                step="100"
+                className="font-mono text-xs px-3 py-1.5 rounded-sm bg-transparent"
+                style={{ border: "1px solid var(--term-border)", color: "var(--term-text)", width: 120 }}
+              />
+              <button
+                onClick={handleSetBalance}
+                disabled={balanceLoading}
+                className="font-mono text-xs tracking-wider px-4 py-1.5 rounded-sm transition-none disabled:opacity-40"
+                style={{ border: "1px solid var(--term-green)", color: "var(--term-green)" }}
+              >
+                {balanceLoading ? "AYARLANIYOR…" : "BAKİYE AYARLA"}
+              </button>
+            </div>
+            {balanceMsg && (
+              <div className="font-mono text-xs mt-2" style={{ color: balanceMsg.startsWith("✓") ? "var(--term-green)" : "var(--term-red)" }}>
+                {balanceMsg}
+              </div>
+            )}
+          </div>
+
           {/* Portföy seçici — hangi portföy sıfırlanacak */}
           <div className="rounded-sm px-4 py-3" style={borderStyle}>
             <div className="font-mono text-xs tracking-wider mb-2" style={muted}>
               HEDEF PORTFÖY
             </div>
             <div className="flex gap-2">
-              {(["bist", "us", "all"] as const).map((slug) => (
+              {(["bist", "us", "crypto", "all"] as const).map((slug) => (
                 <button
                   key={slug}
                   onClick={() => setResetPortfolioSlug(slug)}
@@ -266,13 +390,13 @@ export default function AyarlarPage() {
                     color: resetPortfolioSlug === slug ? "var(--term-amber)" : "var(--term-muted)",
                   }}
                 >
-                  {slug === "bist" ? "BIST" : slug === "us" ? "US (NASDAQ+DJIA)" : "TÜMÜ"}
+                  {slug === "bist" ? "BIST" : slug === "us" ? "US" : slug === "crypto" ? "KRİPTO" : "TÜMÜ"}
                 </button>
               ))}
             </div>
             <p className="text-[10px] font-mono mt-1.5" style={muted}>
               {resetPortfolioSlug === "all"
-                ? "İki portföy birden (BIST + US) sıfırlanır."
+                ? "Üç portföy birden (BIST + US + Kripto) sıfırlanır."
                 : `Sadece ${resetPortfolioSlug.toUpperCase()} portföyü sıfırlanır.`}
             </p>
           </div>

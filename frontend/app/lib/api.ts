@@ -281,6 +281,34 @@ export type TickerSuggestion = {
   industry?: string;
 };
 
+// ── Crypto (Binance) ──
+
+export type CryptoKline = {
+  open_time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  close_time: number;
+};
+
+export type CryptoAnalysis = {
+  symbol?: string;
+  interval?: string;
+  price?: number;
+  change_pct?: number;
+  composite: number;
+  momentum_score?: number;
+  rsi?: number;
+  volume_score?: number;
+  volatility_penalty?: number;
+  signal: "bullish" | "bearish" | "neutral";
+  data_missing: boolean;
+  ticker?: string;
+  risk_score?: number;
+};
+
 // ── SSE Live Prices ──
 
 export type LiveWatchlistItem = {
@@ -545,4 +573,39 @@ export const api = {
         reports: { deleted: Record<string, number> };
       }>
     ),
+
+  // ── Crypto (Binance) ──
+  cryptoPing: () => apiFetch("/api/crypto/ping", { cache: "no-store" }).then(j<{ ok: boolean }>),
+  cryptoUniverse: () => apiFetch("/api/crypto/universe", { cache: "no-store" }).then(j<{ count: number; symbols: string[] }>),
+  cryptoPrice: (symbol: string) =>
+    apiFetch(`/api/crypto/price/${encodeURIComponent(symbol)}`, { cache: "no-store" }).then(
+      j<{ symbol: string; price: number; change_pct: number }>
+    ),
+  cryptoKlines: (symbol: string, interval = "5m", limit = 100) =>
+    apiFetch(`/api/crypto/klines/${encodeURIComponent(symbol)}?interval=${interval}&limit=${limit}`, {
+      cache: "no-store",
+    }).then(j<{ symbol: string; interval: string; count: number; klines: CryptoKline[] }>),
+  cryptoAnalyze: (symbol: string, interval = "5m") =>
+    apiFetch(`/api/crypto/analyze/${encodeURIComponent(symbol)}?interval=${interval}`, {
+      cache: "no-store",
+    }).then(j<CryptoAnalysis>),
+  cryptoScan: (interval = "5m") =>
+    apiFetch(`/api/crypto/scan?interval=${interval}`, { cache: "no-store" }).then(
+      j<{ symbols_scanned: number; candidates: CryptoAnalysis[] }>
+    ),
+
+  // ── Ayarlar: bakiye + scraping ──
+  setBalance: (portfolioSlug: string, amount: number) =>
+    apiFetch(`/api/admin/balance/set?portfolio_slug=${portfolioSlug}&amount=${amount}`, {
+      method: "POST",
+    }).then(j<{ ok: boolean; portfolio_slug: string; balance_cash: number }>),
+  scrapingStatus: () =>
+    apiFetch("/api/admin/scraping/status", { cache: "no-store" }).then(
+      j<{ enabled: boolean; bist: boolean; us: boolean; crypto: boolean }>
+    ),
+  scrapingToggle: (portfolioSlug: string | null, enabled: boolean) =>
+    apiFetch(
+      `/api/admin/scraping/toggle?portfolio_slug=${portfolioSlug ?? ""}&enabled=${enabled}`,
+      { method: "POST" }
+    ).then(j<{ ok: boolean; portfolio_slug: string | null; enabled: boolean }>),
 };
