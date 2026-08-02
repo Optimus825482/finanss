@@ -90,7 +90,8 @@ def _render_candlestick_png(history, ticker: str, period: str) -> Optional[str]:
     if len(df) < 5:
         return None
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, (ax, ax_rsi) = plt.subplots(2, 1, figsize=(12, 8), sharex=True,
+                                     gridspec_kw={"height_ratios": [3, 1]})
     # SMA20
     closes = df["Close"]
     sma20 = closes.rolling(20).mean()
@@ -110,10 +111,26 @@ def _render_candlestick_png(history, ticker: str, period: str) -> Optional[str]:
     ax.plot(range(len(df)), sma20, color="blue", linewidth=1, label="SMA20")
     ax.plot(range(len(df)), upper, color="gray", linewidth=0.5, linestyle="--", label="BB up")
     ax.plot(range(len(df)), lower, color="gray", linewidth=0.5, linestyle="--", label="BB low")
+    ax.fill_between(range(len(df)), lower, upper, color="gray", alpha=0.1)
 
-    ax.set_title(f"{ticker} — {period} Candlestick")
+    # RSI (14) alt panel — varsayılan gösterge
+    delta = closes.diff()
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss
+    rsi = (100 - 100 / (1 + rs)).fillna(50)
+    ax_rsi.plot(range(len(df)), rsi, color="purple", linewidth=1, label="RSI 14")
+    ax_rsi.axhline(70, color="red", linewidth=0.5, linestyle=":")
+    ax_rsi.axhline(30, color="green", linewidth=0.5, linestyle=":")
+    ax_rsi.axhline(50, color="gray", linewidth=0.5, linestyle=":")
+    ax_rsi.set_ylim(0, 100)
+    ax_rsi.set_title("RSI 14", fontsize=9)
+    ax_rsi.legend(loc="upper left", fontsize=8)
+
+    ax.set_title(f"{ticker} — {period} Candlestick (BB + RSI)")
     ax.legend(loc="upper left")
     ax.grid(True, alpha=0.3)
+    ax_rsi.grid(True, alpha=0.3)
     fig.tight_layout()
 
     buf = io.BytesIO()
@@ -125,13 +142,14 @@ def _render_candlestick_png(history, ticker: str, period: str) -> Optional[str]:
 
 # --- VLM analiz prompt'unu hazırla ---
 
-_VLM_PROMPT_TEMPLATE = """Bu {ticker} hissesinin son {period} mum grafiği (candlestick + Bollinger bantları + SMA20).
+_VLM_PROMPT_TEMPLATE = """Bu {ticker} hissesinin son {period} mum grafiği (candlestick + Bollinger bantları + SMA20 + RSI 14 alt paneli).
 
 Türkçe yanıt ver. Şunları belirt:
 1. Tespit edilen mum formasyonu (doji/hammer/engulfing vb.)
 2. Kısa vadeli görünüm (yükseliş/düşüş/yatay)
-3. Destek/direnç seviyeleri gözlemi
-4. İşlem için kritik seviyeler (varsa)
+3. Bollinger bantlarına göre fiyat konumu (üst/orta/alt bant, sıkışma) ve RSI durumu (aşırı alım >70 / aşırı satım <30)
+4. Destek/direnç seviyeleri gözlemi
+5. İşlem için kritik seviyeler (varsa)
 """
 
 

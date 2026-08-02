@@ -211,11 +211,11 @@ class AlphaEngine:
         d = np.diff(arr)
         g, l = np.where(d>0,d,0), np.where(d<0,-d,0)
         ag = np.mean(g[:period]); al = np.mean(l[:period])
-        out[period] = 100-100/(1+ag/al) if al>0 else 100
+        out[period] = 100-100/(1+ag/al) if al>0 else (100 if ag>0 else 50)
         for i in range(period+1, len(arr)):
             ag = (ag*(period-1)+g[i-1])/period
             al = (al*(period-1)+l[i-1])/period
-            out[i] = 100-100/(1+ag/al) if al>0 else 100
+            out[i] = 100-100/(1+ag/al) if al>0 else (100 if ag>0 else 50)
         return out
 
     @staticmethod

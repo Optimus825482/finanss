@@ -130,7 +130,7 @@ async def stage1_prescreen(
             losses = np.where(delta < 0, -delta, 0)
             avg_gain = float(np.mean(gains[-14:])) if len(gains) >= 14 else 1.0
             avg_loss = float(np.mean(losses[-14:])) if len(losses) >= 14 else 1.0
-            rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
+            rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else (100.0 if avg_gain > 0 else 50.0)
 
             # Volume ratio
             avg_vol_20 = float(np.mean(vol_arr[-20:])) if len(vol_arr) >= 20 else 1.0
@@ -239,7 +239,7 @@ async def _prescreen_individual(tickers: list[str], cfg: dict) -> list[dict]:
             losses = np.where(delta < 0, -delta, 0)
             avg_gain = float(np.mean(gains[-14:])) if len(gains) >= 14 else 1.0
             avg_loss = float(np.mean(losses[-14:])) if len(losses) >= 14 else 1.0
-            rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else 100.0
+            rsi_val = 100.0 - (100.0 / (1.0 + avg_gain / avg_loss)) if avg_loss > 0 else (100.0 if avg_gain > 0 else 50.0)
             avg_vol_20 = float(np.mean(volumes_raw[-20:])) if len(volumes_raw) >= 20 else 1.0
             volume_ratio = float(volumes_raw[-1] / avg_vol_20) if avg_vol_20 > 0 else 1.0
             rets = np.divide(np.diff(closes), np.where(closes[:-1] != 0, closes[:-1], np.nan))
