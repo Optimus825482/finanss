@@ -1,0 +1,16 @@
+{
+ "running": false,
+ "started_at": null,
+ "stopped_at": null,
+ "last_round_at": "2026-08-02T10:45:08.557796",
+ "last_round": {
+  "ok": true,
+  "scanned": 15,
+  "open_positions": 0,
+  "actions": [],
+  "equity_usdt": 0,
+  "ms": 63840,
+  "timestamp": "2026-08-02T10:45:08.559102"
+ },
+ "rounds": 0
+}
