@@ -7,3 +7,10 @@ node_modules/
 .env
 .env.local
 .dyad/
+
+# Agent debug output
+backend/*.err
+backend/*.out
+backend/test_*.txt
+backend/pv.*
+out.txt
