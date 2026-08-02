@@ -26,10 +26,15 @@ def market_is_open(exchange: str) -> bool:
     day = now.weekday()  # 0=Pazartesi, 6=Pazar
     t = now.hour * 60 + now.minute
 
+    exchange = exchange.upper()
+
+    # Kripto 7/24 açık — hafta sonu/saat kontrolü yok
+    if exchange in ("CRYPTO", "BINANCE"):
+        return True
+
     if day >= 5:  # Cumartesi-Pazar
         return False
 
-    exchange = exchange.upper()
     if exchange in ("BIST",):
         return 600 <= t < 1080  # 10:00-18:00
     elif exchange in ("NASDAQ", "NYSE", "DOWJONES", "US"):
@@ -151,7 +156,15 @@ STOCK_UNIVERSE = {
 
 BENCHMARK_TICKER = "^GSPC"
 
-# Coklu portfoy yapilandirmasi — her portfoye ayrı bakiye + universe.
+# Kripto evreni — Binance sembolleri (M5 tarama için).
+# Likidite yüksek, spread dar ana pariteler.
+CRYPTO_UNIVERSE = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+    "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT",
+    "MATICUSDT", "LTCUSDT", "TRXUSDT", "NEARUSDT", "APTUSDT",
+]
+
+# Çoklu portfoy yapilandirmasi — her portfoye ayrı bakiye + universe.
 PORTFOLIOS = {
     "bist": {
         "display_name": "BIST Portföyü",
@@ -166,6 +179,13 @@ PORTFOLIOS = {
         "cash": 10_000.0,
         "max_positions": 8,
         "max_per_position_pct": 0.25,
+    },
+    "crypto": {
+        "display_name": "Kripto Portföyü (Binance)",
+        "exchanges": ["CRYPTO"],
+        "cash": 5_000.0,
+        "max_positions": 6,
+        "max_per_position_pct": 0.30,
     },
 }
 

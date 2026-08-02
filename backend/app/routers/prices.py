@@ -18,7 +18,7 @@ from app.services.autonomous_agent import AutonomousAgent
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 logger = logging.getLogger(__name__)
 
-VALID_SLUGS = ("bist", "us")
+VALID_SLUGS = ("bist", "us", "crypto")
 
 
 def _fetch_prices_sync(db: Session, portfolio_slug: str) -> dict:

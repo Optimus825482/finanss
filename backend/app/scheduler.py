@@ -80,6 +80,21 @@ def _run_autonomous_us_sync():
         logger.error(f"US otonom ajan calismasi basarisiz: {e}")
 
 
+def _run_autonomous_crypto_sync():
+    """Kripto portföyü (Binance) için otonom ajan periyodik çalışması.
+
+    Kripto 7/24 açık — 15dk'da bir M5 tarama (hisse 30dk'ya göre daha sık).
+    """
+    try:
+        from app.services.autonomous_agent import AutonomousAgent
+        agent = AutonomousAgent(portfolio_slug="crypto")
+        result = agent.run()  # exchanges config'den (["CRYPTO"])
+        logger.info("Crypto ajan: %d islem, %d karar",
+                     len(result.get("actions", [])), len(result.get("decisions", [])))
+    except Exception as e:
+        logger.error(f"Crypto otonom ajan calismasi basarisiz: {e}")
+
+
 def start_scheduler() -> BackgroundScheduler:
     """Start global scheduler singleton. Safe to call multiple times."""
     global _scheduler
@@ -114,8 +129,16 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
     )
 
+    # Kripto ajan — 15dk (7/24 açık, M5 tarama)
+    _scheduler.add_job(
+        _run_autonomous_crypto_sync,
+        trigger=IntervalTrigger(minutes=15),
+        id="autonomous_crypto",
+        replace_existing=True,
+    )
+
     _scheduler.start()
-    logger.info("Scheduler baslatildi: gunluk rapor (%02d:%02d) + BIST ajan (30dk) + US ajan (30dk)",
+    logger.info("Scheduler baslatildi: gunluk rapor (%02d:%02d) + BIST ajan (30dk) + US ajan (30dk) + Crypto ajan (15dk)",
                  SCHEDULE_HOUR, SCHEDULE_MINUTE)
     return _scheduler
 

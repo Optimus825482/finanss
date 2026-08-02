@@ -17,7 +17,7 @@ from app.services.balance_service import ensure_portfolio
 router = APIRouter(prefix="/api/autonomous", tags=["autonomous"])
 logger = logging.getLogger(__name__)
 
-VALID_SLUGS = ("bist", "us")
+VALID_SLUGS = ("bist", "us", "crypto")
 
 
 def _resolve_portfolio_id(db: Session, slug: str) -> int:

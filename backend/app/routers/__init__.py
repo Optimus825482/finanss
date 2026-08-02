@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.routers import (
     reports, watchlist, portfolio, balance, profile, chat, memory, admin,
     screener, screener_analyze, screener_screen, notifications, predictions,
-    autonomous, skill, prices,
+    autonomous, skill, prices, crypto,
 )
 
 
@@ -24,3 +24,4 @@ def register_routers(app: FastAPI):
     app.include_router(autonomous.router)
     app.include_router(prices.router)
     app.include_router(skill.router)
+    app.include_router(crypto.router)

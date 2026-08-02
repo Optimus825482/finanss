@@ -31,26 +31,37 @@ TECHNICAL_SCREEN_DEFAULTS = {
 
 
 def get_universe(exchanges: Optional[list[str]] = None) -> list[str]:
-    """Secili borsalardan hisse evrenini dondur."""
+    """Secili borsalardan hisse evrenini dondur.
+
+    CRYPTO/BINANCE → CRYPTO_UNIVERSE (Binance sembolleri).
+    """
+    from app.config import CRYPTO_UNIVERSE
+
     if not exchanges:
         tickers = []
         for tlist in STOCK_UNIVERSE.values():
             tickers.extend(tlist)
+        tickers.extend(CRYPTO_UNIVERSE)
         return list(dict.fromkeys(tickers))
 
     tickers = []
     for ex in exchanges:
-        if ex in STOCK_UNIVERSE:
+        if ex.upper() in ("CRYPTO", "BINANCE"):
+            tickers.extend(CRYPTO_UNIVERSE)
+        elif ex in STOCK_UNIVERSE:
             tickers.extend(STOCK_UNIVERSE[ex])
     return list(dict.fromkeys(tickers))
 
 
 def list_exchanges() -> list[dict]:
     """Kullanilabilir borsa ve hisse sayilari."""
-    return [
+    from app.config import CRYPTO_UNIVERSE
+    items = [
         {"slug": k, "label": _exchange_label(k), "ticker_count": len(v)}
         for k, v in STOCK_UNIVERSE.items()
     ]
+    items.append({"slug": "CRYPTO", "label": "Binance (Kripto)", "ticker_count": len(CRYPTO_UNIVERSE)})
+    return items
 
 def _exchange_label(slug: str) -> str:
     return {

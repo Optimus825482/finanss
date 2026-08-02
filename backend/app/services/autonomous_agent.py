@@ -82,7 +82,28 @@ class AutonomousAgent:
         return await stage1_prescreen(tickers)
 
     async def analyze_single(self, ticker: str) -> dict:
-        """Tek hisse detayli analiz (full agent pipeline)."""
+        """Tek hisse detayli analiz (full agent pipeline).
+
+        Kripto (USDT/BNB/... Binance sembolü) → CryptoAgent M5 teknik analiz.
+        Hisse → mevcut full agent pipeline.
+        """
+        # Crypto: Binance sembolü (USDT son ekli) → M5 teknik
+        if ticker.upper().endswith("USDT") or ticker.upper() in ("BTC", "ETH", "BNB", "SOL"):
+            from app.agents.crypto_agent import CryptoAgent
+            from app.services.binance_service import get_price, get_klines
+            symbol = ticker.upper() if ticker.upper().endswith("USDT") else f"{ticker.upper()}USDT"
+            px = get_price(symbol)
+            klines = get_klines(symbol, "5m", limit=100)
+            if not klines:
+                return {"ticker": symbol, "price": (px or {}).get("price", 0),
+                        "composite_score": 50.0, "crypto_signal": "neutral", "data_missing": True}
+            cand = [{"ticker": symbol, "price": float(klines[-1]["close"]), "history": klines}]
+            out = await CryptoAgent().run(cand)
+            c = out[0] if out else cand[0]
+            c["price"] = (px or {}).get("price", c.get("price"))
+            c["momentum_pct"] = (px or {}).get("change_pct", 0)
+            return c
+
         from app.services.yf_utils import safe_ticker_info, safe_ticker_history
         info = safe_ticker_info(ticker)
         hist = safe_ticker_history(ticker, period="3mo")
@@ -329,8 +350,33 @@ class AutonomousAgent:
 
     async def _gather_candidates(self, db: Session, exchanges: list[str], is_bist: bool) -> list[dict]:
         """Aday hisseleri topla — doğru exchange'in son raporundan. Rapor eskiyse yeni rapor tetikle.
-        Rapor yoksa önce yeni rapor üret, sonra pick'leri kullan.
+
+        Kripto (CRYPTO/BINANCE exchange): hisse raporu yok — doğrudan Binance M5
+        taraması + CryptoAgent sinyali. 7/24 açık, rapor bekleme yok.
         """
+        from app.config import CRYPTO_UNIVERSE
+
+        # ── Crypto path ──
+        if any(e.upper() in ("CRYPTO", "BINANCE") for e in (exchanges or [])):
+            from app.agents.crypto_agent import CryptoAgent
+            from app.services.binance_service import get_price
+            candidates: list[dict] = []
+            for sym in CRYPTO_UNIVERSE:
+                px = get_price(sym)
+                if not px:
+                    continue
+                candidates.append({
+                    "ticker": sym, "price": px["price"],
+                    "momentum_pct": px.get("change_pct", 0) or 0,
+                    "momentum_5d": px.get("change_pct", 0) or 0,
+                })
+            # M5 sinyal (paralel)
+            if candidates:
+                out = await CryptoAgent().run(candidates)
+                candidates = out or candidates
+                candidates.sort(key=lambda c: c.get("composite_score", 50), reverse=True)
+            return candidates
+
         from app.models.core import Report
         from app.services.agent_logs import log_if_active
         from datetime import timedelta
