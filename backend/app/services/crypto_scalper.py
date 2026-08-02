@@ -112,7 +112,7 @@ def cards() -> dict:
             card = {
                 "ticker": sym,
                 "price": price,
-                "composite": round(composite, 1),
+                "composite": float(composite),
                 "rsi": sig.get("rsi"),
                 "momentum_5m": sig.get("momentum_5m"),
                 "momentum_15m": sig.get("momentum_15m"),

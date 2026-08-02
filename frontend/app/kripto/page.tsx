@@ -218,7 +218,7 @@ export default function KriptoPage() {
                     {fmtPrice(c.price)}
                   </div>
                   <div className="font-mono text-[10px] mt-1" style={{ color: MUTED }}>
-                    COMP <span style={{ color: TEXT }}>{c.composite != null ? c.composite.toFixed(0) : "—"}</span>
+                    COMP <span style={{ color: TEXT }}>{c.composite != null ? c.composite.toFixed(2) : "—"}</span>
                     {" · "}RSI {c.rsi != null ? c.rsi.toFixed(0) : "—"}
                   </div>
                   <div className="font-mono text-[10px]" style={{ color: MUTED }}>

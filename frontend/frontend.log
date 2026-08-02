@@ -7,5 +7,4 @@ npm notice run next dev -p 3009
  ✓ Starting...
  ✓ Ready in 2.1s
  ○ Compiling /kripto ...
- ✓ Compiled /kripto in 816ms (532 modules)
- GET /kripto 200 in 1055ms
+ ✓ Compiled /kripto in 1391ms (532 modules)
