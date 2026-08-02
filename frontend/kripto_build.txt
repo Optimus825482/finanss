@@ -1,0 +1,36 @@
+npm notice run orbis-finai-dashboard@1.0.0 build
+npm notice run next build
+  ▲ Next.js 14.2.5
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/12) ...
+   Generating static pages (3/12) 
+   Generating static pages (6/12) 
+   Generating static pages (9/12) 
+ ✓ Generating static pages (12/12)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    4.13 kB         102 kB
+├ ○ /_not-found                          141 B          87.3 kB
+├ ○ /admin                               779 B          87.9 kB
+├ ○ /ayarlar                             10.5 kB        97.6 kB
+├ ○ /bist                                4.94 kB        92.1 kB
+├ ○ /kripto                              5.18 kB         148 kB
+├ ○ /portfoy                             6.73 kB         149 kB
+├ ○ /raporlar                            2.38 kB        93.7 kB
+├ ○ /skill                               9.88 kB         159 kB
+└ ○ /takip                               5.71 kB         155 kB
++ First Load JS shared by all            87.1 kB
+  ├ chunks/23-db980321f0d92fab.js        31.5 kB
+  ├ chunks/fd9d1056-9a7e30b9bd7fd373.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+○  (Static)  prerendered as static content
+
