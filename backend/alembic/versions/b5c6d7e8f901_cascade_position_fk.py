@@ -33,19 +33,16 @@ def _add_cascade(table: str, constraint: str) -> None:
 
 def upgrade() -> None:
     _add_cascade("balance_transactions", "balance_transactions_position_id_fkey")
-    _add_cascade("trading_decisions", "trading_decisions_position_id_fkey")
+    # trading_decisions has NO position_id column — position linkage lives only
+    # on balance_transactions. Skip; do not create a phantom FK.
 
 
 def downgrade() -> None:
-    op.drop_constraint("trading_decisions_position_id_fkey", "trading_decisions", type_="foreignkey")
-    op.create_foreign_key(
-        "trading_decisions_position_id_fkey",
-        "trading_decisions", "portfolio_positions",
-        ["position_id"], ["id"],
-    )
-    op.drop_constraint("balance_transactions_position_id_fkey", "balance_transactions", type_="foreignkey")
-    op.create_foreign_key(
-        "balance_transactions_position_id_fkey",
-        "balance_transactions", "portfolio_positions",
-        ["position_id"], ["id"],
-    )
+    # Reverse: drop CASCADE-only FK if it exists, recreate without CASCADE.
+    if _fk_exists("balance_transactions", "balance_transactions_position_id_fkey"):
+        op.drop_constraint("balance_transactions_position_id_fkey", "balance_transactions", type_="foreignkey")
+        op.create_foreign_key(
+            "balance_transactions_position_id_fkey",
+            "balance_transactions", "portfolio_positions",
+            ["position_id"], ["id"],
+        )
