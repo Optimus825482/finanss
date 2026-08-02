@@ -26,7 +26,7 @@ const INTERVALS=[{k:"1m",l:"1D"},{k:"3m",l:"3D"},{k:"5m",l:"5D"},{k:"15m",l:"15"
 function sma(d:number[],p:number):(number|null)[]{const o:(number|null)[]=[];for(let i=0;i<d.length;i++){if(i<p-1){o.push(null);continue}let s=0;for(let j=i-p+1;j<=i;j++)s+=d[j];o.push(s/p)}return o}
 function ema(d:number[],p:number):(number|null)[]{const o:(number|null)[]=[];const k=2/(p+1);for(let i=0;i<d.length;i++){if(i===0){o.push(d[0]);continue}const pr=o[i-1]??d[i];o.push(d[i]*k+pr*(1-k))}return o}
 function bollinger(d:number[],p:number,m:number){const mid=sma(d,p);const up:(number|null)[]=[];const lo:(number|null)[]=[];for(let i=0;i<d.length;i++){if(i<p-1){up.push(null);lo.push(null);continue}let s=0;for(let j=i-p+1;j<=i;j++)s+=(d[j]-mid[i]!)**2;const std=Math.sqrt(s/p);up.push(mid[i]!+m*std);lo.push(mid[i]!-m*std)}return{upper:up,middle:mid,lower:lo}}
-function rsiFn(d:number[],p:number):(number|null)[]{const o:(number|null)[]=[];let ag=0,al=0;for(let i=1;i<d.length;i++){const ch=d[i]-d[i-1];const gn=ch>0?ch:0;const ls=ch<0?-ch:0;if(i<p){ag+=gn;al+=ls;if(i!==p-1){o.push(null);continue}ag/=p;al/=p}else{ag=(ag*(p-1)+gn)/p;al=(al*(p-1)+ls)/p}o.push(al===0?100:100-(100/(1+ag/al)))}return o}
+function rsiFn(d:number[],p:number):(number|null)[]{const o:(number|null)[]=[];let ag=0,al=0;for(let i=1;i<d.length;i++){const ch=d[i]-d[i-1];const gn=ch>0?ch:0;const ls=ch<0?-ch:0;if(i<p){ag+=gn;al+=ls;if(i!==p-1){o.push(null);continue}ag/=p;al/=p}else{ag=(ag*(p-1)+gn)/p;al=(al*(p-1)+ls)/p}o.push(ag===0&&al===0?50:al===0?100:100-(100/(1+ag/al)))}return o}
 function macdFn(d:number[]){const e12=ema(d,12);const e26=ema(d,26);const mv:(number|null)[]=[];for(let i=0;i<d.length;i++)mv.push(e12[i]!=null&&e26[i]!=null?e12[i]!-e26[i]!:null);const sig=ema(mv.filter(v=>v!=null)as number[],9);const ps:(number|null)[]=[];const off=26+9-2;for(let i=0;i<d.length;i++)ps.push(i<off?null:sig[i-off]??null);const hs:(number|null)[]=[];for(let i=0;i<d.length;i++)hs.push(mv[i]!=null&&ps[i]!=null?mv[i]!-ps[i]!:null);return{macd:mv,signal:ps,hist:hs}}
 
 const resolveColor = (c:string)=>{const m=c.match(/^var\((--[^,)]+)/);if(m){const v=getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();if(v)return v}return c.includes("green")?"#22C55E":c.includes("red")?"#EF4444":"#9CA3AF"};
@@ -44,7 +44,7 @@ export default function PriceChart({data,color,period,interval,onPeriodChange,on
   const [mode,setMode]=useState<ChartMode>("candle");
   const [ready,setReady]=useState(false);
   const [leg,setLeg]=useState({o:0,h:0,l:0,c:0,v:0});
-  const [inds,setInds]=useState<Set<IndicatorId>>(new Set(["volume"]));
+  const [inds,setInds]=useState<Set<IndicatorId>>(new Set(["volume","bb","rsi"]));
   const [showInd,setShowInd]=useState(false);
   const [showAn,setShowAn]=useState(false);
   const [analysis,setAnalysis]=useState<string|null>(null);

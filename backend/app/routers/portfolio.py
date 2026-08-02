@@ -58,6 +58,19 @@ def get_portfolio(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/open/{ticker}", response_model=list[PortfolioPositionOut])
+def get_open_positions(ticker: str, db: Session = Depends(get_db)):
+    """Bir ticker için açık pozisyonlar, canlı fiyat + kâr/zarar ile."""
+    ticker = ticker.upper().strip()
+    positions = (
+        db.query(PortfolioPosition)
+        .filter(PortfolioPosition.ticker == ticker, PortfolioPosition.status == "open")
+        .all()
+    )
+    price_map = get_live_prices([ticker])
+    return [_enrich_position(p, price_map) for p in positions]
+
+
 @router.post("", response_model=PortfolioPositionOut)
 def add_portfolio_position(pos: PortfolioPositionIn, db: Session = Depends(get_db)):
     ticker = pos.ticker.upper().strip()

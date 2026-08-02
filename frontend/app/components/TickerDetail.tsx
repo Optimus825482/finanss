@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExchangeBadge, SectorBadge } from "./TickerBadge";
 import PriceChart from "./PriceChart";
-import { api } from "../lib/api";
+import { api, apiFetch } from "../lib/api";
 
 export interface TickerDetailData {
   ticker: string;
@@ -58,6 +58,22 @@ function fmtPct(v: number | null | undefined): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
+export interface OpenPosition {
+  id: number;
+  ticker: string;
+  quantity: number;
+  entry_price: number | null;
+  entry_date: string;
+  status: string;
+  exit_price: number | null;
+  exit_date: string | null;
+  notes: string | null;
+  current_price: number | null;
+  market_value: number | null;
+  unrealized_pl: number | null;
+  unrealized_pl_pct: number | null;
+}
+
 interface TickerDetailProps {
   detail: TickerDetailData;
   period?: string;
@@ -71,7 +87,45 @@ export default function TickerDetail({ detail, period, interval, onPeriodChange,
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
   const [addWatchlistLoading, setAddWatchlistLoading] = useState(false);
   const [addWatchlistMsg, setAddWatchlistMsg] = useState<string | null>(null);
-  const changeColor = (detail.change_pct ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)";
+  const [tick, setTick] = useState<{ price: number; change: number | null; change_pct: number | null } | null>(null);
+  const [positions, setPositions] = useState<OpenPosition[]>([]);
+
+  // 1sn canlı tick — fiyat + açık pozisyon P/L; tam detay 30sn'de useTickerDetail yeniler
+  useEffect(() => {
+    if (!detail.ticker) return;
+    let alive = true;
+    const id = setInterval(async () => {
+      try {
+        const [res, posRes] = await Promise.all([
+          apiFetch(`/api/screener/${encodeURIComponent(detail.ticker)}/tick`, { cache: "no-store" }),
+          apiFetch(`/api/portfolio/open/${encodeURIComponent(detail.ticker)}`, { cache: "no-store" }),
+        ]);
+        if (res.ok && alive) setTick(await res.json());
+        if (posRes.ok && alive) setPositions(await posRes.json());
+      } catch { /* poll zaten tekrar dener */ }
+    }, 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, [detail.ticker]);
+
+  // Grafik son barını tick ile canlı güncelle (yeni reference → PriceChart data effect tetiklenir)
+  const liveHistory = useMemo<typeof detail.price_history>(() => {
+    if (!tick) return detail.price_history;
+    const h = detail.price_history.slice();
+    const last = h[h.length - 1];
+    if (!last) return h;
+    h[h.length - 1] = {
+      ...last,
+      close: tick.price,
+      high: Math.max(last.high ?? last.close, tick.price),
+      low: Math.min(last.low ?? last.close, tick.price),
+    };
+    return h;
+  }, [detail.price_history, tick]);
+
+  const price = tick?.price ?? detail.price;
+  const changePct = tick?.change_pct ?? detail.change_pct;
+  const change = tick?.change ?? detail.change;
+  const changeColor = (changePct ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)";
 
   const handleDeepAnalyze = async () => {
     setAnalyzing(true);
@@ -103,11 +157,11 @@ export default function TickerDetail({ detail, period, interval, onPeriodChange,
           </div>
           <div className="text-right">
             <div className="font-mono text-2xl font-bold" style={{ color: "var(--term-amber)" }}>
-              {detail.currency === "TRY" ? "₺" : "$"}{detail.price?.toFixed(2) ?? "—"}
+              {detail.currency === "TRY" ? "₺" : "$"}{price?.toFixed(2) ?? "—"}
             </div>
             <div className="font-mono text-sm" style={{ color: changeColor }}>
-              {detail.change_pct !== null ? `${detail.change_pct >= 0 ? "▲" : "▼"} ${Math.abs(detail.change_pct).toFixed(2)}%` : "—"}
-              {detail.change !== null ? ` (${detail.change >= 0 ? "+" : ""}${detail.change.toFixed(2)})` : ""}
+              {changePct !== null ? `${changePct >= 0 ? "▲" : "▼"} ${Math.abs(changePct).toFixed(2)}%` : "—"}
+              {change !== null ? ` (${change >= 0 ? "+" : ""}${change.toFixed(2)})` : ""}
             </div>
             <button onClick={async()=>{
               setAddWatchlistLoading(true);
@@ -141,9 +195,56 @@ export default function TickerDetail({ detail, period, interval, onPeriodChange,
       {detail.price_history.length > 0 && (
         <div className="rounded-sm p-4" style={{ borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
           <div className="text-[11px] tracking-[0.2em] font-mono mb-2" style={{ color: "var(--term-muted)" }}>FİYAT GRAFİĞİ (30 GÜN)</div>
-          <PriceChart data={detail.price_history} color={changeColor}
+          <PriceChart data={liveHistory} color={changeColor}
             period={period} interval={interval}
             onPeriodChange={onPeriodChange} onIntervalChange={onIntervalChange} />
+        </div>
+      )}
+
+      {/* Açık Pozisyonlar · Canlı K/Z */}
+      {positions.length > 0 && (
+        <div className="rounded-sm p-4" style={{ borderColor: "var(--term-border)", backgroundColor: "var(--term-panel)", border: "1px solid var(--term-border)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] tracking-[0.2em] font-mono" style={{ color: "var(--term-muted)" }}>AÇIK POZİSYONLAR · CANLI KÂR/ZARAR</div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--term-green)", animation: "pulse 1.5s infinite" }} />
+              <span className="text-[10px] font-mono" style={{ color: "var(--term-muted)" }}>CANLI</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {positions.map((p) => {
+              const livePrice = tick?.price ?? p.current_price;
+              const cost = (p.entry_price ?? 0) * p.quantity;
+              const mv = livePrice != null ? livePrice * p.quantity : null;
+              const pl = mv != null ? mv - cost : null;
+              const plPct = cost > 0 && pl != null ? (pl / cost) * 100 : null;
+              const plColor = (pl ?? 0) >= 0 ? "var(--term-green)" : "var(--term-red)";
+              return (
+                <div key={p.id} className="flex items-center justify-between font-mono text-xs border-b border-dashed pb-2 last:border-0" style={{ borderColor: "var(--term-border)" }}>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <div style={{ color: "var(--term-text)" }}>{p.quantity} {detail.ticker}</div>
+                      <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>
+                        Giriş ${(p.entry_price ?? 0).toFixed(2)} · {new Date(p.entry_date).toLocaleDateString("tr-TR")}
+                      </div>
+                    </div>
+                    <div className="text-[10px]" style={{ color: "var(--term-muted)" }}>
+                      <div>Maliyet ${cost.toFixed(2)}</div>
+                      <div>Güncel {livePrice != null ? `$${livePrice.toFixed(2)}` : "—"}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div style={{ color: plColor }}>
+                      {pl != null ? `${pl >= 0 ? "+" : ""}$${pl.toFixed(2)}` : "—"}
+                    </div>
+                    <div className="text-[10px]" style={{ color: plColor }}>
+                      {plPct != null ? `${plPct >= 0 ? "+" : ""}${plPct.toFixed(2)}%` : "—"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

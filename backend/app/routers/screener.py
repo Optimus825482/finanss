@@ -55,6 +55,31 @@ def suggest_tickers(q: str):
         return []
 
 
+_tick_cache: dict[str, tuple[float, dict]] = {}
+
+@router.get("/{ticker}/tick")
+def get_ticker_tick(ticker: str):
+    """Hafif canlı fiyat ucu: 1sn poll için fast_info. 2sn TTL cache (Yahoo rate-limit koruması)."""
+    import time as _time
+    t = ticker.strip().upper()
+    now = _time.time()
+    cached = _tick_cache.get(t)
+    if cached and now - cached[0] < 2.0:
+        return cached[1]
+    try:
+        fi = yf.Ticker(t).fast_info
+        payload = _sanitize({
+            "ticker": t,
+            "price": fi.last_price,
+            "change": getattr(fi, "previous_close", None) and fi.last_price - fi.previous_close,
+            "change_pct": getattr(fi, "previous_close", None) and (fi.last_price / fi.previous_close - 1),
+        })
+        _tick_cache[t] = (now, payload)
+        return payload
+    except Exception as e:
+        logger.warning("tick failed for %s: %s", t, e)
+        raise HTTPException(status_code=404, detail=f"Sembol verisi alinamadi: {str(e)}")
+
 @router.get("/{ticker}")
 async def get_ticker_detail(ticker: str, period: str = Query("1mo"), interval: str = Query("1d")):
     """Hisse detayi: fiyat, sirket bilgisi, haberler, metrikler. Tum metinler Turkce."""
