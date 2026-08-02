@@ -7,7 +7,7 @@
 ### Kritik
 | # | Bulgu | Yer | Düzeltme |
 |---|-------|-----|----------|
-| S1 | **FERNET_KEY yoksa LLM API key'leri DB'de plaintext** — `get_decrypted_api_key()` fernet yoksa raw döner, `set_encrypted_api_key()` raw saklar | `models/llm.py:13-22,45-64` | FERNET_KEY zorunlu yap; yoksa provider kaydını reddet veya uyarı logla |
+| S1 | **FERNET_KEY yoksa LLM API key'leri DB'de plaintext** — `get_decrypted_api_key()` fernet yoksa raw döner, `set_encrypted_api_key()` raw saklar | `models/llm.py:13-22,45-64` | **KABUL EDİLMİŞ RİSK (2026-08-02)** — kullanıcı zorunluluğu kaldırdı; şifreleme altyapısı duruyor, FERNET_KEY set edilirse otomatik devreye girer |
 | S2 | **Tek paylaşımlı API key — kullanıcı bazlı auth yok** — tüm admin işlemleri aynı `API_KEY`'e güveniyor; session/JWT/MFA yok | `middleware.py:28` | Multi-user planlanana kadar kabul edilebilir; prod'da API_KEY zorunlu kıl |
 
 ### Orta

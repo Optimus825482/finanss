@@ -16,10 +16,7 @@
 - Docker compose'ta `FERNET_KEY: ${FERNET_KEY:-}` — boşsa (varsayılan) **şifreleme yok**.
 - Etki: DB erişimi olan herkes (dump, backup, admin DB) tüm LLM provider API key'lerini okuyabilir.
 
-**Düzeltme:**
-1. `startup`'ta `FERNET_KEY` yoksa uyarı logla (tercihen fail).
-2. `create_provider`'da fernet yoksa provider kaydını reddet veya açıkça "şifresiz" işaretle.
-3. Önerilen: `.env.example`'da FERNET_KEY zorunlu yap.
+**Durum: KABUL EDİLMİŞ RİSK (2026-08-02 kararı).** Kullanıcı FERNET_KEY zorunluluğunu kaldırmayı seçti. Şifreleme altyapısı mevcut — ileride `FERNET_KEY` set edilirse key'ler otomatik şifrelenir. Uyarı log'u main.py'den kaldırıldı.
 
 ### S2. Tek paylaşımlı API key — kullanıcı/auth yok
 `backend/app/middleware.py:28`

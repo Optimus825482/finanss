@@ -194,7 +194,7 @@ return asyncio.run(self.think_and_act(db, exchanges))
 | 🔴 P1 | NewsAnalyst + BullBearResearcher Stage 2'ye ekle (skor kalitesi) | ORBIS_AI_AGENT_ANALIZI #1, M6 |
 | 🔴 P1 | Scheduler'ı tek kalıcı async loop'a taşı (create_task sessiz ölümü) | M3, R7.1 |
 | 🔴 P1 | **XGBoost günlük train gate (24 fit/CPU starvation)** | M10, R5.1 |
-| 🔴 P1 | **FERNET_KEY zorunlu; API_KEY boşsa prod fail** | GÜVENLIK_RAPORU S1/S4 |
+| 🟢 P4 | FERNET_KEY opsiyonel (kabul edilen risk — ileride set edilirse otomatik şifreleme) | GUVENLIK_RAPORU S1 |
 | 🟠 P2 | Peter Lynch docstring/PEG netliği (temettü dahil PEG yorumu) | VERI_DOGULUK_RAPORU Bölüm 1 |
 | 🟠 P2 | LLM JSON parse'ı skill_router'ın robust parse'ıyla birleştir | M4 |
 | 🟠 P2 | Para işlemleri testi: execute_buy/sell, balance, veto (coverage %22) | TEST_KAPSAM_RAPORU |
