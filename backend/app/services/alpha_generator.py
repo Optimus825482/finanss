@@ -9,7 +9,6 @@ LLM-Generated Alpha Factors + Volume/Order Flow Anomaly Detection.
    Kaynak: Institutional order flow analysis, Volume Profile methodology
 """
 import logging
-from typing import Optional
 
 import numpy as np
 
@@ -55,8 +54,16 @@ def detect_volume_anomaly(ticker: str) -> dict:
         # Volume Price Trend (VPT) divergence
         vpt_divergence = False
         if len(closes) >= 10 and len(volumes) >= 10:
-            vpt_recent = np.cumsum(volumes.iloc[-5:] * np.sign(np.diff(closes.iloc[-6:])))
-            vpt_prev = np.cumsum(volumes.iloc[-10:-5] * np.sign(np.diff(closes.iloc[-11:-5])))
+            # np.asarray → Series index alignment/label sorunlarını önler.
+            # np.cumsum(Series) Series döner, series[-1] label-based KeyError üretir.
+            vpt_recent = np.cumsum(
+                np.asarray(volumes.iloc[-5:], dtype=float)
+                * np.sign(np.diff(np.asarray(closes.iloc[-6:], dtype=float)))
+            )
+            vpt_prev = np.cumsum(
+                np.asarray(volumes.iloc[-10:-5], dtype=float)
+                * np.sign(np.diff(np.asarray(closes.iloc[-11:-5], dtype=float)))
+            )
             if len(vpt_recent) > 0 and len(vpt_prev) > 0:
                 vpt_divergence = float(vpt_recent[-1]) * float(vpt_prev[-1]) < 0
 
@@ -126,7 +133,8 @@ JSON formatında döndür (sadece JSON):
             temperature=0.8,
             max_tokens=800,
         )
-        import json, re
+        import json
+        import re
         json_match = re.search(r'\{[\s\S]*\}', response)
         if json_match:
             data = json.loads(json_match.group(0))

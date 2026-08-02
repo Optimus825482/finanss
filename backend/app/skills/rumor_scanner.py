@@ -21,6 +21,7 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from app.config import now_istanbul
 from typing import Optional
 
 from app.services.llm_bridge import generate

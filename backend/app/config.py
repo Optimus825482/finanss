@@ -89,7 +89,7 @@ STOCK_UNIVERSE = {
         # REIT & Infrastructure
         "SPG","O","PLD","AMT","WELL","CCI","EQIX","DLR",
         # Media / Entertainment
-        "DIS","VZ","T","TMUS","SPOT","LYV","WBD","PARA",
+        "DIS","VZ","T","TMUS","LYV","PARA",
     ],
     "DOWJONES": [
         # Dow Jones Industrial Average 30 (tam liste)

@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.config import now_istanbul
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -227,6 +229,36 @@ async def _fetch_hn(query: str, limit: int = 10) -> list[SearchHit]:
     except Exception as e:
         logger.warning("web_search HN failed (%s): %s", query, e)
         return []
+
+
+# --- Reddit JSON parser (pure — test edilebilir) ---
+# Reddit fetch kaldırıldı (403 bot block) ama parser korunuyor:
+# test_web_search.py + olası yedek sağlayıcılar bunu kullanır.
+
+def _parse_reddit_json(data: dict) -> list[SearchHit]:
+    """Reddit search.json çıktısını parse (https://www.reddit.com/search.json?q=...)."""
+    hits: list[SearchHit] = []
+    try:
+        children = data.get("data", {}).get("children", [])
+        for child in children[:20]:
+            d = child.get("data", {}) if isinstance(child, dict) else {}
+            title = d.get("title")
+            permalink = d.get("permalink")
+            if not title or not permalink:
+                continue
+            subreddit = d.get("subreddit", "")
+            link = f"https://www.reddit.com{permalink}" if permalink.startswith("/") else permalink
+            ts = d.get("created_utc")
+            hits.append(SearchHit(
+                title=_strip_tags(title)[:300],
+                publisher=f"r/{subreddit}" if subreddit else "reddit",
+                link=link,
+                timestamp=ts,
+                source_provider="reddit",
+            ))
+    except Exception as e:
+        logger.warning("web_search Reddit parse failed: %s", e)
+    return hits
 
 
 # --- Birleştirilmiş fetch ---
