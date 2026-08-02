@@ -66,6 +66,27 @@ def get_ticker_tick(ticker: str):
     cached = _tick_cache.get(t)
     if cached and now - cached[0] < 2.0:
         return cached[1]
+    # Kripto: Binance canlı fiyat (Yahoo'da USDT pariteleri yok).
+    if t.endswith("USDT") or t in ("BTC", "ETH", "BNB", "SOL"):
+        from app.services.binance_service import get_price
+        try:
+            sym = t if t.endswith("USDT") else f"{t}USDT"
+            px = get_price(sym)
+            if px is None:
+                raise HTTPException(status_code=404, detail=f"Kripto verisi alinamadi: {sym}")
+            pct = px.get("change_pct")
+            payload = _sanitize({
+                "ticker": t,
+                "price": px["price"],
+                "change_pct": pct,
+                "change": round(px["price"] * pct / 100, 6) if pct is not None else None,
+            })
+            _tick_cache[t] = (now, payload)
+            return payload
+        except Exception as e:
+            logger.warning("binance tick failed for %s: %s", t, e)
+            raise HTTPException(status_code=404, detail=f"Kripto verisi alinamadi: {str(e)}")
+
     try:
         fi = yf.Ticker(t).fast_info
         payload = _sanitize({
