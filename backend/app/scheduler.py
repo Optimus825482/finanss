@@ -111,9 +111,17 @@ def _run_autonomous_crypto_sync():
     """Kripto portföyü (Binance) için otonom ajan periyodik çalışması.
 
     Kripto 7/24 açık — 15dk'da bir M5 tarama (hisse 30dk'ya göre daha sık).
+    Scalper aktifken ajanı atla — iki sistem aynı portföyü aynı anda yönetmesin.
     """
     if not _scraping_enabled("crypto"):
         return
+    try:
+        from app.services.crypto_scalper import is_running as scalper_running
+        if scalper_running():
+            logger.info("Crypto ajan: scalper aktif, 15dk'lık ajan atlandı (çakışma önlendi)")
+            return
+    except Exception:
+        pass
     try:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="crypto")

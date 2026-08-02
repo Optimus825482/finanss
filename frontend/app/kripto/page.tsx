@@ -60,11 +60,11 @@ export default function KriptoPage() {
     try { setPortfolio(await api.getAgentPortfolio("crypto")); } catch { /* */ }
   }, []);
 
-  // 1s canlı: kartlar + açık pozisyonlar. Grafik 30s.
+  // 3s canlı: kartlar + açık pozisyonlar. Grafik 30s.
   useEffect(() => {
     loadScalp();
     loadPortfolio();
-    const i = setInterval(() => { loadScalp(); loadPortfolio(); }, 1_000);
+    const i = setInterval(() => { loadScalp(); loadPortfolio(); }, 3_000);
     return () => clearInterval(i);
   }, [loadScalp, loadPortfolio]);
 

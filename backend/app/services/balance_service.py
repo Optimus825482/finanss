@@ -42,6 +42,7 @@ def ensure_portfolio(db: Session, slug: str) -> Portfolio:
     Migration seed'i yapmamışsa bile runtime'da guarantee.
     """
     from app.config import PORTFOLIOS
+    from sqlalchemy.exc import IntegrityError
 
     p = get_portfolio_by_slug(db, slug)
     if p is not None:
@@ -60,7 +61,14 @@ def ensure_portfolio(db: Session, slug: str) -> Portfolio:
         is_active=True,
     )
     db.add(p)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Race: başka thread/ajent aynı slug'ı oluşturdu — mevcut kaydı dön.
+        db.rollback()
+        p = get_portfolio_by_slug(db, slug)
+        if p is None:
+            raise
     db.refresh(p)
     return p
 

@@ -15,3 +15,6 @@ npm notice run next dev -p 3009
  GET /portfoy 200 in 46ms
  ✓ Compiled in 4.2s (546 modules)
  ✓ Compiled in 1017ms (546 modules)
+ ✓ Compiled in 1498ms (546 modules)
+ ✓ Compiled in 306ms (277 modules)
+ ✓ Compiled in 257ms (277 modules)

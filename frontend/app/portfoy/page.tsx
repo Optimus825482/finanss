@@ -100,11 +100,11 @@ export default function PortfoyPage() {
     return () => clearInterval(i);
   }, [activeTab, cryptoChartSymbol, loadCryptoChart]);
 
-  // Scalper: crypto sekmesinde 1s canlı kart güncelleme
+  // Scalper: crypto sekmesinde 3s canlı kart güncelleme (backend zaten 1s tarıyor)
   useEffect(() => {
     if (activeTab !== "crypto") return;
     loadScalp();
-    const i = setInterval(loadScalp, 1_000);
+    const i = setInterval(loadScalp, 3_000);
     return () => clearInterval(i);
   }, [activeTab, loadScalp]);
 

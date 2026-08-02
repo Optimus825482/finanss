@@ -267,6 +267,10 @@ def _tick(db):
         px = get_price(pos.ticker)
         price = (px or {}).get("price") or 0
         if not price:
+            # get_price başarısız — bu turdaki sinyal fiyatını dene; o da yoksa atla ama sessiz kalma.
+            price = (signals.get(pos.ticker) or {}).get("price") or 0
+        if not price:
+            logger.warning("scalper: %s fiyat alınamadı — pozisyon yönetilmedi (stop-loss riski)", pos.ticker)
             continue
         sig = signals.get(pos.ticker)
         entry = pos.entry_price or 0
