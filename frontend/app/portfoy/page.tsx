@@ -480,7 +480,8 @@ export default function PortfoyPage() {
                 <tbody>
                   {decisions.map((d, i) => {
                     const isBuy = d.action === "buy";
-                    const pl = !isBuy ? (d.total_amount || 0) - (d.quantity * d.price) : null;
+                    // realized_pl backend'den gelir; yoksa legacy hesap (satış hasılatı - maliyet).
+                    const pl = !isBuy ? (d.realized_pl ?? (d.total_amount || 0) - (d.quantity * d.price)) : null;
                     return (
                       <tr key={d.id || i} style={{ color: "var(--term-text)", borderTop: `1px solid ${borderColor}` }}>
                         <td className="px-2 py-1.5" style={{ color: "var(--term-muted)" }}>

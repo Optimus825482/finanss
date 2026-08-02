@@ -288,12 +288,15 @@ def _tick(db):
 
     # ── Yeni alımlar ──
     open_positions = _open_positions(db, portfolio_id)
+    open_tickers = {p.ticker for p in open_positions}
     if len(open_positions) < MAX_OPEN_POSITIONS:
         ranked = sorted(signals.items(),
                         key=lambda kv: kv[1].get("composite", 50), reverse=True)
         for sym, sig in ranked:
             if len(_open_positions(db, portfolio_id)) >= MAX_OPEN_POSITIONS:
                 break
+            if sym in open_tickers:
+                continue  # zaten açık — ticker bazlı tekrar alım yok
             if sig.get("composite", 50) < BUY_THRESHOLD:
                 continue
             price = sig.get("price") or 0

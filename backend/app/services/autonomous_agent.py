@@ -182,6 +182,14 @@ class AutonomousAgent:
         total_cost = round(quantity * price, 2)
         if portfolio.cash < total_cost:
             return {"success": False, "error": f"Yetersiz bakiye. Gereken: ${total_cost}, Mevcut: ${portfolio.cash}"}
+        # Aynı ticker'da zaten açık pozisyon varsa yeniden alma (çift pozisyon çoğaltmasını önler).
+        existing = (db.query(PortfolioPosition)
+                    .filter(PortfolioPosition.status == "open")
+                    .filter(PortfolioPosition.portfolio_id == portfolio_id)
+                    .filter(PortfolioPosition.ticker == ticker.upper())
+                    .first())
+        if existing:
+            return {"success": False, "error": f"{ticker} zaten açık pozisyonda (pos #{existing.id}) — yeniden alım engellendi"}
 
         pos = PortfolioPosition(
             ticker=ticker.upper(), quantity=quantity, entry_price=price,
@@ -207,27 +215,31 @@ class AutonomousAgent:
             return {"success": False, "error": "Pozisyon bulunamadi"}
         if pos.portfolio_id != portfolio_id:
             return {"success": False, "error": f"Pozisyon bu portföye ait değil (pos.portfolio_id={pos.portfolio_id})"}
+        if pos.status != "open":
+            return {"success": False, "error": f"Pozisyon #{pos.id} zaten {pos.status} — tekrar satış engellendi"}
 
         proceeds = round(pos.quantity * price, 2)
+        pl = round(proceeds - pos.quantity * pos.entry_price, 2)
         pos.status = "closed"
         pos.exit_price = price
         pos.exit_date = now_istanbul()
         record_position_closed(db, pos.id, proceeds, pos.ticker, portfolio_id=portfolio_id)
 
         self._log_decision(db, pos.ticker, "sell", pos.quantity, price, proceeds, reasoning, confidence,
-                           portfolio_before, self.get_portfolio(db))
+                           portfolio_before, self.get_portfolio(db), realized_pl=pl)
 
         db.commit()
         return {"success": True, "ticker": pos.ticker, "proceeds": proceeds, "pl": round(proceeds - pos.quantity * pos.entry_price, 2)}
 
     def _log_decision(self, db: Session, ticker: str, action: str, quantity: float, price: float,
-                      amount: float, reasoning: str, confidence: float, portfolio_before: dict, portfolio_after: dict):
+                      amount: float, reasoning: str, confidence: float, portfolio_before: dict, portfolio_after: dict,
+                      realized_pl: float | None = None):
         """Her karari trading_decisions'a yaz (TradingDecision modeli ile)."""
         portfolio_id = self._ensure_portfolio_id(db)
         db.add(TradingDecision(
             ticker=ticker.upper(), action=action, quantity=quantity, price=price,
             total_amount=amount, reasoning=reasoning[:1000],
-            factors=json.dumps({}), confidence=confidence,
+            factors=json.dumps({"realized_pl": realized_pl}), confidence=confidence,
             portfolio_value_before=portfolio_before.get("total_market_value"),
             portfolio_value_after=portfolio_after.get("total_market_value"),
             portfolio_id=portfolio_id,
@@ -1052,15 +1064,17 @@ def get_trading_logs(db: Session, ticker: str | None = None, limit: int = 50, po
     if portfolio_id is not None:
         q = q.filter(TradingDecision.portfolio_id == portfolio_id)
     q = q.order_by(TradingDecision.created_at.desc()).limit(limit)
-    return [
-        {
+    out = []
+    for r in q.all():
+        factors = r.factors or {}
+        out.append({
             "id": r.id, "ticker": r.ticker, "action": r.action,
             "quantity": r.quantity, "price": r.price, "total_amount": r.total_amount,
             "reasoning": r.reasoning, "confidence": r.confidence,
             "portfolio_id": r.portfolio_id,
             "portfolio_value_before": r.portfolio_value_before,
             "portfolio_value_after": r.portfolio_value_after,
+            "realized_pl": factors.get("realized_pl") if isinstance(factors, dict) else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in q.all()
-    ]
+        })
+    return out

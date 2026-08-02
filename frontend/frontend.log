@@ -6,3 +6,12 @@ npm notice run next dev -p 3009
 
  ✓ Starting...
  ✓ Ready in 2.2s
+(node:35652) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ○ Compiling /portfoy ...
+ ✓ Compiled /portfoy in 1243ms (532 modules)
+ GET /portfoy 200 in 1532ms
+ GET /portfoy 200 in 89ms
+ GET /portfoy 200 in 46ms
+ ✓ Compiled in 4.2s (546 modules)
+ ✓ Compiled in 1017ms (546 modules)

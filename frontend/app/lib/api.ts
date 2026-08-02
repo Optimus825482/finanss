@@ -134,6 +134,7 @@ export type AgentDecision = {
   reasoning: string;
   confidence: number;
   portfolio_id?: number | null;
+  realized_pl?: number | null;
   created_at: string;
 };
 
