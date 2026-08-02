@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 const NAV_ITEMS = [
   { label: "ANA SAYFA", href: "/" },
   { label: "PORTFÖY", href: "/portfoy" },
+  { label: "KRİPTO", href: "/kripto" },
   { label: "SEMBOL ANALİZ", href: "/skill" },
   { label: "TAKİP", href: "/takip" },
   { label: "RAPORLAR", href: "/raporlar" },
