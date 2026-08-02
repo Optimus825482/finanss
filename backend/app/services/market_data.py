@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 _price_cache: dict[str, tuple[float, dict]] = {}
 _CACHE_TTL = 60  # saniye — polling 3sn = 20 kullanım, yfinance rate-limit koruması
 
+# Çıplak kripto kısa isimleri (Yahoo'da yok, Binance'te USDT paritesi)
+_CRYPTO_ALIASES = {"BTC", "ETH", "BNB", "SOL"}
+
 # Küresel makro göstergeler — batch download ile tek seferde çekilir.
 # Her gösterge: display_name, ticker, description, unit
 MACRO_INDICATORS: list[dict] = [
@@ -55,7 +58,9 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
 
     # .IS ticker'lar batch download'da calismaz → bireysel indir
     bist = [t for t in need_fetch if t.endswith(".IS")]
-    non_bist = [t for t in need_fetch if not t.endswith(".IS")]
+    # Kripto (USDT pariteleri + çıplak kısa isimler): Yahoo'da yok → Binance.
+    crypto = [t for t in need_fetch if t.upper().endswith("USDT") or t.upper() in _CRYPTO_ALIASES]
+    non_bist = [t for t in need_fetch if not t.endswith(".IS") and t not in crypto]
 
     # Non-BIST: batch download
     if non_bist:
@@ -78,6 +83,20 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
                     result[t] = {"price": None, "change_pct": None}
         else:
             for t in non_bist:
+                result[t] = {"price": None, "change_pct": None}
+
+    # Kripto: Binance canlı fiyat — Yahoo'da USDT pariteleri yok.
+    if crypto:
+        from app.services.binance_service import get_price as binance_price
+        for t in crypto:
+            try:
+                px = binance_price(t)
+                if px and px.get("price") is not None:
+                    result[t] = {"price": round(float(px["price"]), 2),
+                                 "change_pct": px.get("change_pct")}
+                else:
+                    result[t] = {"price": None, "change_pct": None}
+            except Exception:
                 result[t] = {"price": None, "change_pct": None}
 
     # BIST: batch download (5d/1d periyot, daha az request)
