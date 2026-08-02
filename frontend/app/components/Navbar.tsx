@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
+import PwaInstallButton from "./PwaInstallButton";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 
@@ -204,6 +205,7 @@ export default function Navbar() {
           </div>
 
           <ThemeToggle />
+          <PwaInstallButton />
         </div>
       </div>
 
