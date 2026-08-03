@@ -54,6 +54,7 @@ class ScalperSettingsIn(BaseModel):
     max_open_positions: Optional[int] = None     # frontend ScalpParams anahtarı
     position_usd: Optional[float] = None         # pozisyon başına bütçe (USDT)
     min_signal_drop: Optional[float] = None      # açık poz: sinyal < bu → çık
+    min_hold_s: Optional[float] = None           # girişten sonra sinyal-zayıf çıkışı cooldown (sn)
 
 class TestMessage(BaseModel):
     message: str = "Baglanti testi"
@@ -152,6 +153,7 @@ _SCALPER_SETTING_KEYS = {
     "max_positions": "scalper_max_positions",
     "position_usd": "scalper_position_usd",
     "min_signal_drop": "scalper_min_signal_drop",
+    "min_hold_s": "scalper_min_hold_s",
 }
 
 
@@ -172,6 +174,7 @@ def api_set_scalper_settings(body: ScalperSettingsIn, db: Session = Depends(get_
         "max_positions": body.max_positions if body.max_positions is not None else body.max_open_positions,
         "position_usd": body.position_usd,
         "min_signal_drop": body.min_signal_drop,
+        "min_hold_s": body.min_hold_s,
     }
     for name, value in updates.items():
         if value is not None:

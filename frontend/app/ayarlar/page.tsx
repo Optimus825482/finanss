@@ -57,6 +57,7 @@ export default function AyarlarPage() {
         max_open_positions: String(p.max_open_positions),
         position_usd: String(p.position_usd),
         min_signal_drop: String(p.min_signal_drop),
+        min_hold_s: String(p.min_hold_s ?? 300),
       });
     } catch { /* */ }
   };
@@ -71,6 +72,7 @@ export default function AyarlarPage() {
         max_open_positions: parseInt(scalperForm.max_open_positions, 10),
         position_usd: parseFloat(scalperForm.position_usd),
         min_signal_drop: parseFloat(scalperForm.min_signal_drop),
+        min_hold_s: parseFloat(scalperForm.min_hold_s),
       });
       setScalperMsg("✓ Scalper parametreleri kaydedildi");
     } catch (e) {
@@ -378,6 +380,7 @@ export default function AyarlarPage() {
                 ["max_open_positions", "MAX POZİSYON", "eşzamanlı açık poz"],
                 ["position_usd", "POZİSYON BÜTÇESİ $", "alım başına USDT"],
                 ["min_signal_drop", "MİN SİNYAL", "açık poz: altı → çık"],
+                ["min_hold_s", "MİN HOLD (sn)", "girişten sonra satış cooldown"],
               ] as const).map(([key, label, hint]) => (
                 <div key={key}>
                   <div className="font-mono text-[10px] tracking-wider mb-1" style={muted}>{label}</div>

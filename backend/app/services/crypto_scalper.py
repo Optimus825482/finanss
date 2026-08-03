@@ -49,6 +49,7 @@ _SCALPER_PARAM_KEYS = {
     "max_open_positions": ("scalper_max_positions", MAX_OPEN_POSITIONS),
     "position_usd": ("scalper_position_usd", POSITION_USD),
     "min_signal_drop": ("scalper_min_signal_drop", MIN_SIGNAL_DROP),
+    "min_hold_s": ("scalper_min_hold_s", MIN_HOLD_S),
 }
 
 
@@ -343,12 +344,12 @@ def _tick(db):
             entry_utc = (pos.entry_date.replace(tzinfo=IST).astimezone(timezone.utc).timestamp()
                          if pos.entry_date else 0)
             held = time.time() - entry_utc
-            if held >= MIN_HOLD_S:
+            if held >= p["min_hold_s"]:
                 reason = f"sinyal zayıf (composite {sig['composite']:.0f})"
-            elif held < MIN_HOLD_S:
+            elif held < p["min_hold_s"]:
                 # Tutma süresi dolmadan sinyal-zayıf çıkışı yok; sadece logla.
                 logger.debug("scalper: %s sinyal zayıf ama %d sn tutuluyor (min %d sn)",
-                             pos.ticker, int(held), int(MIN_HOLD_S))
+                             pos.ticker, int(held), int(p["min_hold_s"]))
         if reason:
             try:
                 result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8, source="scalper")
