@@ -36,7 +36,7 @@ TAKE_PROFIT_PCT = 0.025    # +%2.5 → k-r al
 MAX_OPEN_POSITIONS = int(PORTFOLIOS.get("crypto", {}).get("max_positions", 3))
 POSITION_USD = 25.0        # pozisyon başına bütçe (USDT)
 MIN_SIGNAL_DROP = 55.0     # açık poz: sinyal < bu → çık
-MIN_HOLD_S = 300.0         # girişten sonra sinyal-zayıf çıkışına minimum bekleme (5 dk)
+MIN_HOLD_BARS = 1.0        # girişten sonra sinyal-zayıf çıkışına minimum bekleme (5m bar)
                           # — giriş/çıkış aynı sinyal kaynağı olduğundan, sinyal girişten
                           # hemen sonra zayıflarsa pozisyonu saniyeler içinde kapatmaz.
 
@@ -49,7 +49,7 @@ _SCALPER_PARAM_KEYS = {
     "max_open_positions": ("scalper_max_positions", MAX_OPEN_POSITIONS),
     "position_usd": ("scalper_position_usd", POSITION_USD),
     "min_signal_drop": ("scalper_min_signal_drop", MIN_SIGNAL_DROP),
-    "min_hold_s": ("scalper_min_hold_s", MIN_HOLD_S),
+    "min_hold_bars": ("scalper_min_hold_bars", MIN_HOLD_BARS),
 }
 
 
@@ -63,7 +63,7 @@ def _get_params(db) -> dict:
     for name, (key, default) in _SCALPER_PARAM_KEYS.items():
         raw = get_setting(db, key, str(default))
         try:
-            out[name] = float(raw) if name != "max_open_positions" else int(float(raw))
+            out[name] = int(float(raw)) if name in ("max_open_positions", "min_hold_bars") else float(raw)
         except (TypeError, ValueError):
             out[name] = default
     return out
@@ -343,13 +343,14 @@ def _tick(db):
             IST = timezone(timedelta(hours=3))
             entry_utc = (pos.entry_date.replace(tzinfo=IST).astimezone(timezone.utc).timestamp()
                          if pos.entry_date else 0)
-            held = time.time() - entry_utc
-            if held >= p["min_hold_s"]:
+            held_s = time.time() - entry_utc
+            held_bars = held_s / 300.0  # 5m bar = 300 sn
+            if held_bars >= p["min_hold_bars"]:
                 reason = f"sinyal zayıf (composite {sig['composite']:.0f})"
-            elif held < p["min_hold_s"]:
+            elif held_bars < p["min_hold_bars"]:
                 # Tutma süresi dolmadan sinyal-zayıf çıkışı yok; sadece logla.
-                logger.debug("scalper: %s sinyal zayıf ama %d sn tutuluyor (min %d sn)",
-                             pos.ticker, int(held), int(p["min_hold_s"]))
+                logger.debug("scalper: %s sinyal zayıf ama %d bar tutuluyor (min %d bar)",
+                             pos.ticker, int(held_bars), int(p["min_hold_bars"]))
         if reason:
             try:
                 result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8, source="scalper")

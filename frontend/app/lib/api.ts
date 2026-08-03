@@ -335,7 +335,7 @@ export type ScalpParams = {
   max_open_positions: number;
   position_usd: number;
   min_signal_drop: number;
-  min_hold_s: number;
+  min_hold_bars: number;
   scan_interval_s: number;
 };
 
