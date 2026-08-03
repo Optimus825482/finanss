@@ -173,7 +173,7 @@ class AutonomousAgent:
             } for p in positions],
         }
 
-    def execute_buy(self, db: Session, ticker: str, quantity: float, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7) -> dict:
+    def execute_buy(self, db: Session, ticker: str, quantity: float, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7, source: str = "agent") -> dict:
         """Alim yap."""
         portfolio_id = self._ensure_portfolio_id(db)
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
@@ -182,11 +182,14 @@ class AutonomousAgent:
         total_cost = round(quantity * price, 2)
         if portfolio.cash < total_cost:
             return {"success": False, "error": f"Yetersiz bakiye. Gereken: ${total_cost}, Mevcut: ${portfolio.cash}"}
-        # Aynı ticker'da zaten açık pozisyon varsa yeniden alma (çift pozisyon çoğaltmasını önler).
+        # Aynı ticker + aynı kaynak'ta zaten açık pozisyon varsa yeniden alma.
+        # İki trade motoru (scalper/agent) aynı ticker'da paralel pozisyon açabilir,
+        # ama aynı motor aynı ticker'da çift pozisyon açmaz.
         existing = (db.query(PortfolioPosition)
                     .filter(PortfolioPosition.status == "open")
                     .filter(PortfolioPosition.portfolio_id == portfolio_id)
                     .filter(PortfolioPosition.ticker == ticker.upper())
+                    .filter(PortfolioPosition.source == source)
                     .first())
         if existing:
             return {"success": False, "error": f"{ticker} zaten açık pozisyonda (pos #{existing.id}) — yeniden alım engellendi"}
@@ -194,7 +197,7 @@ class AutonomousAgent:
         pos = PortfolioPosition(
             ticker=ticker.upper(), quantity=quantity, entry_price=price,
             entry_date=now_istanbul(), status="open",
-            portfolio_id=portfolio_id,
+            portfolio_id=portfolio_id, source=source,
         )
         db.add(pos)
         db.flush()
@@ -207,7 +210,7 @@ class AutonomousAgent:
         db.commit()
         return {"success": True, "position_id": pos.id, "ticker": ticker, "quantity": quantity, "cost": total_cost}
 
-    def execute_sell(self, db: Session, position_id: int, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7) -> dict:
+    def execute_sell(self, db: Session, position_id: int, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7, source: str = "agent") -> dict:
         """Satis yap."""
         portfolio_id = self._ensure_portfolio_id(db)
         pos = db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id).first()
@@ -217,6 +220,9 @@ class AutonomousAgent:
             return {"success": False, "error": f"Pozisyon bu portföye ait değil (pos.portfolio_id={pos.portfolio_id})"}
         if pos.status != "open":
             return {"success": False, "error": f"Pozisyon #{pos.id} zaten {pos.status} — tekrar satış engellendi"}
+        # İki trade motoru ayrı çalışır — her biri sadece kendi pozisyonunu satabilir.
+        if pos.source != source:
+            return {"success": False, "error": f"Pozisyon #{pos.id} {pos.source} motoruna ait — {source} motoru satamaz"}
 
         proceeds = round(pos.quantity * price, 2)
         pl = round(proceeds - pos.quantity * pos.entry_price, 2)

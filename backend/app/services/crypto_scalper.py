@@ -233,10 +233,11 @@ def _crypto_signals(symbols: list[str]) -> dict[str, dict]:
     return out
 
 
-def _open_positions(db, portfolio_id: int) -> list[PortfolioPosition]:
+def _open_positions(db, portfolio_id: int, source: str = "scalper") -> list[PortfolioPosition]:
     return (db.query(PortfolioPosition)
             .filter(PortfolioPosition.status == "open")
             .filter(PortfolioPosition.portfolio_id == portfolio_id)
+            .filter(PortfolioPosition.source == source)
             .all())
 
 
@@ -320,7 +321,7 @@ def _tick(db):
                              pos.ticker, int(held), int(MIN_HOLD_S))
         if reason:
             try:
-                result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8)
+                result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8, source="scalper")
                 if result.get("success"):
                     actions.append({"action": "sell", "ticker": pos.ticker,
                                     "price": price, "reason": reason,
@@ -355,7 +356,7 @@ def _tick(db):
                          f"mom15m={sig.get('momentum_15m', 50):.0f} "
                          f"mom1h={sig.get('momentum_1h', 50):.0f}")
             try:
-                result = agent.execute_buy(db, sym, qty, price, reasoning, portfolio_before, confidence=0.8)
+                result = agent.execute_buy(db, sym, qty, price, reasoning, portfolio_before, confidence=0.8, source="scalper")
                 if result.get("success"):
                     actions.append({"action": "buy", "ticker": sym, "price": price,
                                     "quantity": qty, "composite": sig["composite"],

@@ -123,6 +123,9 @@ class PortfolioPosition(Base):
     status = Column(String, default="open")  # open | closed
     exit_price = Column(Float, nullable=True)
     exit_date = Column(DateTime, nullable=True)
+    # Trade motoru ayrımı: "scalper" (otomatik) vs "agent" (LLM/manuel).
+    # İki motor aynı portföyde çakışmasın — her biri sadece kendi pozisyonunu yönetir.
+    source = Column(String, default="agent", nullable=False, server_default="agent")
 
     created_at = Column(DateTime, default=now_istanbul)
 
