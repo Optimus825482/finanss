@@ -16,7 +16,7 @@ import asyncio
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.config import CRYPTO_UNIVERSE, PORTFOLIOS
 from app.database import SessionLocal
@@ -36,6 +36,9 @@ TAKE_PROFIT_PCT = 0.025    # +%2.5 → k-r al
 MAX_OPEN_POSITIONS = int(PORTFOLIOS.get("crypto", {}).get("max_positions", 3))
 POSITION_USD = 25.0        # pozisyon başına bütçe (USDT)
 MIN_SIGNAL_DROP = 55.0     # açık poz: sinyal < bu → çık
+MIN_HOLD_S = 300.0         # girişten sonra sinyal-zayıf çıkışına minimum bekleme (5 dk)
+                          # — giriş/çıkış aynı sinyal kaynağı olduğundan, sinyal girişten
+                          # hemen sonra zayıflarsa pozisyonu saniyeler içinde kapatmaz.
 
 # ── Modül state ──
 _stop_event: asyncio.Event | None = None
@@ -206,7 +209,11 @@ def stop(timeout: float = 10.0) -> dict:
 # ── Yardımcılar ──
 
 def _crypto_signals(symbols: list[str]) -> dict[str, dict]:
-    """Evren için MT sinyal haritası: {sym: {price, composite, momentum_5m, rsi, ...}}."""
+    """Evren için MT sinyal haritası: {sym: {price, composite, momentum_5m, rsi, ...}}.
+
+    Giriş sinyali M5 (ref_tf="5m") — gürültü/gecikme arası dengeli, kullanıcı tercihi.
+    Stop-loss/take-profit fiyat bazlı olduğundan zarar koruması her TF'de korunur.
+    """
     from app.agents.crypto_agent import compute_crypto_signal_mt
     out: dict[str, dict] = {}
     for sym in symbols:
@@ -218,7 +225,7 @@ def _crypto_signals(symbols: list[str]) -> dict[str, dict]:
             klines_by_tf[tf] = get_klines(sym, tf, limit=100) or []
         if not any(klines_by_tf.values()):
             continue
-        sig = compute_crypto_signal_mt(klines_by_tf)
+        sig = compute_crypto_signal_mt(klines_by_tf, ref_tf="5m")
         # numpy skalerleri JSON'a gitmez - float'a normalize et
         sig = {k: (float(v) if isinstance(v, (float, int)) and not isinstance(v, bool) else v)
                for k, v in sig.items()}
@@ -297,7 +304,20 @@ def _tick(db):
         elif pnl_pct >= TAKE_PROFIT_PCT:
             reason = f"TAKE-PROFIT {pnl_pct*100:.2f}%"
         elif sig and sig.get("composite", 50) < MIN_SIGNAL_DROP:
-            reason = f"sinyal zayıf (composite {sig['composite']:.0f})"
+            # Girişten hemen sonra sinyal zayıflarsa satma — minimum tutma süresi.
+            # Stop-loss/take-profit fiyat bazlı olduğundan zarar koruması korunur.
+            # entry_date DB'den naive "Istanbul local" döner (tz kaybolur) →
+            # +3 (Istanbul) ekleyip UTC'ye çevir, time.time() (UTC) ile karşılaştır.
+            IST = timezone(timedelta(hours=3))
+            entry_utc = (pos.entry_date.replace(tzinfo=IST).astimezone(timezone.utc).timestamp()
+                         if pos.entry_date else 0)
+            held = time.time() - entry_utc
+            if held >= MIN_HOLD_S:
+                reason = f"sinyal zayıf (composite {sig['composite']:.0f})"
+            elif held < MIN_HOLD_S:
+                # Tutma süresi dolmadan sinyal-zayıf çıkışı yok; sadece logla.
+                logger.debug("scalper: %s sinyal zayıf ama %d sn tutuluyor (min %d sn)",
+                             pos.ticker, int(held), int(MIN_HOLD_S))
         if reason:
             try:
                 result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8)

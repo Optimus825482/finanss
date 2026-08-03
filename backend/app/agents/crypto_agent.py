@@ -149,29 +149,41 @@ def _dynamic_weights(rsi: float) -> tuple[float, float, float]:
     return w_mom, w_rsi, w_vol
 
 
-def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]]) -> dict:
-    """Çok zaman dilimli sinyal — momentum 5m/15m/1h ağırlıklı birleşik.
+def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]], ref_tf: str = "5m") -> dict:
+    """Çok zaman dilimli sinyal — momentum ref/15m/1h ağırlıklı birleşik.
 
-    `klines_by_tf`: {"5m": [...], "15m": [...], "1h": [...]}
+    `klines_by_tf`: {"5m": [...], "15m": [...], "1h": [...]} (ref_tf=5m)
+                    ya da {"15m": [...], "1h": [...]} (ref_tf=15m)
     Hangi dilim yoksa/eksikse momentum o dilimden 50 (nötr) sayılır.
+
+    `ref_tf` — RSI/volume/volatility'nin alındığı ana dilim (giriş sinyali).
+    Scalper M15 girişi için ref_tf="15m" kullanır.
 
     Dinamik ağırlık: dilimler trend yönünde hizalıysa (≥2 dilim aynı yönde)
     üst dilimlerin ağırlığı artar (trend teyidi). RSI aşırı/nötr durumuna
     göre momentum/RSI ağırlığı kayar.
     """
-    tf_weights = {"5m": 0.5, "15m": 0.3, "1h": 0.2}
+    if ref_tf == "1m":
+        tf_weights = {"1m": 0.5, "5m": 0.3, "1h": 0.2}
+        aligned_weights = {"1m": 0.35, "5m": 0.35, "1h": 0.30}
+    elif ref_tf == "5m":
+        tf_weights = {"5m": 0.5, "15m": 0.3, "1h": 0.2}
+        aligned_weights = {"5m": 0.35, "15m": 0.35, "1h": 0.30}
+    else:  # ref_tf == "15m" — 15m giriş, 1h teyit
+        tf_weights = {"15m": 0.7, "1h": 0.3}
+        aligned_weights = {"15m": 0.6, "1h": 0.4}
     mom_by_tf: dict[str, float] = {}
-    closes_5m = None
-    volumes_5m = None
+    closes_ref = None
+    volumes_ref = None
     for tf, klines in klines_by_tf.items():
         if not klines or len(klines) < 4:
             mom_by_tf[tf] = 50.0
             continue
         closes = np.array([k["close"] for k in klines], dtype=float)
         mom_by_tf[tf] = _score_momentum(closes)
-        if tf == "5m":
-            closes_5m = closes
-            volumes_5m = np.array([k["volume"] for k in klines], dtype=float)
+        if tf == ref_tf:
+            closes_ref = closes
+            volumes_ref = np.array([k["volume"] for k in klines], dtype=float)
 
     # Trend hizalaması: ≥2 dilim aynı yönde → üst dilimlere ağırlık kay
     directions = {tf: 1 if s >= 55 else (-1 if s <= 45 else 0)
@@ -180,11 +192,11 @@ def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]]) -> dict:
     bearish_n = sum(1 for d in directions.values() if d == -1)
     aligned = bullish_n >= 2 or bearish_n >= 2
     if aligned:
-        tf_weights = {"5m": 0.35, "15m": 0.35, "1h": 0.30}
+        tf_weights = aligned_weights
 
     mom = round(sum(tf_weights[tf] * mom_by_tf[tf] for tf in tf_weights), 1)
 
-    if closes_5m is None or volumes_5m is None or len(closes_5m) < 20:
+    if closes_ref is None or volumes_ref is None or len(closes_ref) < 20:
         return {
             "composite": 50.0, "momentum_score": mom,
             "momentum_5m": mom_by_tf.get("5m", 50.0),
@@ -195,9 +207,9 @@ def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]]) -> dict:
             "w_momentum": 0.4, "w_rsi": 0.35, "tf_aligned": aligned,
         }
 
-    rsi = _rsi(closes_5m)
-    vol_score = _score_volume(volumes_5m)
-    penalty = _volatility_penalty(closes_5m)
+    rsi = _rsi(closes_ref)
+    vol_score = _score_volume(volumes_ref)
+    penalty = _volatility_penalty(closes_ref)
 
     w_mom, w_rsi, w_vol = _dynamic_weights(rsi)
 
@@ -218,6 +230,7 @@ def compute_crypto_signal_mt(klines_by_tf: dict[str, list[dict]]) -> dict:
         "momentum_5m": mom_by_tf.get("5m", 50.0),
         "momentum_15m": mom_by_tf.get("15m", 50.0),
         "momentum_1h": mom_by_tf.get("1h", 50.0),
+        "momentum_ref": mom_by_tf.get(ref_tf, 50.0),
         "rsi": rsi,
         "volume_score": vol_score,
         "volatility_penalty": penalty,

@@ -239,7 +239,11 @@ class AutonomousAgent:
         db.add(TradingDecision(
             ticker=ticker.upper(), action=action, quantity=quantity, price=price,
             total_amount=amount, reasoning=reasoning[:1000],
-            factors=json.dumps({"realized_pl": realized_pl}), confidence=confidence,
+            # factors JSON column — dict ver, SQLAlchemy kendisi serialize eder.
+            # json.dumps + JSON column = çift serialize → string olarak saklanır,
+            # get_trading_logs dict yerine string görür → realized_pl hiç okunmaz.
+            factors=({"realized_pl": realized_pl} if realized_pl is not None else {}),
+            confidence=confidence,
             portfolio_value_before=portfolio_before.get("total_market_value"),
             portfolio_value_after=portfolio_after.get("total_market_value"),
             portfolio_id=portfolio_id,
