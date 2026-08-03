@@ -21,6 +21,7 @@ from datetime import datetime
 from app.config import CRYPTO_UNIVERSE, PORTFOLIOS
 from app.database import SessionLocal
 from app.models.core import PortfolioPosition
+from app.models.portfolio import Portfolio
 from app.services.binance_service import get_price, get_klines
 
 logger = logging.getLogger(__name__)
@@ -345,13 +346,19 @@ def _tick(db):
                 logger.exception("scalper: %s alım hatası: %s", sym, e)
                 db.rollback()
 
+    # İşlemlerden sonra taze cash oku — bu turdaki al/sat yansımış olsun.
+    _portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+    _cash = _portfolio.cash if _portfolio else 0.0
     _set_state(last_round_at=datetime.now().isoformat(),
                last_round={
                    "ok": True,
                    "scanned": len(signals),
                    "open_positions": len(_open_positions(db, portfolio_id)),
                    "actions": actions,
-                   "equity_usdt": round(sum(
+                   # Equity = nakit + açık poz market değeri. Önceki sürüm sadece
+                   # açık poz değerini sayıyordu → kapanan pozların kâr/zararı
+                   # toplam portföyü değiştirmiyor görünüyordu.
+                   "equity_usdt": round(_cash + sum(
                        (signals.get(p.ticker) or {}).get("price", p.entry_price or 0) * p.quantity
                        for p in _open_positions(db, portfolio_id)), 2),
                    "ms": int((time.time() - round_start) * 1000),
