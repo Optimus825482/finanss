@@ -330,6 +330,15 @@ def _reset_portfolio_internal(db: Session, portfolio_slug: Optional[str] = None)
                 TradingDecision.portfolio_id == portfolio_id
             ).count(),
         }
+        # Önce bu portföyün pozisyonlarına referans veren balance_transactions'ı
+        # position_id üzerinden sil — CASCADE FK (position_id → portfolio_positions)
+        # portfolio_positions DELETE'te ihlal edilmesin. position_id bazlı yakala.
+        pos_ids = [p.id for p in db.query(PortfolioPosition.id).filter(
+            PortfolioPosition.portfolio_id == portfolio_id)]
+        if pos_ids:
+            db.query(BalanceTransaction).filter(
+                BalanceTransaction.position_id.in_(pos_ids)
+            ).delete(synchronize_session=False)
         db.query(BalanceTransaction).filter(
             BalanceTransaction.portfolio_id == portfolio_id
         ).delete(synchronize_session=False)
