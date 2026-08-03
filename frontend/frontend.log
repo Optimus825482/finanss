@@ -32,3 +32,13 @@ npm notice run next dev -p 3009
  ✓ Compiled in 449ms (552 modules)
  GET /kripto 200 in 173ms
  GET /kripto 200 in 80ms
+ ✓ Compiled in 1230ms (548 modules)
+ ✓ Compiled in 472ms (279 modules)
+ ✓ Compiled in 289ms (279 modules)
+ ✓ Compiled in 242ms (279 modules)
+ ✓ Compiled in 283ms (279 modules)
+ ✓ Compiled in 1461ms (279 modules)
+ ✓ Compiled in 651ms (279 modules)
+ ✓ Compiled /kripto in 249ms (273 modules)
+ GET /kripto 200 in 460ms
+ GET /kripto 200 in 42ms
