@@ -45,6 +45,16 @@ class SettingIn(BaseModel):
     value: str
     description: Optional[str] = None
 
+class ScalperSettingsIn(BaseModel):
+    """Kripto scalper parametreleri — toplu güncelleme. Verilmeyenler değişmez."""
+    buy_threshold: Optional[float] = None        # composite ≥ bu → alım
+    stop_loss_pct: Optional[float] = None        # ondalık (0.015 = %1.5)
+    take_profit_pct: Optional[float] = None      # ondalık (0.025 = %2.5)
+    max_positions: Optional[int] = None          # eşzamanlı açık pozisyon (alias)
+    max_open_positions: Optional[int] = None     # frontend ScalpParams anahtarı
+    position_usd: Optional[float] = None         # pozisyon başına bütçe (USDT)
+    min_signal_drop: Optional[float] = None      # açık poz: sinyal < bu → çık
+
 class TestMessage(BaseModel):
     message: str = "Baglanti testi"
 
@@ -131,6 +141,43 @@ def api_get_settings(db: Session = Depends(get_db)):
 def api_set_setting(body: SettingIn, db: Session = Depends(get_db)):
     s = set_setting(db, key=body.key, value=body.value, description=body.description)
     return {"key": s.key, "value": s.value, "updated": True}
+
+
+# ── Kripto scalper parametreleri ──
+
+_SCALPER_SETTING_KEYS = {
+    "buy_threshold": "scalper_buy_threshold",
+    "stop_loss_pct": "scalper_stop_loss_pct",
+    "take_profit_pct": "scalper_take_profit_pct",
+    "max_positions": "scalper_max_positions",
+    "position_usd": "scalper_position_usd",
+    "min_signal_drop": "scalper_min_signal_drop",
+}
+
+
+@router.get("/scalper")
+def api_get_scalper_settings(db: Session = Depends(get_db)):
+    """Kripto scalper parametrelerini döndür (SystemSettings'ten)."""
+    from app.services.crypto_scalper import _get_params
+    return _get_params(db)
+
+
+@router.post("/scalper")
+def api_set_scalper_settings(body: ScalperSettingsIn, db: Session = Depends(get_db)):
+    """Kripto scalper parametrelerini güncelle. Verilmeyenler değişmez."""
+    updates = {
+        "buy_threshold": body.buy_threshold,
+        "stop_loss_pct": body.stop_loss_pct,
+        "take_profit_pct": body.take_profit_pct,
+        "max_positions": body.max_positions if body.max_positions is not None else body.max_open_positions,
+        "position_usd": body.position_usd,
+        "min_signal_drop": body.min_signal_drop,
+    }
+    for name, value in updates.items():
+        if value is not None:
+            set_setting(db, key=_SCALPER_SETTING_KEYS[name], value=str(value))
+    from app.services.crypto_scalper import _get_params
+    return {"updated": True, "params": _get_params(db)}
 
 
 @router.get("/prediction-config")

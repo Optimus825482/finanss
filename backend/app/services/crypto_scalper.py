@@ -40,6 +40,34 @@ MIN_HOLD_S = 300.0         # girişten sonra sinyal-zayıf çıkışına minimum
                           # — giriş/çıkış aynı sinyal kaynağı olduğundan, sinyal girişten
                           # hemen sonra zayıflarsa pozisyonu saniyeler içinde kapatmaz.
 
+# ── Parametre kaynağı (SystemSettings'ten ayarlanabilir) ──
+# Anahtarlar admin paneli / scalper endpoint'inden güncellenebilir.
+_SCALPER_PARAM_KEYS = {
+    "buy_threshold": ("scalper_buy_threshold", BUY_THRESHOLD),
+    "stop_loss_pct": ("scalper_stop_loss_pct", STOP_LOSS_PCT),
+    "take_profit_pct": ("scalper_take_profit_pct", TAKE_PROFIT_PCT),
+    "max_open_positions": ("scalper_max_positions", MAX_OPEN_POSITIONS),
+    "position_usd": ("scalper_position_usd", POSITION_USD),
+    "min_signal_drop": ("scalper_min_signal_drop", MIN_SIGNAL_DROP),
+}
+
+
+def _get_params(db) -> dict:
+    """6 scalper parametresini SystemSettings'ten oku (default = module sabitleri).
+
+    MAX_OPEN_POSITIONS default'u PORTFOLIOS config'inden; diğerleri module sabitleri.
+    """
+    from app.services.admin_service import get_setting
+    out = {}
+    for name, (key, default) in _SCALPER_PARAM_KEYS.items():
+        raw = get_setting(db, key, str(default))
+        try:
+            out[name] = float(raw) if name != "max_open_positions" else int(float(raw))
+        except (TypeError, ValueError):
+            out[name] = default
+    return out
+
+
 # ── Modül state ──
 _stop_event: asyncio.Event | None = None
 _thread: threading.Thread | None = None          # stop() thread'in bitmesini beklesin
@@ -87,7 +115,8 @@ def cards() -> dict:
         from app.services.autonomous_agent import AutonomousAgent
         agent = AutonomousAgent(portfolio_slug="crypto")
         portfolio_id = agent._ensure_portfolio_id(db)
-        open_pos = {p.ticker: p for p in _open_positions(db, portfolio_id)}
+        p = _get_params(db)
+        open_pos = {p2.ticker: p2 for p2 in _open_positions(db, portfolio_id)}
         signals = _last_signals
         if not signals:
             signals = _crypto_signals(CRYPTO_UNIVERSE)
@@ -101,20 +130,20 @@ def cards() -> dict:
             action = "hold"
             if pos and price > 0 and pos.entry_price:
                 pnl_pct = (price - pos.entry_price) / pos.entry_price
-                if pnl_pct <= -STOP_LOSS_PCT:
+                if pnl_pct <= -p["stop_loss_pct"]:
                     action, rule = "sell", f"STOP-LOSS {pnl_pct*100:.2f}%"
-                elif pnl_pct >= TAKE_PROFIT_PCT:
+                elif pnl_pct >= p["take_profit_pct"]:
                     action, rule = "sell", f"TAKE-PROFIT {pnl_pct*100:.2f}%"
-                elif composite < MIN_SIGNAL_DROP:
+                elif composite < p["min_signal_drop"]:
                     action, rule = "sell", f"sinyal zayıf (composite {composite:.0f})"
                 else:
-                    action, rule = "hold", f"HOLD - stop {STOP_LOSS_PCT*100:.1f}% / TP {TAKE_PROFIT_PCT*100:.1f}%"
+                    action, rule = "hold", f"HOLD - stop {p['stop_loss_pct']*100:.1f}% / TP {p['take_profit_pct']*100:.1f}%"
             elif pos:
                 action, rule = "hold", "HOLD - pozisyon var"
-            elif composite >= BUY_THRESHOLD:
-                action, rule = "buy", f"AL adayı - composite {composite:.0f} ≥ {BUY_THRESHOLD:.0f}"
+            elif composite >= p["buy_threshold"]:
+                action, rule = "buy", f"AL adayı - composite {composite:.0f} ≥ {p['buy_threshold']:.0f}"
             else:
-                action, rule = "wait", f"bekle - composite {composite:.0f} < {BUY_THRESHOLD:.0f}"
+                action, rule = "wait", f"bekle - composite {composite:.0f} < {p['buy_threshold']:.0f}"
 
             card = {
                 "ticker": sym,
@@ -149,12 +178,12 @@ def cards() -> dict:
             "status": status(),
             "cards": cards_out,
             "params": {
-                "buy_threshold": BUY_THRESHOLD,
-                "stop_loss_pct": STOP_LOSS_PCT * 100,
-                "take_profit_pct": TAKE_PROFIT_PCT * 100,
-                "max_open_positions": MAX_OPEN_POSITIONS,
-                "position_usd": POSITION_USD,
-                "min_signal_drop": MIN_SIGNAL_DROP,
+                "buy_threshold": p["buy_threshold"],
+                "stop_loss_pct": p["stop_loss_pct"] * 100,
+                "take_profit_pct": p["take_profit_pct"] * 100,
+                "max_open_positions": p["max_open_positions"],
+                "position_usd": p["position_usd"],
+                "min_signal_drop": p["min_signal_drop"],
                 "scan_interval_s": SCAN_INTERVAL_S,
             },
         }
@@ -275,6 +304,7 @@ def _tick(db):
     agent = AutonomousAgent(portfolio_slug="crypto")
     portfolio_id = agent._ensure_portfolio_id(db)
     portfolio_before = agent.get_portfolio(db)
+    p = _get_params(db)
 
     signals = _crypto_signals(CRYPTO_UNIVERSE)
     _last_signals = signals  # cards() aynı veriyi kullansın
@@ -300,11 +330,11 @@ def _tick(db):
         entry = pos.entry_price or 0
         pnl_pct = (price - entry) / entry if entry else 0
         reason = None
-        if pnl_pct <= -STOP_LOSS_PCT:
+        if pnl_pct <= -p["stop_loss_pct"]:
             reason = f"STOP-LOSS {pnl_pct*100:.2f}%"
-        elif pnl_pct >= TAKE_PROFIT_PCT:
+        elif pnl_pct >= p["take_profit_pct"]:
             reason = f"TAKE-PROFIT {pnl_pct*100:.2f}%"
-        elif sig and sig.get("composite", 50) < MIN_SIGNAL_DROP:
+        elif sig and sig.get("composite", 50) < p["min_signal_drop"]:
             # Girişten hemen sonra sinyal zayıflarsa satma — minimum tutma süresi.
             # Stop-loss/take-profit fiyat bazlı olduğundan zarar koruması korunur.
             # entry_date DB'den naive "Istanbul local" döner (tz kaybolur) →
@@ -333,21 +363,21 @@ def _tick(db):
 
     # ── Yeni alımlar ──
     open_positions = _open_positions(db, portfolio_id)
-    open_tickers = {p.ticker for p in open_positions}
-    if len(open_positions) < MAX_OPEN_POSITIONS:
+    open_tickers = {p2.ticker for p2 in open_positions}
+    if len(open_positions) < p["max_open_positions"]:
         ranked = sorted(signals.items(),
                         key=lambda kv: kv[1].get("composite", 50), reverse=True)
         for sym, sig in ranked:
-            if len(_open_positions(db, portfolio_id)) >= MAX_OPEN_POSITIONS:
+            if len(_open_positions(db, portfolio_id)) >= p["max_open_positions"]:
                 break
             if sym in open_tickers:
                 continue  # zaten açık — ticker bazlı tekrar alım yok
-            if sig.get("composite", 50) < BUY_THRESHOLD:
+            if sig.get("composite", 50) < p["buy_threshold"]:
                 continue
             price = sig.get("price") or 0
             if price <= 0:
                 continue
-            qty = round(POSITION_USD / price, 6)
+            qty = round(p["position_usd"] / price, 6)
             if qty <= 0:
                 continue
             reasoning = (f"scalper sinyal composite={sig['composite']:.1f} "

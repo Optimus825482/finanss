@@ -642,6 +642,13 @@ export const api = {
   cryptoScalpStop: () => apiFetch("/api/crypto/scalp/stop", { method: "POST" }).then(j<Record<string, unknown>>),
   cryptoScalpStatus: () => apiFetch("/api/crypto/scalp/status", { cache: "no-store" }).then(j<Record<string, unknown>>),
   cryptoScalpCards: () => apiFetch("/api/crypto/scalp/cards", { cache: "no-store" }).then(j<ScalpCardsResponse>),
+  getScalperSettings: () => apiFetch("/api/admin/scalper", { cache: "no-store" }).then(j<ScalpParams>),
+  setScalperSettings: (body: Partial<ScalpParams>) =>
+    apiFetch("/api/admin/scalper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(j<{ updated: boolean; params: ScalpParams }>),
 
   // ── Ayarlar: bakiye + scraping ──
   setBalance: (portfolioSlug: string, amount: number) =>

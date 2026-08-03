@@ -42,6 +42,42 @@ export default function AyarlarPage() {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [scraping, setScraping] = useState<{ enabled: boolean; bist: boolean; us: boolean; crypto: boolean } | null>(null);
 
+  // ── Kripto scalper parametreleri ──
+  const [scalperForm, setScalperForm] = useState<Record<string, string>>({});
+  const [scalperMsg, setScalperMsg] = useState<string | null>(null);
+  const [scalperLoading, setScalperLoading] = useState(false);
+
+  const loadScalper = async () => {
+    try {
+      const p = await api.getScalperSettings();
+      setScalperForm({
+        buy_threshold: String(p.buy_threshold),
+        stop_loss_pct: String(p.stop_loss_pct * 100), // yüzde olarak göster
+        take_profit_pct: String(p.take_profit_pct * 100),
+        max_open_positions: String(p.max_open_positions),
+        position_usd: String(p.position_usd),
+        min_signal_drop: String(p.min_signal_drop),
+      });
+    } catch { /* */ }
+  };
+
+  const saveScalper = async () => {
+    setScalperLoading(true); setScalperMsg(null);
+    try {
+      await api.setScalperSettings({
+        buy_threshold: parseFloat(scalperForm.buy_threshold),
+        stop_loss_pct: parseFloat(scalperForm.stop_loss_pct) / 100,
+        take_profit_pct: parseFloat(scalperForm.take_profit_pct) / 100,
+        max_open_positions: parseInt(scalperForm.max_open_positions, 10),
+        position_usd: parseFloat(scalperForm.position_usd),
+        min_signal_drop: parseFloat(scalperForm.min_signal_drop),
+      });
+      setScalperMsg("✓ Scalper parametreleri kaydedildi");
+    } catch (e) {
+      setScalperMsg(`✗ ${e instanceof Error ? e.message : "hata"}`);
+    } finally { setScalperLoading(false); }
+  };
+
   const loadScraping = async () => {
     try { setScraping(await api.scrapingStatus()); } catch { /* */ }
   };
@@ -76,7 +112,7 @@ export default function AyarlarPage() {
     if (res.ok) setModels(await res.json());
   };
 
-  useEffect(() => { loadProviders(); loadModels(); loadScraping(); }, []);
+  useEffect(() => { loadProviders(); loadModels(); loadScraping(); loadScalper(); }, []);
 
   const addProvider = async (data: { name: string; slug: string; base_url: string; api_key: string }) => {
     await apiFetch("/api/admin/providers", {
@@ -324,6 +360,48 @@ export default function AyarlarPage() {
             ) : (
               <div className="text-xs font-mono" style={muted}>Yükleniyor…</div>
             )}
+          </div>
+
+          {/* ── KRİPTO SCALPER PARAMETRELERİ ── */}
+          <div className="rounded-sm px-4 py-4" style={borderStyle}>
+            <div className="font-mono text-sm font-semibold mb-1" style={{ color: "var(--term-text)" }}>
+              KRİPTO SCALPER PARAMETRELERİ
+            </div>
+            <p className="text-xs font-mono mb-3" style={muted}>
+              Otonom kripto scalper'ın alım/satım eşikleri ve pozisyon büyüklüğü. Kaydet sonraki turda uygulanır.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+              {([
+                ["buy_threshold", "ALIM EŞİĞİ", "composite ≥ bu → al"],
+                ["stop_loss_pct", "STOP-LOSS %", "ondalık (1.5 = %1.5)"],
+                ["take_profit_pct", "TAKE-PROFIT %", "ondalık (2.5 = %2.5)"],
+                ["max_open_positions", "MAX POZİSYON", "eşzamanlı açık poz"],
+                ["position_usd", "POZİSYON BÜTÇESİ $", "alım başına USDT"],
+                ["min_signal_drop", "MİN SİNYAL", "açık poz: altı → çık"],
+              ] as const).map(([key, label, hint]) => (
+                <div key={key}>
+                  <div className="font-mono text-[10px] tracking-wider mb-1" style={muted}>{label}</div>
+                  <input
+                    type="number" step="any" value={scalperForm[key] ?? ""}
+                    onChange={(e) => setScalperForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="font-mono text-xs w-full px-2 py-1.5 rounded-sm transition-none"
+                    style={{
+                      backgroundColor: "var(--term-bg)", border: borderStyle.border,
+                      color: "var(--term-text)", outline: "none",
+                    }}
+                  />
+                  <div className="font-mono text-[9px] mt-0.5" style={muted}>{hint}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={saveScalper} disabled={scalperLoading}
+                className="font-mono text-xs px-4 py-1.5 rounded-sm transition-none disabled:opacity-40"
+                style={{ border: `1px solid var(--term-amber)`, color: "var(--term-amber)", backgroundColor: "var(--term-amber)15" }}>
+                {scalperLoading ? "KAYDEDİLİYOR…" : "KAYDET"}
+              </button>
+              {scalperMsg && <span className="font-mono text-[11px]" style={{ color: scalperMsg.startsWith("✓") ? "var(--term-green)" : "var(--term-red)" }}>{scalperMsg}</span>}
+            </div>
           </div>
 
           {/* ── BAŞLANGIÇ BAKİYESİ SET ── */}
