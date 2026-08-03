@@ -18,7 +18,7 @@ import threading
 import time
 from datetime import datetime
 
-from app.config import CRYPTO_UNIVERSE
+from app.config import CRYPTO_UNIVERSE, PORTFOLIOS
 from app.database import SessionLocal
 from app.models.core import PortfolioPosition
 from app.services.binance_service import get_price, get_klines
@@ -30,7 +30,9 @@ SCAN_INTERVAL_S = 1.0
 BUY_THRESHOLD = 65.0       # composite ≥ bu → alım
 STOP_LOSS_PCT = 0.015      # -%1.5 → stop
 TAKE_PROFIT_PCT = 0.025    # +%2.5 → k-r al
-MAX_OPEN_POSITIONS = 3
+# Eşzamanlı açık pozisyon limiti — PORTFOLIOS["crypto"].max_positions'dan çekilir
+# (tek doğruluk kaynağı). Fallback 3.
+MAX_OPEN_POSITIONS = int(PORTFOLIOS.get("crypto", {}).get("max_positions", 3))
 POSITION_USD = 25.0        # pozisyon başına bütçe (USDT)
 MIN_SIGNAL_DROP = 55.0     # açık poz: sinyal < bu → çık
 
@@ -242,6 +244,8 @@ async def _loop():
                 await asyncio.to_thread(_tick, db)
             except Exception as e:
                 logger.exception("crypto_scalper tick hatası: %s", e)
+                # Zehirlenmiş session'ı temizle — sonraki tick'lerin commit'i çalışsın.
+                db.rollback()
             _set_state(rounds=_state.get("rounds", 0) + 1)
             await asyncio.sleep(SCAN_INTERVAL_S)
     finally:
@@ -255,6 +259,9 @@ def _tick(db):
     global _last_signals
     from app.services.autonomous_agent import AutonomousAgent
     round_start = time.time()
+
+    # Önceki tick'ten kalan başarısız transaction varsa temizle (güvenli no-op).
+    db.rollback()
 
     agent = AutonomousAgent(portfolio_slug="crypto")
     portfolio_id = agent._ensure_portfolio_id(db)
@@ -291,12 +298,16 @@ def _tick(db):
         elif sig and sig.get("composite", 50) < MIN_SIGNAL_DROP:
             reason = f"sinyal zayıf (composite {sig['composite']:.0f})"
         if reason:
-            result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8)
-            if result.get("success"):
-                actions.append({"action": "sell", "ticker": pos.ticker,
-                                "price": price, "reason": reason,
-                                "pnl_pct": round(pnl_pct * 100, 2),
-                                "pl": result.get("pl")})
+            try:
+                result = agent.execute_sell(db, pos.id, price, f"scalper: {reason}", portfolio_before, confidence=0.8)
+                if result.get("success"):
+                    actions.append({"action": "sell", "ticker": pos.ticker,
+                                    "price": price, "reason": reason,
+                                    "pnl_pct": round(pnl_pct * 100, 2),
+                                    "pl": result.get("pl")})
+            except Exception as e:
+                logger.exception("scalper: %s satış hatası: %s", pos.ticker, e)
+                db.rollback()
 
     # ── Yeni alımlar ──
     open_positions = _open_positions(db, portfolio_id)
@@ -322,13 +333,17 @@ def _tick(db):
                          f"mom5m={sig.get('momentum_5m', 50):.0f} "
                          f"mom15m={sig.get('momentum_15m', 50):.0f} "
                          f"mom1h={sig.get('momentum_1h', 50):.0f}")
-            result = agent.execute_buy(db, sym, qty, price, reasoning, portfolio_before, confidence=0.8)
-            if result.get("success"):
-                actions.append({"action": "buy", "ticker": sym, "price": price,
-                                "quantity": qty, "composite": sig["composite"],
-                                "rsi": sig.get("rsi"), "momentum_5m": sig.get("momentum_5m"),
-                                "momentum_15m": sig.get("momentum_15m"),
-                                "momentum_1h": sig.get("momentum_1h")})
+            try:
+                result = agent.execute_buy(db, sym, qty, price, reasoning, portfolio_before, confidence=0.8)
+                if result.get("success"):
+                    actions.append({"action": "buy", "ticker": sym, "price": price,
+                                    "quantity": qty, "composite": sig["composite"],
+                                    "rsi": sig.get("rsi"), "momentum_5m": sig.get("momentum_5m"),
+                                    "momentum_15m": sig.get("momentum_15m"),
+                                    "momentum_1h": sig.get("momentum_1h")})
+            except Exception as e:
+                logger.exception("scalper: %s alım hatası: %s", sym, e)
+                db.rollback()
 
     _set_state(last_round_at=datetime.now().isoformat(),
                last_round={
@@ -337,7 +352,7 @@ def _tick(db):
                    "open_positions": len(_open_positions(db, portfolio_id)),
                    "actions": actions,
                    "equity_usdt": round(sum(
-                       (get_price(p.ticker) or {}).get("price", p.entry_price or 0) * p.quantity
+                       (signals.get(p.ticker) or {}).get("price", p.entry_price or 0) * p.quantity
                        for p in _open_positions(db, portfolio_id)), 2),
                    "ms": int((time.time() - round_start) * 1000),
                    "timestamp": datetime.now().isoformat(),

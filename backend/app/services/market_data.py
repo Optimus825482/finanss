@@ -92,7 +92,9 @@ def get_live_prices(tickers: list[str]) -> dict[str, dict]:
             try:
                 px = binance_price(t)
                 if px and px.get("price") is not None:
-                    result[t] = {"price": round(float(px["price"]), 2),
+                    # Kripto fiyatları sub-cent olabilir (DOGE ~0.07, XRP ~1.07).
+                    # round(...,2) PnL'yi bozar — Binance'in ham fiyatını 8dp koru.
+                    result[t] = {"price": float(px["price"]),
                                  "change_pct": px.get("change_pct")}
                 else:
                     result[t] = {"price": None, "change_pct": None}
