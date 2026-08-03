@@ -151,6 +151,11 @@ export default function CryptoChart({ klines, height = 320 }: Props) {
     const chart = chartRef.current;
     if (!chart) return;
 
+    // Eski serileri kaldır — yoksa sembol/timeframe değişince seriler üst üste
+    // bindirilir (BTC serisi silinmez, yenisi eklenir → "hep BTC görünür").
+    seriesRefs.current.forEach((s) => chart.removeSeries(s));
+    seriesRefs.current = [];
+
     const data = klines.map((k) => ({
       time: Math.floor(k.open_time / 1000) as Time,
       open: k.open,

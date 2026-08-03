@@ -33,8 +33,15 @@ const ACTION_META: Record<ScalpCard["action"], { label: string; color: string; g
 export default function KriptoPage() {
   // Grafik
   const [symbol, setSymbol] = useState("BTCUSDT");
+  const [interval, setTf] = useState("5m");
   const [klines, setKlines] = useState<CryptoKline[]>([]);
   const [universe, setUniverse] = useState<string[]>([]);
+
+  // Timeframe seçenekleri (Binance interval)
+  const TIMEFRAMES = [
+    { k: "1m", l: "M1" }, { k: "5m", l: "M5" }, { k: "15m", l: "M15" },
+    { k: "1h", l: "H1" }, { k: "4h", l: "H4" }, { k: "1d", l: "D1" },
+  ];
 
   // Scalper kartları + durum
   const [scalp, setScalp] = useState<ScalpCardsResponse | null>(null);
@@ -49,8 +56,8 @@ export default function KriptoPage() {
   }, []);
 
   const loadKlines = useCallback(async () => {
-    try { const k = await api.cryptoKlines(symbol, "5m", 200); setKlines(k.klines); } catch { /* */ }
-  }, [symbol]);
+    try { const k = await api.cryptoKlines(symbol, interval, 200); setKlines(k.klines); } catch { /* */ }
+  }, [symbol, interval]);
 
   const loadScalp = useCallback(async () => {
     try { setScalp(await api.cryptoScalpCards()); } catch { /* scalper kapalı */ }
@@ -151,11 +158,28 @@ export default function KriptoPage() {
         </div>
       )}
 
-      {/* ── ÜST: M5 GRAFİK ── */}
+      {/* ── ÜST: MUM GRAFİK ── */}
       <div className="rounded-sm p-3" style={{ border: `1px solid ${BORDER}`, backgroundColor: PANEL }}>
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <div className="font-mono text-xs tracking-wider" style={{ color: MUTED }}>
-            M5 MUM GRAFİĞİ — <span className="font-bold" style={{ color: TEXT }}>{symbol}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-mono text-xs tracking-wider" style={{ color: MUTED }}>
+              MUM GRAFİĞİ — <span className="font-bold" style={{ color: TEXT }}>{symbol}</span>
+            </div>
+            {/* Timeframe seçici */}
+            <div className="flex items-center gap-1 ml-2">
+              {TIMEFRAMES.map(tf => (
+                <button key={tf.k} onClick={() => setTf(tf.k)}
+                  className="font-mono text-[10px] px-2 py-0.5 rounded-sm transition-none"
+                  style={{
+                    color: interval === tf.k ? "var(--term-bg)" : MUTED,
+                    backgroundColor: interval === tf.k ? AMBER : "transparent",
+                    border: `1px solid ${interval === tf.k ? AMBER : BORDER}`,
+                    fontWeight: interval === tf.k ? 700 : 400,
+                  }}>
+                  {tf.l}
+                </button>
+              ))}
+            </div>
           </div>
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)}
             className="font-mono text-[10px] px-2 py-1 rounded-sm transition-none"
