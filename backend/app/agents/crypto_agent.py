@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Teknik parametreler
 RSI_PERIOD = 14
 VOL_WINDOW = 20
-MOM_WINDOW = 3
+MOM_WINDOW = 10
 # Momentum için kullanılacak zaman dilimleri (5m/15m/1h) — dinamik ağırlık
 MOM_TIMEFRAMES = ["5m", "15m", "1h"]
 
@@ -52,11 +52,14 @@ def _rsi(closes: np.ndarray, period: int = RSI_PERIOD) -> float:
 
 def _score_momentum(closes: np.ndarray, mom_window: int = MOM_WINDOW) -> float:
     """Son `mom_window` mum eğilimi → 0-100 skor."""
-    if len(closes) < mom_window + 1:
+    if len(closes) < 2:
         return 50.0
-    rets = np.diff(closes[-mom_window - 1:]) / closes[-mom_window - 1:-1]
+    # Veri pencereden kısa olabilir (örn. sentetik testler 4 mum) — pencereyi sınırla.
+    window = min(mom_window, len(closes) - 1)
+    rets = np.diff(closes[-window - 1:]) / closes[-window - 1:-1]
     avg = float(np.mean(rets))
-    # %0.5 mum başına trend = güçlü; %-0.5 = güçlü düşüş
+    # 10 mumda %0.5/mum (~%5 toplam) = güçlü trend → 100. Orijinal ölçek (10000):
+    # 10 mumluk pencere gürültüyü filtreler, skor aralığı aynı kalır.
     return round(float(np.clip(50 + avg * 10000, 0, 100)), 1)
 
 
