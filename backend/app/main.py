@@ -14,6 +14,7 @@ from app.middleware import APIKeyMiddleware
 from app.scheduler import start_scheduler
 from app.services.admin_service import seed_default_provider
 from app.routers import register_routers
+from app.orchestrator import orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
         )
 
     init_db()
+    orchestrator.reconcile_stale_runs()
     seed_default_provider()
     start_scheduler()
 

@@ -84,6 +84,23 @@ class Orchestrator:
         except Exception as e:
             logger.warning("Pipeline run kaydi tamamlanamadi: %s", e)
 
+    def reconcile_stale_runs(self):
+        """Close runs left as running when the API process was restarted."""
+        try:
+            db = SessionLocal()
+            stale = db.query(PipelineRun).filter(PipelineRun.status == "running").all()
+            for run in stale:
+                run.status = "error"
+                run.error = "Pipeline process restart nedeniyle yarida kesildi"
+                run.finished_at = now_istanbul()
+                run.progress = (run.progress or []) + ["Process restart: run otomatik kapatildi"]
+            if stale:
+                db.commit()
+                logger.warning("%d stale pipeline run error olarak kapatildi", len(stale))
+            db.close()
+        except Exception as e:
+            logger.warning("Stale pipeline run reconciliation basarisiz: %s", e)
+
     def _log(self, msg: str):
         self.progress_log.append(msg)
         logger.info("[pipeline] %s", msg)
