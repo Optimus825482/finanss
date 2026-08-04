@@ -1,4 +1,5 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Backend Docker/local default is 8012 (see backend/Dockerfile and compose).
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8012";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 /** Shared headers: API key when configured. */
@@ -420,8 +421,7 @@ export const api = {
     ),
   deleteReport: (id: number) =>
     apiFetch(`/api/reports/${id}`, { method: "DELETE" })
-      .then(j<{ deleted: boolean }>)
-      .catch(() => ({ deleted: false })),
+      .then(j<{ deleted: boolean }>),
 
   getWatchlist: () => apiFetch("/api/watchlist/personal", { cache: "no-store" }).then(j<WatchlistItem[]>),
   addWatchlistItem: (ticker: string, notes?: string) =>

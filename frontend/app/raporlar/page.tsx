@@ -204,7 +204,7 @@ export default function RaporlarPage() {
                       {h.top_ticker || "—"} · {h.candidates_scanned} sembol
                     </div>
                   </div>
-                  <span onClick={(e) => { e.stopPropagation(); api.deleteReport(h.id).then(() => { setHistory(prev => prev.filter(x => x.id !== h.id)); if (report?.id === h.id) setReport(null); }); }}
+                  <span onClick={(e) => { e.stopPropagation(); setError(null); api.deleteReport(h.id).then((result) => { if (!result.deleted) throw new Error("Silme işlemi onaylanmadı"); setHistory(prev => prev.filter(x => x.id !== h.id)); if (report?.id === h.id) setReport(null); }).catch((err) => setError(`Rapor silinemedi: ${err instanceof Error ? err.message : "Beklenmeyen hata"}`)); }}
                     className="text-term-red text-[10px] transition-none shrink-0 mt-0.5" aria-label="Raporu sil">✕</span>
                 </button>
               ))}
