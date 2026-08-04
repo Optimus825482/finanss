@@ -3,6 +3,7 @@ from app.config import now_istanbul
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
+import uuid
 
 from app.database import Base
 
@@ -16,6 +17,20 @@ class Report(Base):
     candidates_scanned = Column(Integer, default=0)
 
     picks = relationship("StockPick", back_populates="report", cascade="all, delete-orphan")
+
+
+class PipelineRun(Base):
+    __tablename__ = "pipeline_runs"
+
+    id = Column(String(64), primary_key=True, default=lambda: uuid.uuid4().hex)
+    kind = Column(String(20), nullable=False)  # standard | deep
+    exchange = Column(String(20), nullable=True)
+    status = Column(String(20), nullable=False, default="running")  # running | done | error
+    started_at = Column(DateTime, default=now_istanbul, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
+    error = Column(Text, nullable=True)
+    progress = Column(JSON, default=list)
 
 
 class Notification(Base):
@@ -173,6 +188,7 @@ class PendingOrder(Base):
     confidence = Column(Float, default=0.7)
     status = Column(String, default="pending")  # pending | executed | cancelled | expired
     exchange = Column(String, nullable=True)  # BIST | US
+    source = Column(String, default="agent", nullable=False, server_default="agent")
     created_at = Column(DateTime, default=now_istanbul)
     executed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)

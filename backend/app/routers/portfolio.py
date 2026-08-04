@@ -1,7 +1,7 @@
 from datetime import datetime
 from app.config import now_istanbul
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,7 +9,7 @@ from app.models import PortfolioPosition
 from app.schemas import PortfolioPositionIn, PortfolioCloseIn, PortfolioPositionOut, PortfolioSummaryOut
 from app.services.market_data import get_live_prices
 from app.services.balance_service import (
-    get_balance, deposit, record_position_opened, record_position_closed,
+    record_position_opened, record_position_closed, ensure_portfolio,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -35,8 +35,11 @@ def _enrich_position(pos: PortfolioPosition, price_map: dict) -> PortfolioPositi
 
 
 @router.get("", response_model=PortfolioSummaryOut)
-def get_portfolio(db: Session = Depends(get_db)):
-    positions = db.query(PortfolioPosition).order_by(PortfolioPosition.created_at.desc()).all()
+def get_portfolio(portfolio_slug: str = Query("bist"), db: Session = Depends(get_db)):
+    portfolio = ensure_portfolio(db, portfolio_slug.lower())
+    positions = (db.query(PortfolioPosition)
+        .filter(PortfolioPosition.portfolio_id == portfolio.id)
+        .order_by(PortfolioPosition.created_at.desc()).all())
     open_tickers = [p.ticker for p in positions if p.status == "open"]
     price_map = get_live_prices(open_tickers)
     out_positions = [_enrich_position(p, price_map) for p in positions]
@@ -46,25 +49,25 @@ def get_portfolio(db: Session = Depends(get_db)):
     total_pl = round(total_market_value - total_cost_basis, 2)
     total_pl_pct = round((total_pl / total_cost_basis) * 100, 2) if total_cost_basis else 0.0
 
-    balance = get_balance(db)
-
     return PortfolioSummaryOut(
         positions=out_positions,
         total_cost_basis=round(total_cost_basis, 2),
         total_market_value=round(total_market_value, 2),
         total_pl=total_pl,
         total_pl_pct=total_pl_pct,
-        cash_balance=balance.cash,
+        cash_balance=portfolio.cash,
     )
 
 
 @router.get("/open/{ticker}", response_model=list[PortfolioPositionOut])
-def get_open_positions(ticker: str, db: Session = Depends(get_db)):
+def get_open_positions(ticker: str, portfolio_slug: str = Query("bist"), db: Session = Depends(get_db)):
     """Bir ticker için açık pozisyonlar, canlı fiyat + kâr/zarar ile."""
     ticker = ticker.upper().strip()
+    portfolio = ensure_portfolio(db, portfolio_slug.lower())
     positions = (
         db.query(PortfolioPosition)
-        .filter(PortfolioPosition.ticker == ticker, PortfolioPosition.status == "open")
+        .filter(PortfolioPosition.ticker == ticker, PortfolioPosition.status == "open",
+                PortfolioPosition.portfolio_id == portfolio.id)
         .all()
     )
     price_map = get_live_prices([ticker])
@@ -72,25 +75,26 @@ def get_open_positions(ticker: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=PortfolioPositionOut)
-def add_portfolio_position(pos: PortfolioPositionIn, db: Session = Depends(get_db)):
+def add_portfolio_position(pos: PortfolioPositionIn, portfolio_slug: str = Query("bist"), db: Session = Depends(get_db)):
     ticker = pos.ticker.upper().strip()
     cost = round(pos.quantity * pos.entry_price, 2)
+    portfolio = ensure_portfolio(db, portfolio_slug.lower())
 
-    balance = get_balance(db)
-    if balance.cash < cost:
+    if portfolio.cash < cost:
         raise HTTPException(
             status_code=400,
-            detail=f"Yetersiz bakiye. Maliyet: ${cost:,.2f}, Mevcut: ${balance.cash:,.2f}",
+            detail=f"Yetersiz bakiye. Maliyet: ${cost:,.2f}, Mevcut: ${portfolio.cash:,.2f}",
         )
 
     p = PortfolioPosition(
         ticker=ticker, quantity=pos.quantity, entry_price=pos.entry_price,
         entry_date=pos.entry_date or now_istanbul(), notes=pos.notes, status="open",
+        portfolio_id=portfolio.id,
     )
     db.add(p)
     db.flush()
 
-    record_position_opened(db, p.id, cost, ticker)
+    record_position_opened(db, p.id, cost, ticker, portfolio_id=portfolio.id)
 
     db.commit()
     db.refresh(p)
@@ -100,8 +104,10 @@ def add_portfolio_position(pos: PortfolioPositionIn, db: Session = Depends(get_d
 
 
 @router.put("/{position_id}/close", response_model=PortfolioPositionOut)
-def close_portfolio_position(position_id: int, body: PortfolioCloseIn, db: Session = Depends(get_db)):
-    p = db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id).first()
+def close_portfolio_position(position_id: int, body: PortfolioCloseIn, portfolio_slug: str = Query("bist"), db: Session = Depends(get_db)):
+    portfolio = ensure_portfolio(db, portfolio_slug.lower())
+    p = (db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id,
+        PortfolioPosition.portfolio_id == portfolio.id).first())
     if not p:
         raise HTTPException(status_code=404, detail="Pozisyon bulunamadi")
 
@@ -111,7 +117,7 @@ def close_portfolio_position(position_id: int, body: PortfolioCloseIn, db: Sessi
     p.exit_price = body.exit_price
     p.exit_date = body.exit_date or now_istanbul()
 
-    record_position_closed(db, p.id, proceeds, p.ticker)
+    record_position_closed(db, p.id, proceeds, p.ticker, portfolio_id=portfolio.id)
 
     db.commit()
     db.refresh(p)
@@ -119,14 +125,16 @@ def close_portfolio_position(position_id: int, body: PortfolioCloseIn, db: Sessi
 
 
 @router.delete("/{position_id}")
-def delete_portfolio_position(position_id: int, db: Session = Depends(get_db)):
-    p = db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id).first()
+def delete_portfolio_position(position_id: int, portfolio_slug: str = Query("bist"), db: Session = Depends(get_db)):
+    portfolio = ensure_portfolio(db, portfolio_slug.lower())
+    p = (db.query(PortfolioPosition).filter(PortfolioPosition.id == position_id,
+        PortfolioPosition.portfolio_id == portfolio.id).first())
     if not p:
         raise HTTPException(status_code=404, detail="Bulunamadi")
 
     if p.status == "open":
         refund = round(p.quantity * p.entry_price, 2)
-        deposit(db, refund, f"{p.ticker} pozisyon iptal iadesi")
+        record_position_closed(db, p.id, refund, p.ticker, portfolio_id=portfolio.id)
 
     db.delete(p)
     db.commit()

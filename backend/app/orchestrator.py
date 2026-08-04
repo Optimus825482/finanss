@@ -15,7 +15,7 @@ from app.agents.sentiment_agent import SentimentAgent
 from app.agents.risk_agent import RiskAgent
 from app.agents.report_agent import ReportAgent
 from app.database import SessionLocal
-from app.models import Report, StockPick
+from app.models import Report, StockPick, PipelineRun
 from app.services.screener_service import (
     stage1_prescreen, stage2_deep_analysis, get_universe,
 )
@@ -41,13 +41,48 @@ class Orchestrator:
         return [self.scanner, self.fundamental, self.sentiment, self.risk, self.reporter]
 
     def status_snapshot(self) -> dict:
+        latest_run = None
+        try:
+            db = SessionLocal()
+            latest_run = db.query(PipelineRun).order_by(PipelineRun.started_at.desc()).first()
+            db.close()
+        except Exception:
+            pass
         return {
             "running": self.is_running,
             "agents": [a.as_dict() for a in self.agents],
             "mode": "two-stage",
             "progress": self.progress_log[-20:] if self.progress_log else [],
             "last_error": self.last_error,
+            "latest_run_id": latest_run.id if latest_run else None,
+            "latest_run_status": latest_run.status if latest_run else None,
         }
+
+    def _begin_persistent_run(self, kind: str, exchanges: list[str] | None) -> str | None:
+        try:
+            import uuid
+            db = SessionLocal()
+            run_id = uuid.uuid4().hex
+            db.add(PipelineRun(id=run_id, kind=kind, exchange=','.join(exchanges or []), status="running", progress=[]))
+            db.commit(); db.close()
+            return run_id
+        except Exception as e:
+            logger.warning("Pipeline run kaydi baslatilamadi: %s", e)
+            return None
+
+    def _finish_persistent_run(self, run_id: str | None, status: str, report_id: int | None = None, error: str | None = None):
+        if not run_id:
+            return
+        try:
+            db = SessionLocal()
+            run = db.query(PipelineRun).filter(PipelineRun.id == run_id).first()
+            if run:
+                run.status = status; run.report_id = report_id; run.error = error
+                run.finished_at = now_istanbul(); run.progress = self.progress_log[-50:]
+                db.commit()
+            db.close()
+        except Exception as e:
+            logger.warning("Pipeline run kaydi tamamlanamadi: %s", e)
 
     def _log(self, msg: str):
         self.progress_log.append(msg)
@@ -64,10 +99,14 @@ class Orchestrator:
             self.is_running = True
             self.last_error = None
             self.progress_log = []
+            run_id = self._begin_persistent_run("standard", exchanges)
             try:
-                return await self._run_two_stage(exchanges)
+                result = await self._run_two_stage(exchanges)
+                self._finish_persistent_run(run_id, "done", report_id=result)
+                return result
             except Exception as e:
                 self.last_error = str(e)
+                self._finish_persistent_run(run_id, "error", error=str(e))
                 raise
             finally:
                 self.is_running = False
@@ -84,10 +123,14 @@ class Orchestrator:
             self.is_running = True
             self.last_error = None
             self.progress_log = []
+            run_id = self._begin_persistent_run("deep", exchanges)
             try:
-                return await self._run_deep(exchanges)
+                result = await self._run_deep(exchanges)
+                self._finish_persistent_run(run_id, "done", report_id=result)
+                return result
             except Exception as e:
                 self.last_error = str(e)
+                self._finish_persistent_run(run_id, "error", error=str(e))
                 raise
             finally:
                 self.is_running = False
@@ -230,23 +273,14 @@ class Orchestrator:
         # (_compose_async) çağırmaz; deep mode LLM istiyorsa bu pipeline'ın
         # reporter.run() üzerinden geçmesi gerekir (tek kaynak: _compose_async step 7).
 
-        # Build summary
-        for c in top_picks:
-            c["narrative"] = (
-                f"{c['ticker']}: composite {c.get('composite_score', 0):.0f}, "
-                f"{c.get('valuation_assessment', 'degerleme yok')}"
-            )
-            if c.get("llm_reasoning"):
-                c["narrative"] += f" — {c['llm_reasoning'][:200]}"
-
-        summary_lines = [f"Deep Batch Raporu: {total_scanned} hisse tarandi, {len(top_picks)} pick secildi."]
-        best = top_picks[0] if top_picks else None
-        if best:
-            summary_lines.append(f"En guclu: {best['ticker']} ({best.get('composite_score', 0):.0f}/100)")
-        result = {"summary": "\n".join(summary_lines), "candidates_scanned": total_scanned, "picks": top_picks}
+        # ReportAgent is the single report contract: it produces the final
+        # narrative, macro context, fair-value enrichment and pick LLM fields.
+        # Persisting directly here previously made deep mode skip that stage.
+        result = await self.reporter.run(stage2)
+        result["candidates_scanned"] = total_scanned
 
         rid = self._persist(result)
-        self._log(f"Deep Rapor #{rid} kaydedildi ({len(top_picks)} pick)")
+        self._log(f"Deep Rapor #{rid} kaydedildi ({len(result.get('picks', []))} pick)")
         return rid
 
     def _persist(self, result: dict) -> int:

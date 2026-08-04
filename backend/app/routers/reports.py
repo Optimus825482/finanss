@@ -46,6 +46,7 @@ async def generate_deep_report(background_tasks: BackgroundTasks, exchange: str 
 
 @router.get("/reports/latest", response_model=ReportOut)
 def get_latest_report(exchange: str | None = None, db: Session = Depends(get_db)):
+    exchange = exchange.upper() if exchange else None
     report = (
         db.query(Report)
         .options(joinedload(Report.picks))
@@ -65,6 +66,8 @@ def get_latest_report(exchange: str | None = None, db: Session = Depends(get_db)
 
 @router.get("/reports/history", response_model=list[ReportListItem])
 def get_report_history(limit: int = 30, exchange: str | None = None, db: Session = Depends(get_db)):
+    exchange = exchange.upper() if exchange else None
+    limit = max(1, min(limit, 100))
     reports = (
         db.query(Report)
         .options(joinedload(Report.picks))

@@ -1,19 +1,19 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PortfolioPositionIn(BaseModel):
     ticker: str
-    quantity: float
-    entry_price: float
+    quantity: float = Field(gt=0)
+    entry_price: float = Field(gt=0)
     entry_date: Optional[datetime] = None
     notes: Optional[str] = None
 
 
 class PortfolioCloseIn(BaseModel):
-    exit_price: float
+    exit_price: float = Field(gt=0)
     exit_date: Optional[datetime] = None
 
 

@@ -175,6 +175,8 @@ class AutonomousAgent:
 
     def execute_buy(self, db: Session, ticker: str, quantity: float, price: float, reasoning: str, portfolio_before: dict, confidence: float = 0.7, source: str = "agent") -> dict:
         """Alim yap."""
+        if quantity <= 0 or price <= 0:
+            return {"success": False, "error": "Miktar ve fiyat sifirdan buyuk olmali"}
         portfolio_id = self._ensure_portfolio_id(db)
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
         if portfolio is None:
@@ -288,7 +290,10 @@ class AutonomousAgent:
             pos.exit_date = now_istanbul()
             pos.notes = "Auto-closed: price unavailable (delisted/yfinance error)"
             proceeds = round(quantity * entry_price, 2)
-            record_position_closed(db, pos_id, proceeds, ticker)
+            record_position_closed(
+                db, pos_id, proceeds, ticker,
+                portfolio_id=self._ensure_portfolio_id(db),
+            )
 
             self._log_decision(
                 db, ticker, "sell", quantity, entry_price, proceeds,
@@ -599,11 +604,20 @@ class AutonomousAgent:
                 if not current_price or current_price <= 0:
                     continue
 
+                # A stored price is a limit price. Keep the order pending until
+                # the market satisfies it; never silently turn it into a market order.
+                if order.price and (
+                    (order.action == "buy" and current_price > order.price)
+                    or (order.action == "sell" and current_price < order.price)
+                ):
+                    order.notes = f"Limit kosulu bekleniyor: emir={order.price}, piyasa={current_price}"
+                    continue
+
                 if order.action == "buy":
                     result = self.execute_buy(
                         db, order.ticker, order.quantity, current_price,
                         f"Bekleyen emir gerceklesti: {order.reasoning}",
-                        portfolio, confidence=order.confidence,
+                        portfolio, confidence=order.confidence, source=order.source,
                     )
                 else:
                     # sell - pozisyonu bul
@@ -618,7 +632,7 @@ class AutonomousAgent:
                         result = self.execute_sell(
                             db, pos.id, current_price,
                             f"Bekleyen emir gerceklesti: {order.reasoning}",
-                            portfolio, confidence=order.confidence,
+                            portfolio, confidence=order.confidence, source=order.source,
                         )
                     else:
                         result = {"success": False, "error": "Pozisyon bulunamadi"}
@@ -704,6 +718,7 @@ class AutonomousAgent:
                     portfolio_id=self._ensure_portfolio_id(db),
                     ticker=c["ticker"], action="buy", quantity=qty,
                     price=price, reasoning=reasoning[:1000],
+                    source="agent",
                     analysis_json={
                         "conclusion": conclusion,
                         "composite": composite,

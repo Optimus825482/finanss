@@ -15,6 +15,8 @@ LOCK = __import__("threading").Lock()
 def start_run(slug: str) -> str:
     run_id = f"{slug}_{int(time.time() * 1000)}"
     with LOCK:
+        if any(st == "running" and rid.startswith(f"{slug}_") for rid, st in _active.items()):
+            raise RuntimeError(f"Ajan zaten calisiyor: {slug}")
         _active[run_id] = "running"
         _slug_to_run[slug] = run_id
     log_step(run_id, "start", f"Ajan başlatıldı: {slug}")

@@ -276,25 +276,36 @@ def _open_positions(db, portfolio_id: int, source: str = "scalper") -> list[Port
 async def _loop():
     global _stop_event
     ev = _stop_event
-    db = SessionLocal()
     try:
         while ev is not None and not ev.is_set():
             try:
-                await asyncio.to_thread(_tick, db)
+                # Create the SQLAlchemy Session inside the worker thread;
+                # Session instances must never cross thread boundaries.
+                await asyncio.to_thread(_tick)
             except Exception as e:
                 logger.exception("crypto_scalper tick hatası: %s", e)
-                # Zehirlenmiş session'ı temizle — sonraki tick'lerin commit'i çalışsın.
-                db.rollback()
             _set_state(rounds=_state.get("rounds", 0) + 1)
             await asyncio.sleep(SCAN_INTERVAL_S)
     finally:
-        db.close()
         _set_state(running=False, stopped_at=datetime.now().isoformat())
         logger.info("crypto_scalper: durduruldu")
 
 
-def _tick(db):
+def _tick():
     """Tek tur: sinyaller → açık poz yönetimi → yeni alımlar."""
+    global _last_signals
+    db = SessionLocal()
+    try:
+        _tick_with_db(db)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _tick_with_db(db):
+    """DB session'ı worker thread'inde oluşturulmuş tek tick uygulaması."""
     global _last_signals
     from app.services.autonomous_agent import AutonomousAgent
     round_start = time.time()

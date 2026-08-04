@@ -15,11 +15,15 @@ export default function RaporlarPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    api.getHistory(exchangeFilter || undefined).then(setHistory).catch(() => {});
+    api.getHistory(exchangeFilter || undefined).then(setHistory).catch((e) => {
+      setError(`Rapor geçmişi yüklenemedi: ${e instanceof Error ? e.message : "Beklenmeyen hata"}`);
+    });
   }, [exchangeFilter]);
 
   useEffect(() => {
-    api.markAllNotificationsRead().catch(() => {});
+    api.markAllNotificationsRead().catch(() => {
+      // Notification failure must not hide report data; it is intentionally non-blocking.
+    });
   }, []);
 
   // Cleanup poll on unmount

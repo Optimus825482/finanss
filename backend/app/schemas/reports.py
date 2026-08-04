@@ -77,3 +77,5 @@ class PipelineStatusOut(BaseModel):
     mode: Optional[str] = None
     progress: list[str] = []
     last_error: Optional[str] = None
+    latest_run_id: Optional[str] = None
+    latest_run_status: Optional[str] = None

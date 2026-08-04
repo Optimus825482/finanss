@@ -565,6 +565,9 @@ async def _evaluate_one(db: Session, pred: Prediction) -> dict:
         actual = None
 
     if actual is None:
+        pred.error_analysis = "Gercek fiyat verisi henuz alinamadi; sonraki evaluation turunda tekrar denenecek."
+        pred.evaluated_at = now_istanbul()
+        db.commit()
         return {"id": pred.id, "ticker": pred.ticker, "status": "no_data"}
 
     pred_day30 = float(pred.predicted_prices.get("day_30", {}).get("predicted", pred.current_price))

@@ -433,7 +433,8 @@ export const api = {
   deleteWatchlistItem: (id: number) =>
     apiFetch(`/api/watchlist/personal/${id}`, { method: "DELETE" }).then(j<{ deleted: boolean }>),
 
-  getPortfolio: () => apiFetch("/api/portfolio", { cache: "no-store" }).then(j<PortfolioSummary>),
+  getPortfolio: (portfolioSlug: string = "bist") =>
+    apiFetch(`/api/portfolio?portfolio_slug=${encodeURIComponent(portfolioSlug)}`, { cache: "no-store" }).then(j<PortfolioSummary>),
   addPortfolioPosition: (payload: {
     ticker: string;
     quantity: number;
@@ -459,7 +460,11 @@ export const api = {
     apiFetch(`/api/autonomous/portfolio?portfolio_slug=${portfolioSlug}`).then(j<AgentPortfolio>),
   runAgent: (portfolioSlug: string = "bist") =>
     apiFetch(`/api/autonomous/run?portfolio_slug=${portfolioSlug}`, { method: "POST" }).then(
-      j<{ started: boolean; portfolio_slug: string; mode: string }>
+      j<{ started: boolean; portfolio_slug: string; mode: string; run_id: string }>
+    ),
+  getAgentRunLogs: (runId: string) =>
+    apiFetch(`/api/autonomous/logs/${encodeURIComponent(runId)}`).then(
+      j<{ run_id: string; status: "running" | "done" | "error" | "unknown"; steps: Array<{ step: string; msg: string; ts: number }> }>
     ),
   getAgentDecisions: (portfolioSlug: string = "bist", limit = 20) =>
     apiFetch(`/api/autonomous/decisions?portfolio_slug=${portfolioSlug}&limit=${limit}`).then(

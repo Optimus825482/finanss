@@ -9,14 +9,19 @@ export default function AgentPortfolioCard() {
   const [decisions, setDecisions] = useState<AgentDecision[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setPortfolio(await api.getAgentPortfolio(selectedPortfolio));
-    } catch { /* agent not configured yet */ }
+    } catch (e) {
+      setError(e instanceof Error ? `Portföy yüklenemedi: ${e.message}` : "Portföy yüklenemedi");
+    }
     try {
       setDecisions(await api.getAgentDecisions(selectedPortfolio, 10));
-    } catch { /* no decisions yet */ }
+    } catch (e) {
+      setError(e instanceof Error ? `Kararlar yüklenemedi: ${e.message}` : "Kararlar yüklenemedi");
+    }
   }, [selectedPortfolio]);
 
   // Initial load + auto-refresh every 60s + portföy değişince reload
@@ -30,13 +35,27 @@ export default function AgentPortfolioCard() {
     setRunning(true);
     setError(null);
     try {
-      await api.runAgent(selectedPortfolio);
-      // Wait a moment then refresh
-      setTimeout(load, 3000);
+      const started = await api.runAgent(selectedPortfolio);
+      setRunId(started.run_id);
+      const poll = window.setInterval(async () => {
+        try {
+          const current = await api.getAgentRunLogs(started.run_id);
+          if (current.status !== "running") {
+            window.clearInterval(poll);
+            setRunning(false);
+            setRunId(null);
+            if (current.status === "error") setError("Ajan çalışırken hata oluştu");
+            await load();
+          }
+        } catch {
+          // Keep the run state until the backend confirms completion.
+        }
+      }, 1500);
     } catch {
       setError("Ajan çalıştırılamadı");
-    } finally {
       setRunning(false);
+    } finally {
+      // The run is long-lived; completion is handled by the status poll above.
     }
   };
 

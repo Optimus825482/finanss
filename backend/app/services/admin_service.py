@@ -137,6 +137,7 @@ def _validate_public_url(url: str) -> bool:
     """
     from urllib.parse import urlparse
     import ipaddress
+    import socket
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
@@ -148,11 +149,27 @@ def _validate_public_url(url: str) -> bool:
         try:
             ip = ipaddress.ip_address(host)
         except ValueError:
-            return True  # domain — DNS çözümleme test anında yapılır (üretimde daha sıkı olabilir)
-        return not (ip.is_private or ip.is_loopback or ip.is_link_local
-                    or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+            # DNS rebinding/indirect SSRF: bütün A/AAAA sonuçlarını kontrol et.
+            try:
+                resolved = {
+                    info[4][0]
+                    for info in socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+                }
+                if not resolved:
+                    return False
+                return all(_is_public_ip(address) for address in resolved)
+            except (OSError, ValueError):
+                return False
+        return _is_public_ip(str(ip))
     except Exception:
         return False
+
+
+def _is_public_ip(address: str) -> bool:
+    import ipaddress
+    ip = ipaddress.ip_address(address)
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 def test_provider_connection(provider_id: int, test_message: str = "Merhaba, bağlantı testi") -> dict:
     """Provider API bağlantısını test et."""

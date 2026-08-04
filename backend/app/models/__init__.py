@@ -1,5 +1,5 @@
 from app.database import Base
-from app.models.core import Report, StockPick, WatchlistItem, PortfolioPosition, Notification, Prediction, TradingDecision
+from app.models.core import Report, StockPick, WatchlistItem, PortfolioPosition, Notification, Prediction, TradingDecision, PipelineRun
 from app.models.balance import VirtualBalance, BalanceTransaction
 from app.models.portfolio import Portfolio
 from app.models.memory import UserProfile, ChatSession, ChatMessage, ResearchMemory, MemoryEmbedding
@@ -10,5 +10,5 @@ __all__ = [
     "VirtualBalance", "BalanceTransaction", "Portfolio",
     "UserProfile", "ChatSession", "ChatMessage", "ResearchMemory", "MemoryEmbedding",
     "LLMProvider", "LLMModel", "SystemSettings", "TranslationCache",
-    "Notification", "Prediction", "TradingDecision",
+    "Notification", "Prediction", "TradingDecision", "PipelineRun",
 ]

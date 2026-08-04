@@ -41,6 +41,8 @@ def dcf_fair_value(fcf_per_share: float, shares_outstanding: float = None,
     FCF projekte edilir → WACC ile bugune indirgenir + terminal deger."""
     if fcf_per_share <= 0:
         return {"value": None, "method": "DCF", "error": "Serbest nakit akisi negatif — DCF uygulanamaz"}
+    if wacc <= terminal_growth or wacc <= -1:
+        return {"value": None, "method": "DCF", "error": "WACC terminal büyümesinden büyük olmalı"}
 
     pv_sum = 0.0
     fcf = fcf_per_share
@@ -105,7 +107,6 @@ def ensemble_fair_value(values: list[dict], current_price: float) -> dict:
     if not valid:
         return {"fair_value": None, "current_price": current_price, "models": values}
 
-    weights = {"Graham Number": 0.25, "Peter Lynch": 0.25, "DCF": 0.30, "P/E Karsilastirmasi": 0.20}
     use = [v for v in valid if 0.05 * current_price < v["value"] < 5 * current_price]
     if len(use) < 2:
         use = valid  # az model varsa hepsini kullan

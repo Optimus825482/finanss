@@ -316,7 +316,9 @@ async def run(ticker: str, position: Optional[dict] = None, db=None) -> dict:
 
     # 7. Watchlist signal güncelle (sessiz)
     if db is not None:
-        await asyncio.to_thread(_update_watchlist_signal, db, ticker, conclusion)
+        # This is a short DB write; keep the request-owned SQLAlchemy Session
+        # on its original thread. Sessions must not cross into to_thread().
+        _update_watchlist_signal(db, ticker, conclusion)
 
     # 9. Görsel dashboard için ham veriler
     price_history: list[dict] = []
